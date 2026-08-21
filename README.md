@@ -79,3 +79,7 @@ See [SECURITY.md](SECURITY.md) before reporting a vulnerability.
 Riel App Factory is an early public foundation, not a hosted no-code product and not a blanket production-readiness guarantee. The safest contributions improve neutrality, determinism, portability, security, or verification without introducing shared multi-tenancy.
 
 Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE) — use, modify, and distribute the project with attribution and without warranty.
