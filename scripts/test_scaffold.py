@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import json
 import tempfile
 import unittest
@@ -255,6 +256,18 @@ class ScaffoldTests(unittest.TestCase):
         sql = compile_sql(self.spec)
         self.assertNotIn("BEGIN;", sql)
         self.assertNotIn("COMMIT;", sql)
+
+    def test_every_table_enables_row_level_security(self) -> None:
+        # Sin RLS, una API de datos del proveedor (PostgREST en Supabase) deja las
+        # tablas legibles con una clave que por diseno es publica.
+        sql = compile_sql(self.spec)
+        enabled = set(re.findall(r'ALTER TABLE "?([a-z_]+)"? ENABLE ROW LEVEL SECURITY;', sql))
+        expected = {"app_role", "app_user", "app_audit_log", "app_import_batch", "app_attachment"}
+        expected |= {entity["key"] for entity in self.spec["entities"]}
+        self.assertEqual(expected - enabled, set())
+
+    def test_trigger_function_pins_search_path(self) -> None:
+        self.assertIn("SET search_path = pg_catalog, public", compile_sql(self.spec))
 
 
 if __name__ == "__main__":

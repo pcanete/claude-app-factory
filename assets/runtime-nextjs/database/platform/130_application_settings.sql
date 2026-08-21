@@ -38,3 +38,8 @@ CREATE TABLE IF NOT EXISTS app_user_secret (
 
 CREATE INDEX IF NOT EXISTS app_user_secret_user_updated_idx
   ON app_user_secret (user_id, updated_at DESC);
+
+-- Cerrada a cualquier API de datos del proveedor; el dueno no queda sujeto a RLS.
+ALTER TABLE app_setting ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_user_setting ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_user_secret ENABLE ROW LEVEL SECURITY;

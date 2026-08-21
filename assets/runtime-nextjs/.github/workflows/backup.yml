@@ -1,0 +1,60 @@
+name: Database backup
+
+# Una aplicación que es fuente de verdad necesita una copia recuperable propia.
+# El respaldo del proveedor, cuando existe, es del proveedor: esto es tuyo.
+#
+# Requiere un único secreto en el repositorio: DATABASE_URL_DIRECT, la conexión
+# sin pooler (en Supabase, "Direct connection"; el pooler no sirve para pg_dump).
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump the database
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+        run: |
+          if [ -z "$DATABASE_URL_DIRECT" ]; then
+            echo "Falta el secreto DATABASE_URL_DIRECT." >&2
+            exit 1
+          fi
+          mkdir -p backup
+          # La versión del cliente debe coincidir con la del servidor, así que se usa
+          # la imagen oficial en vez del cliente que traiga el runner.
+          docker run --rm -e PGCONNECT_TIMEOUT=30 -v "$PWD/backup:/backup" postgres:17 \
+            pg_dump "$DATABASE_URL_DIRECT" \
+              --no-owner --no-privileges --clean --if-exists \
+              --file=/backup/dump.sql
+          gzip -9 backup/dump.sql
+
+      - name: Verify the dump is usable
+        run: |
+          size=$(stat -c%s backup/dump.sql.gz)
+          echo "Tamaño comprimido: $size bytes"
+          # Un dump sano nunca es diminuto: si lo es, la conexión falló o la base está vacía.
+          if [ "$size" -lt 2000 ]; then
+            echo "El respaldo es sospechosamente chico. Revisá la conexión antes de confiar en él." >&2
+            exit 1
+          fi
+          # Un dump truncado no termina con la línea de cierre de pg_dump.
+          if ! zcat backup/dump.sql.gz | tail -5 | grep -q "PostgreSQL database dump complete"; then
+            echo "El respaldo está truncado: no llegó al final del volcado." >&2
+            exit 1
+          fi
+          zcat backup/dump.sql.gz | grep -c "CREATE TABLE" | xargs echo "Tablas en el respaldo:"
+
+      - name: Store the backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: backup/dump.sql.gz
+          retention-days: 90
+          if-no-files-found: error

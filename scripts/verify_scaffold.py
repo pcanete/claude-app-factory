@@ -96,6 +96,7 @@ EXPECTED_FILES = {
     "src/lib/runtime-access.ts",
     "src/lib/rules.ts",
     "src/lib/view-query.ts",
+    ".github/workflows/backup.yml",
     "scripts/db-connection.mjs",
     "scripts/apply-migrations.mjs",
     "scripts/bootstrap-admin.mjs",

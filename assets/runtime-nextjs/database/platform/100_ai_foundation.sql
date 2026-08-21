@@ -49,3 +49,9 @@ CREATE TABLE IF NOT EXISTS ai_tool_call (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (run_id, tool_call_id)
 );
+
+-- Cerrada a cualquier API de datos del proveedor; el dueno no queda sujeto a RLS.
+ALTER TABLE ai_conversation ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_message ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_run ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_tool_call ENABLE ROW LEVEL SECURITY;
