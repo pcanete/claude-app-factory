@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://riel.local/schemas/app-spec-v0.json",
+  "title": "Riel AppSpec v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "app", "roles", "entities", "views"],
+  "properties": {
+    "version": {"const": "0.1"},
+    "app": {"$ref": "#/$defs/app"},
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/namedKey"}
+    },
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/entity"}
+    },
+    "views": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/view"}
+    },
+    "rules": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rule"}
+    },
+    "decisions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/decision"}
+    }
+  },
+  "$defs": {
+    "key": {"type": "string", "maxLength": 48, "pattern": "^[a-z][a-z0-9_]*$"},
+    "namedKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "label": {"type": "string", "minLength": 1},
+        "description": {"type": "string"}
+      }
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "description"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "locale": {"type": "string", "default": "es-AR"},
+        "timezone": {"type": "string", "default": "America/Argentina/Buenos_Aires"},
+        "theme": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primary": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+            "surface": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+          }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "type"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "label": {"type": "string", "minLength": 1},
+        "type": {"enum": ["text", "long_text", "integer", "decimal", "boolean", "date", "datetime", "email", "url", "enum", "file", "json"]},
+        "required": {"type": "boolean", "default": false},
+        "unique": {"type": "boolean", "default": false},
+        "searchable": {"type": "boolean", "default": false},
+        "default": {},
+        "help": {"type": "string"},
+        "options": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/namedKey"}
+        }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "type", "target"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "label": {"type": "string", "minLength": 1},
+        "type": {"enum": ["belongs_to", "has_many", "many_to_many"]},
+        "target": {"$ref": "#/$defs/key"},
+        "required": {"type": "boolean", "default": false},
+        "on_delete": {"enum": ["restrict", "cascade", "set_null"], "default": "restrict"}
+      }
+    },
+    "permissionMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {"enum": ["list", "read", "create", "update", "delete"]}
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "label_plural", "title_field", "fields", "permissions"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "label": {"type": "string", "minLength": 1},
+        "label_plural": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "title_field": {"$ref": "#/$defs/key"},
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/field"}
+        },
+        "relationships": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/relationship"}
+        },
+        "attachments": {"$ref": "#/$defs/attachmentPolicy"},
+        "permissions": {"$ref": "#/$defs/permissionMap"}
+      }
+    },
+    "attachmentPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "max_files": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
+        "max_size_mb": {"type": "integer", "minimum": 1, "maximum": 4, "default": 3},
+        "allowed_types": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9.+-]+/(\\*|[a-z0-9.+-]+)$"}
+        }
+      }
+    },
+    "sortSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "direction"],
+      "properties": {
+        "field": {"$ref": "#/$defs/key"},
+        "direction": {"enum": ["asc", "desc"]}
+      }
+    },
+    "dashboardWidget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "type", "entity"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "label": {"type": "string", "minLength": 1},
+        "type": {"enum": ["metric", "breakdown", "recent"]},
+        "entity": {"$ref": "#/$defs/key"},
+        "aggregate": {"enum": ["count", "sum", "avg"]},
+        "field": {"$ref": "#/$defs/key"},
+        "group_by": {"$ref": "#/$defs/key"},
+        "fields": {"type": "array", "items": {"$ref": "#/$defs/key"}},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5}
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "type"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "label": {"type": "string", "minLength": 1},
+        "type": {"enum": ["table", "form", "detail", "dashboard", "calendar", "kanban"]},
+        "entity": {"$ref": "#/$defs/key"},
+        "navigation": {"type": "boolean", "default": false},
+        "fields": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/key"}
+        },
+        "default_sort": {"$ref": "#/$defs/sortSpec"},
+        "page_size": {"type": "integer", "minimum": 10, "maximum": 100, "default": 50},
+        "bulk_edit_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/key"}
+        },
+        "group_by": {"$ref": "#/$defs/key"},
+        "allow_move": {"type": "boolean", "default": false},
+        "date_field": {"$ref": "#/$defs/key"},
+        "end_date_field": {"$ref": "#/$defs/key"},
+        "allow_reschedule": {"type": "boolean", "default": false},
+        "widgets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/dashboardWidget"}}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "topic", "statement"],
+      "properties": {
+        "status": {"enum": ["confirmed", "assumption", "unresolved"]},
+        "topic": {"$ref": "#/$defs/key"},
+        "statement": {"type": "string", "minLength": 1}
+      }
+    },
+    "ruleOperand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source"],
+          "properties": {"source": {"const": "now"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "field"],
+          "properties": {
+            "source": {"const": "field"},
+            "field": {"$ref": "#/$defs/key"}
+          }
+        }
+      ]
+    },
+    "ruleCondition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": {"all": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ruleCondition"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": {"any": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ruleCondition"}}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["not"],
+          "properties": {"not": {"$ref": "#/$defs/ruleCondition"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "operator"],
+          "properties": {
+            "field": {"$ref": "#/$defs/key"},
+            "operator": {"enum": ["is_empty", "is_not_empty", "changed", "not_changed"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "operator", "value"],
+          "properties": {
+            "field": {"$ref": "#/$defs/key"},
+            "operator": {"enum": ["eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in", "contains"]},
+            "value": {}
+          }
+        }
+      ]
+    },
+    "ruleAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "field", "value"],
+          "properties": {
+            "action": {"const": "set"},
+            "field": {"$ref": "#/$defs/key"},
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "message"],
+          "properties": {
+            "action": {"const": "block"},
+            "message": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "when", "if", "then"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "label": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "enabled": {"type": "boolean", "default": true},
+        "priority": {"type": "integer", "minimum": 0, "maximum": 1000, "default": 100},
+        "when": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entity", "event"],
+          "properties": {
+            "entity": {"$ref": "#/$defs/key"},
+            "event": {"enum": ["before_create", "before_update", "before_delete", "before_save"]}
+          }
+        },
+        "if": {"$ref": "#/$defs/ruleCondition"},
+        "then": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ruleAction"}}
+      }
+    }
+  }
+}

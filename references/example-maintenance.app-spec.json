@@ -1,0 +1,156 @@
+{
+  "version": "0.1",
+  "app": {
+    "key": "taller_norte",
+    "name": "Taller Norte",
+    "description": "Control de equipos y órdenes de mantenimiento",
+    "locale": "es-AR",
+    "timezone": "America/Argentina/Buenos_Aires",
+    "theme": {
+      "primary": "#6757E8",
+      "surface": "#111318"
+    }
+  },
+  "roles": [
+    {"key": "admin", "label": "Administrador"},
+    {"key": "supervisor", "label": "Supervisor"},
+    {"key": "technician", "label": "Técnico"}
+  ],
+  "entities": [
+    {
+      "key": "equipment",
+      "label": "Equipo",
+      "label_plural": "Equipos",
+      "description": "Activos sujetos a mantenimiento",
+      "title_field": "name",
+      "fields": [
+        {"key": "name", "label": "Nombre", "type": "text", "required": true, "searchable": true},
+        {"key": "serial_number", "label": "Número de serie", "type": "text", "unique": true, "searchable": true},
+        {"key": "commissioned_on", "label": "Fecha de alta", "type": "date"},
+        {
+          "key": "status",
+          "label": "Estado",
+          "type": "enum",
+          "required": true,
+          "default": "active",
+          "options": [
+            {"key": "active", "label": "Activo"},
+            {"key": "maintenance", "label": "En mantenimiento"},
+            {"key": "retired", "label": "Fuera de servicio"}
+          ]
+        }
+      ],
+      "relationships": [
+        {"key": "orders", "label": "Órdenes", "type": "has_many", "target": "work_order"}
+      ],
+      "permissions": {
+        "admin": ["list", "read", "create", "update", "delete"],
+        "supervisor": ["list", "read", "create", "update"],
+        "technician": ["list", "read"]
+      }
+    },
+    {
+      "key": "technician",
+      "label": "Técnico",
+      "label_plural": "Técnicos",
+      "description": "Personas habilitadas para ejecutar trabajos",
+      "title_field": "full_name",
+      "fields": [
+        {"key": "full_name", "label": "Nombre", "type": "text", "required": true, "searchable": true},
+        {"key": "email", "label": "Correo", "type": "email", "required": true, "unique": true},
+        {"key": "active", "label": "Activo", "type": "boolean", "required": true, "default": true}
+      ],
+      "relationships": [
+        {"key": "orders", "label": "Órdenes asignadas", "type": "has_many", "target": "work_order"}
+      ],
+      "permissions": {
+        "admin": ["list", "read", "create", "update", "delete"],
+        "supervisor": ["list", "read", "create", "update"],
+        "technician": ["list", "read"]
+      }
+    },
+    {
+      "key": "work_order",
+      "label": "Orden de trabajo",
+      "label_plural": "Órdenes de trabajo",
+      "description": "Trabajo preventivo o correctivo sobre un equipo",
+      "title_field": "summary",
+      "fields": [
+        {"key": "summary", "label": "Resumen", "type": "text", "required": true, "searchable": true},
+        {"key": "instructions", "label": "Instrucciones", "type": "long_text"},
+        {"key": "scheduled_for", "label": "Programada para", "type": "datetime"},
+        {
+          "key": "status",
+          "label": "Estado",
+          "type": "enum",
+          "required": true,
+          "default": "pending",
+          "options": [
+            {"key": "pending", "label": "Pendiente"},
+            {"key": "in_progress", "label": "En curso"},
+            {"key": "completed", "label": "Completada"},
+            {"key": "cancelled", "label": "Cancelada"}
+          ]
+        },
+        {"key": "report", "label": "Informe", "type": "file"}
+      ],
+      "relationships": [
+        {"key": "equipment", "label": "Equipo", "type": "belongs_to", "target": "equipment", "required": true, "on_delete": "restrict"},
+        {"key": "assigned_technician", "label": "Técnico asignado", "type": "belongs_to", "target": "technician", "on_delete": "set_null"}
+      ],
+      "attachments": {
+        "enabled": true,
+        "max_files": 20,
+        "max_size_mb": 3,
+        "allowed_types": ["application/pdf", "image/jpeg", "image/png"]
+      },
+      "permissions": {
+        "admin": ["list", "read", "create", "update", "delete"],
+        "supervisor": ["list", "read", "create", "update", "delete"],
+        "technician": ["list", "read", "update"]
+      }
+    }
+  ],
+  "views": [
+    {"key": "equipment_list", "label": "Equipos", "type": "table", "entity": "equipment", "navigation": true, "fields": ["name", "serial_number", "status"], "default_sort": {"field": "name", "direction": "asc"}, "bulk_edit_fields": ["status"]},
+    {"key": "work_order_board", "label": "Órdenes", "type": "kanban", "entity": "work_order", "navigation": true, "fields": ["summary", "scheduled_for"], "group_by": "status", "allow_move": true},
+    {"key": "schedule", "label": "Agenda", "type": "calendar", "entity": "work_order", "navigation": true, "fields": ["summary", "status"], "date_field": "scheduled_for", "allow_reschedule": true},
+    {
+      "key": "operations_dashboard",
+      "label": "Operaciones",
+      "type": "dashboard",
+      "navigation": true,
+      "widgets": [
+        {"key": "orders_total", "label": "Órdenes totales", "type": "metric", "entity": "work_order", "aggregate": "count"},
+        {"key": "orders_by_status", "label": "Órdenes por estado", "type": "breakdown", "entity": "work_order", "group_by": "status"},
+        {"key": "recent_orders", "label": "Órdenes recientes", "type": "recent", "entity": "work_order", "fields": ["summary", "status", "scheduled_for"], "limit": 5}
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "key": "require_report_on_completion",
+      "label": "Exigir informe al completar",
+      "when": {"entity": "work_order", "event": "before_save"},
+      "if": {
+        "all": [
+          {"field": "status", "operator": "eq", "value": "completed"},
+          {"field": "report", "operator": "is_empty"}
+        ]
+      },
+      "then": [{"action": "block", "message": "Cargá el informe antes de completar la orden."}]
+    }
+  ],
+  "decisions": [
+    {
+      "status": "assumption",
+      "topic": "single_tenant",
+      "statement": "La aplicación pertenece a una sola organización y no comparte datos ni usuarios con otros clientes"
+    },
+    {
+      "status": "unresolved",
+      "topic": "authentication_provider",
+      "statement": "Seleccionar proveedor o implementación de autenticación antes del despliegue"
+    }
+  ]
+}

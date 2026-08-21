@@ -1,0 +1,4 @@
+interface:
+  display_name: "Riel App Factory"
+  short_description: "Genera aplicaciones single-tenant desde AppSpec"
+  default_prompt: "Usa $riel-app-factory para convertir este pedido de negocio en una aplicación web independiente."
