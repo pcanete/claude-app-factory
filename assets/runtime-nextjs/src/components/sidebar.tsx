@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { clearDevelopmentRoleAction } from "@/app/dev-access/actions";
 import { canUseApplicationAssistant } from "@/features/ai/access";
-import { canViewAudit, canViewRules, getCurrentUser, hasPermission, hasViewAccess } from "@/lib/auth";
+import { canManageUsers, canViewAudit, canViewRules, getCurrentUser, hasPermission, hasViewAccess } from "@/lib/auth";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { runtimeSpec } from "@/lib/spec";
 
@@ -35,6 +35,7 @@ export async function Sidebar() {
         {user && canUseApplicationAssistant(user) && (
           <Link className="nav-link assistant-link" href="/assistant">Asistente IA</Link>
         )}
+        {user && canManageUsers(user) && <Link className="nav-link" href="/users">Usuarios</Link>}
         {user && canViewAudit(user) && <Link className="nav-link audit-link" href="/audit">Auditoría</Link>}
         {user && canViewRules(user) && <Link className="nav-link" href="/rules">Reglas</Link>}
       </nav>

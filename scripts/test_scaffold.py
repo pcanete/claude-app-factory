@@ -160,6 +160,7 @@ class ScaffoldTests(unittest.TestCase):
     def test_report_describes_server_authorization(self) -> None:
         report = compile_report(self.spec)
         self.assertIn("permission matrix is enforced server-side", report)
+        self.assertIn("User administration assigns versioned AppSpec roles", report)
         self.assertIn("production authentication adapter", report)
         self.assertIn("Production fails closed", report)
         self.assertIn("audit event in the same database transaction", report)

@@ -1,7 +1,15 @@
 import type { PoolClient } from "pg";
 import { sql, transactionSql } from "@/lib/db";
 
-export type AuditAction = "create" | "update" | "delete" | "attachment_create" | "attachment_delete";
+export type AuditAction =
+  | "create"
+  | "update"
+  | "delete"
+  | "attachment_create"
+  | "attachment_delete"
+  | "user_create"
+  | "user_update"
+  | "user_status";
 
 export type AuditEvent = {
   id: string;

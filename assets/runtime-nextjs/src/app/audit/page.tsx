@@ -11,6 +11,9 @@ const actions: Array<{ key: AuditAction; label: string }> = [
   { key: "delete", label: "Eliminación" },
   { key: "attachment_create", label: "Archivo adjuntado" },
   { key: "attachment_delete", label: "Archivo eliminado" },
+  { key: "user_create", label: "Usuario creado" },
+  { key: "user_update", label: "Usuario modificado" },
+  { key: "user_status", label: "Estado de usuario" },
 ];
 
 export default async function AuditPage({
@@ -20,14 +23,18 @@ export default async function AuditPage({
 }) {
   await requireAuditAccess();
   const requested = await searchParams;
-  const entityKey = runtimeSpec.entities.some((entity) => entity.key === requested.entity)
+  const auditEntities = [
+    ...runtimeSpec.entities.map((entity) => ({ key: entity.key, label: entity.label, labelPlural: entity.label_plural })),
+    { key: "app_user", label: "Usuario", labelPlural: "Usuarios" },
+  ];
+  const entityKey = auditEntities.some((entity) => entity.key === requested.entity)
     ? requested.entity
     : undefined;
   const action = actions.some((candidate) => candidate.key === requested.action)
     ? requested.action as AuditAction
     : undefined;
   const events = await listAuditEvents({ entityKey, action });
-  const entityLabels = Object.fromEntries(runtimeSpec.entities.map((entity) => [entity.key, entity.label]));
+  const entityLabels = Object.fromEntries(auditEntities.map((entity) => [entity.key, entity.label]));
   const actionLabels = Object.fromEntries(actions.map((candidate) => [candidate.key, candidate.label]));
 
   return (
@@ -42,8 +49,8 @@ export default async function AuditPage({
       <form className="toolbar">
         <select aria-label="Filtrar por entidad" className="control audit-filter" defaultValue={entityKey ?? ""} name="entity">
           <option value="">Todas las entidades</option>
-          {runtimeSpec.entities.map((entity) => (
-            <option key={entity.key} value={entity.key}>{entity.label_plural}</option>
+          {auditEntities.map((entity) => (
+            <option key={entity.key} value={entity.key}>{entity.labelPlural}</option>
           ))}
         </select>
         <select aria-label="Filtrar por acción" className="control audit-filter" defaultValue={action ?? ""} name="action">

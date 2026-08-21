@@ -121,6 +121,9 @@ tbody tr:hover { background: #1a1d25; }
 .audit-badge.delete { color: var(--danger); }
 .audit-badge.attachment_create { color: #5bd6a2; }
 .audit-badge.attachment_delete { color: #f5ae6b; }
+.audit-badge.user_create { color: #5bd6a2; }
+.audit-badge.user_update { color: #7cb8ff; }
+.audit-badge.user_status { color: #f5ae6b; }
 .record-id { color: var(--muted); font-size: 11px; }
 details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
 .audit-json { max-width: 460px; max-height: 320px; overflow: auto; background: #0b0d12; border: 1px solid var(--border); border-radius: 8px; color: #d9dce3; font-size: 11px; line-height: 1.5; padding: 12px; white-space: pre-wrap; word-break: break-word; }
@@ -297,6 +300,25 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
 .assistant-empty .assistant-orb { margin-bottom: 20px; }
 .assistant-empty .subtitle { margin-top: 9px; }
 
+.user-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.user-layout { align-items: start; display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 18px; margin-bottom: 24px; }
+.user-layout .form-card { max-width: none; }
+.user-create-card .subtitle, .role-card .subtitle { font-size: 13px; margin-top: 8px; }
+.user-create-grid { margin-top: 20px; }
+.role-card:hover { border-color: var(--border); }
+.role-list { display: grid; gap: 10px; margin-top: 20px; }
+.role-list > div { align-items: center; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; padding-top: 10px; }
+.role-list code { color: var(--muted); font-size: 11px; }
+.user-toolbar { margin-top: 4px; }
+.users-table { min-width: 760px; }
+.identity-badge, .user-status { border: 1px solid var(--border); border-radius: 999px; display: inline-flex; font-size: 11px; padding: 4px 8px; }
+.identity-badge.vinculada, .user-status.on { color: #5bd6a2; }
+.identity-badge.pendiente { color: #f5ae6b; }
+.identity-badge.local { color: #7cb8ff; }
+.user-status.off { color: var(--muted); }
+.user-detail-meta { grid-template-columns: 1fr; }
+.user-detail-meta .detail-item.full { grid-column: 1; }
+
 .error-box { max-width: 680px; margin: 15vh auto; padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 
 @media (max-width: 760px) {
@@ -323,4 +345,5 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
   .assistant-new-form { align-items: stretch; flex-direction: column; }
   .assistant-messages { padding: 20px 16px; }
   .assistant-composer { padding: 12px 16px; }
+  .user-stats, .user-layout { grid-template-columns: 1fr; }
 }

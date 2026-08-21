@@ -126,6 +126,14 @@ export async function requireAuditAccess() {
   return user;
 }
 
+export const canManageUsers = canViewAudit;
+
+export async function requireUserManagementAccess() {
+  const user = await requireUser();
+  if (!canManageUsers(user)) redirect("/forbidden");
+  return user;
+}
+
 export const canViewRules = canViewAudit;
 
 export async function requireRulesAccess() {

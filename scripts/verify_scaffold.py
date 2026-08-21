@@ -17,6 +17,7 @@ EXPECTED_FILES = {
     "database/generated/001_initial.sql",
     "database/custom/EXTENSIONS.md",
     "database/custom/100_ai_foundation.sql",
+    "database/custom/110_user_management.sql",
     "src/generated/app-spec.ts",
     "src/generated/navigation.ts",
     "src/generated/permissions.ts",
@@ -30,6 +31,9 @@ EXPECTED_FILES = {
     "src/app/page.tsx",
     "src/app/actions.ts",
     "src/app/audit/page.tsx",
+    "src/app/users/actions.ts",
+    "src/app/users/page.tsx",
+    "src/app/users/[id]/page.tsx",
     "src/app/dev-access/actions.ts",
     "src/app/dev-access/page.tsx",
     "src/app/forbidden/page.tsx",
@@ -65,6 +69,7 @@ EXPECTED_FILES = {
     "src/features/ai/store.ts",
     "src/features/ai/tools.ts",
     "src/features/ai/components/application-assistant-chat.tsx",
+    "src/features/users/store.ts",
     "src/lib/auth-types.ts",
     "src/lib/auth.ts",
     "src/lib/audit.ts",
@@ -170,6 +175,15 @@ def main() -> int:
     audit_page = audit_page_path.read_text(encoding="utf-8") if audit_page_path.is_file() else ""
     if "requireAuditAccess" not in audit_page or "listAuditEvents" not in audit_page:
         failures.append("Audit history page is missing its server-side access or data check.")
+    user_actions_path = project / "src/app/users/actions.ts"
+    user_actions = user_actions_path.read_text(encoding="utf-8") if user_actions_path.is_file() else ""
+    for invariant in ("requireUserManagementAccess", "withTransaction", "recordAuditEvent", "SELF_PROTECTION", "LOCAL_IDENTITY"):
+        if invariant not in user_actions:
+            failures.append(f"User management actions are missing: {invariant}.")
+    user_page_path = project / "src/app/users/page.tsx"
+    user_page = user_page_path.read_text(encoding="utf-8") if user_page_path.is_file() else ""
+    if "requireUserManagementAccess" not in user_page or "listManagedUsers" not in user_page:
+        failures.append("User management page is missing server-side access or data checks.")
     rules_page_path = project / "src/app/rules/page.tsx"
     rules_page = rules_page_path.read_text(encoding="utf-8") if rules_page_path.is_file() else ""
     if "requireRulesAccess" not in rules_page or "runtimeSpec.rules" not in rules_page:

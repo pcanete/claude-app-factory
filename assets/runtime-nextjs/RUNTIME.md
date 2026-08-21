@@ -15,6 +15,12 @@ This project is a local application foundation generated from `app-spec.json`.
 
 Every create, update, and delete operation writes `app_audit_log` in the same database transaction. Roles with full list/read/delete access across every entity can review and filter the history at `/audit`.
 
+## User management
+
+Users with full administrative access can manage application users at `/users`: create pending identities, assign one AppSpec role, and activate or deactivate access. User mutations are validated on the server and written to the audit log in the same database transaction. Accounts are deactivated instead of deleted so their history remains attributable.
+
+Local-preview identities are read-only and the current administrator cannot deactivate their own account or remove their own role. The module intentionally does not edit role permissions at runtime: roles and their permission matrices remain versioned in AppSpec. A production authentication adapter must replace each `pending:` subject with the stable subject supplied by the chosen identity provider.
+
 Every entity also exposes generic CSV/XLSX transfer tools:
 
 - export and template downloads require the entity's server-side permissions;
