@@ -148,6 +148,18 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
 .notice.success { border-color: color-mix(in srgb, #22c58b 44%, var(--border)); background: color-mix(in srgb, #22c58b 12%, transparent); color: #9ce8ca; }
 .notice.import-error { border-color: color-mix(in srgb, var(--danger) 48%, var(--border)); background: color-mix(in srgb, var(--danger) 10%, transparent); color: #ffc2c2; }
 .notice.rule-blocked { border-color: color-mix(in srgb, var(--danger) 48%, var(--border)); background: color-mix(in srgb, var(--danger) 10%, transparent); color: #ffc2c2; }
+.settings-section { display: grid; gap: 18px; margin-bottom: 32px; }
+.settings-section-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.settings-section-header > div { flex: 0 0 auto; }
+.settings-section-header h2, .settings-provider-heading h3, .settings-preference-card h3 { margin: 0; }
+.settings-section-header > .subtitle { max-width: 560px; text-align: right; }
+.settings-provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.settings-provider-card { position: relative; }
+.settings-provider-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.settings-provider-heading .subtitle { margin: 6px 0 0; }
+.settings-actions { margin-top: 14px; }
+.settings-remove { margin-top: 10px; }
+.settings-preference-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-top: 16px; }
 .notice.rules-applied { color: #c9c2ff; }
 .rules-list { display: grid; gap: 14px; }
 .rule-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
@@ -351,4 +363,7 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
   .assistant-messages { padding: 20px 16px; }
   .assistant-composer { padding: 12px 16px; }
   .user-stats, .user-layout { grid-template-columns: 1fr; }
+  .settings-section-header { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .settings-section-header > .subtitle { text-align: left; }
+  .settings-provider-grid, .settings-preference-form { grid-template-columns: 1fr; }
 }

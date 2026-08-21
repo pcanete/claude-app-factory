@@ -4,7 +4,8 @@ import { createAiConversationAction } from "@/app/assistant/actions";
 import { ApplicationAssistantChat } from "@/features/ai/components/application-assistant-chat";
 import type { ApplicationAssistantMessage } from "@/features/ai/agent";
 import { canUseApplicationAssistant } from "@/features/ai/access";
-import { aiProviderIsConfigured, getAllowedAiModels } from "@/features/ai/config";
+import { getUserAiConfiguration } from "@/features/ai/config";
+import { AI_MODEL_CATALOG } from "@/features/settings/catalog";
 import { getAiConversation, isAiConversationId, listAiConversations, loadAiMessages } from "@/features/ai/store";
 import { requireUser } from "@/lib/auth";
 
@@ -29,9 +30,10 @@ export default async function AssistantConversationPage({
     loadAiMessages(user.id, id),
   ]);
   if (!conversation) notFound();
-  const models = getAllowedAiModels();
+  const configuration = await getUserAiConfiguration(user.id);
+  const models = configuration.models.length ? configuration.models : AI_MODEL_CATALOG;
   const selectedModel = models.find((model) => model.id === conversation.modelId);
-  const configured = aiProviderIsConfigured();
+  const configured = configuration.configured;
 
   return (
     <div className="assistant-page">
@@ -46,18 +48,18 @@ export default async function AssistantConversationPage({
       </div>
       {!configured && (
         <div className="notice warning assistant-config-notice">
-          La interfaz y la persistencia están listas. Falta configurar <code>OPENAI_API_KEY</code> o <code>AI_GATEWAY_API_KEY</code> en el servidor para consultar un modelo.
+          Conectá una clave personal desde <Link href="/settings">Configuración</Link> para consultar un modelo.
         </div>
       )}
       <div className="assistant-layout">
         <aside className="conversation-sidebar">
           <form action={createAiConversationAction} className="assistant-new-form compact">
-            <select aria-label="Modelo para la nueva conversación" className="control" defaultValue={models[0]?.id} name="modelId">
+            <select aria-label="Modelo para la nueva conversación" className="control" defaultValue={configuration.preferredModelId ?? models[0]?.id} disabled={!configured} name="modelId">
               {models.map((model) => (
                 <option key={model.id} value={model.id}>{model.provider} · {model.label}</option>
               ))}
             </select>
-            <button className="button" type="submit">+ Nueva</button>
+            <button className="button" disabled={!configured} type="submit">+ Nueva</button>
           </form>
           <div className="conversation-list" aria-label="Conversaciones">
             {conversations.map((item) => (

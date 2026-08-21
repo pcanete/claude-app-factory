@@ -19,6 +19,7 @@ EXPECTED_FILES = {
     "database/custom/100_ai_foundation.sql",
     "database/custom/110_user_management.sql",
     "database/custom/120_clerk_authentication.sql",
+    "database/custom/130_application_settings.sql",
     "src/generated/app-spec.ts",
     "src/generated/navigation.ts",
     "src/generated/permissions.ts",
@@ -42,6 +43,8 @@ EXPECTED_FILES = {
     "src/app/dev-access/page.tsx",
     "src/app/forbidden/page.tsx",
     "src/app/rules/page.tsx",
+    "src/app/settings/actions.ts",
+    "src/app/settings/page.tsx",
     "src/app/views/[view]/page.tsx",
     "src/app/attachments/actions.ts",
     "src/app/attachments/[id]/route.ts",
@@ -76,6 +79,9 @@ EXPECTED_FILES = {
     "src/features/ai/store.ts",
     "src/features/ai/tools.ts",
     "src/features/ai/components/application-assistant-chat.tsx",
+    "src/features/settings/catalog.ts",
+    "src/features/settings/crypto.ts",
+    "src/features/settings/store.ts",
     "src/features/users/store.ts",
     "src/lib/auth-types.ts",
     "src/lib/auth.ts",
@@ -234,6 +240,21 @@ def main() -> int:
     for invariant in ("hasPermission", "countFilteredRecords", "listRecords", "getRecord"):
         if invariant not in assistant_tools:
             failures.append(f"Application assistant tools are missing: {invariant}.")
+    settings_actions_path = project / "src/app/settings/actions.ts"
+    settings_actions = settings_actions_path.read_text(encoding="utf-8") if settings_actions_path.is_file() else ""
+    for invariant in ("encryptSecret", "requireUser", "requireUserManagementAccess", "recordAuditEvent", "withTransaction"):
+        if invariant not in settings_actions:
+            failures.append(f"Application settings actions are missing: {invariant}.")
+    settings_crypto_path = project / "src/features/settings/crypto.ts"
+    settings_crypto = settings_crypto_path.read_text(encoding="utf-8") if settings_crypto_path.is_file() else ""
+    for invariant in ("aes-256-gcm", "SETTINGS_ENCRYPTION_KEY", "authenticationTag"):
+        if invariant not in settings_crypto:
+            failures.append(f"Encrypted user settings are missing: {invariant}.")
+    settings_migration_path = project / "database/custom/130_application_settings.sql"
+    settings_migration = settings_migration_path.read_text(encoding="utf-8") if settings_migration_path.is_file() else ""
+    for invariant in ("app_setting", "app_user_setting", "app_user_secret"):
+        if invariant not in settings_migration:
+            failures.append(f"Application settings migration is missing: {invariant}.")
     migration_runner_path = project / "scripts/apply-migrations.mjs"
     migration_runner = migration_runner_path.read_text(encoding="utf-8") if migration_runner_path.is_file() else ""
     if 'resolve("database/custom")' not in migration_runner:
@@ -260,7 +281,7 @@ def main() -> int:
             failures.append("Generic database smoke command is missing.")
         if "exceljs" not in package.get("dependencies", {}):
             failures.append("Excel import/export dependency is missing.")
-        for dependency in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "zod"):
+        for dependency in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "@ai-sdk/anthropic", "zod"):
             if dependency not in package.get("dependencies", {}):
                 failures.append(f"Application assistant dependency is missing: {dependency}.")
         if "@clerk/nextjs" not in package.get("dependencies", {}):

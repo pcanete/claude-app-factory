@@ -37,6 +37,7 @@ export async function Sidebar() {
         {user && canUseApplicationAssistant(user) && (
           <Link className="nav-link assistant-link" href="/assistant">Asistente IA</Link>
         )}
+        {user && <Link className="nav-link" href="/settings">Configuración</Link>}
         {user && canManageUsers(user) && <Link className="nav-link" href="/users">Usuarios</Link>}
         {user && canViewAudit(user) && <Link className="nav-link audit-link" href="/audit">Auditoría</Link>}
         {user && canViewRules(user) && <Link className="nav-link" href="/rules">Reglas</Link>}

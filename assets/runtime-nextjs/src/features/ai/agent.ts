@@ -14,11 +14,11 @@ function entityContext(user: RuntimeUser) {
     .join("\n");
 }
 
-export function createApplicationAssistant(user: RuntimeUser, modelId: string) {
-  const modelAdapter = getAiModelAdapter();
+export async function createApplicationAssistant(user: RuntimeUser, modelId: string) {
+  const modelAdapter = await getAiModelAdapter(user.id, modelId);
   return new ToolLoopAgent({
     id: "riel-application-assistant",
-    model: modelAdapter.model(modelId),
+    model: modelAdapter.model,
     instructions: `Sos el asistente interno de ${runtimeSpec.app.name}.
 
 Tu función es responder preguntas sobre los datos que el usuario actual está autorizado a consultar.
@@ -41,5 +41,5 @@ ${entityContext(user)}`,
 }
 
 export type ApplicationAssistantMessage = InferAgentUIMessage<
-  ReturnType<typeof createApplicationAssistant>
+  Awaited<ReturnType<typeof createApplicationAssistant>>
 >;

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createAiConversationAction } from "@/app/assistant/actions";
 import { canUseApplicationAssistant } from "@/features/ai/access";
-import { aiProviderIsConfigured, getAllowedAiModels } from "@/features/ai/config";
+import { getUserAiConfiguration } from "@/features/ai/config";
+import { AI_MODEL_CATALOG } from "@/features/settings/catalog";
 import { listAiConversations } from "@/features/ai/store";
 import { requireUser } from "@/lib/auth";
 
@@ -12,8 +13,9 @@ export default async function AssistantLandingPage() {
   if (!canUseApplicationAssistant(user)) redirect("/forbidden");
   const conversations = await listAiConversations(user.id);
   if (conversations[0]) redirect(`/assistant/${conversations[0].id}`);
-  const models = getAllowedAiModels();
-  const configured = aiProviderIsConfigured();
+  const configuration = await getUserAiConfiguration(user.id);
+  const models = configuration.models.length ? configuration.models : AI_MODEL_CATALOG;
+  const configured = configuration.configured;
 
   return (
     <div className="assistant-landing">
@@ -26,7 +28,7 @@ export default async function AssistantLandingPage() {
       </div>
       {!configured && (
         <div className="notice warning">
-          Configurá <code>OPENAI_API_KEY</code> o <code>AI_GATEWAY_API_KEY</code> en el servidor para habilitar respuestas reales.
+          Conectá una clave personal desde <a href="/settings">Configuración</a> para habilitar respuestas reales.
         </div>
       )}
       <section className="assistant-empty card">
@@ -36,13 +38,13 @@ export default async function AssistantLandingPage() {
         <form action={createAiConversationAction} className="assistant-new-form">
           <label className="field">
             <span className="field-label">Modelo</span>
-            <select className="control" defaultValue={models[0]?.id} name="modelId">
+            <select className="control" defaultValue={configuration.preferredModelId ?? models[0]?.id} disabled={!configured} name="modelId">
               {models.map((model) => (
                 <option key={model.id} value={model.id}>{model.provider} · {model.label}</option>
               ))}
             </select>
           </label>
-          <button className="button" type="submit">Nueva conversación</button>
+          <button className="button" disabled={!configured} type="submit">Nueva conversación</button>
         </form>
       </section>
     </div>

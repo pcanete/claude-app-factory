@@ -28,7 +28,8 @@ Build an independent application foundation from business language. Treat exampl
 7. With a disposable or approved PostgreSQL database, run `pnpm db:apply` and `pnpm db:smoke`; the smoke test must cover every generated entity and roll back its records by default.
 8. Run `scripts/verify_scaffold.py <generated-directory>` before presenting the result. When a dev server is started, also verify the rendered UI and at least one complete CRUD path in a real browser.
 9. Use `ALLOW_UNSAFE_LOCAL_PREVIEW=true` only for local development. Production uses Clerk for identity and PostgreSQL for active status, roles, and server-side permissions; keep it closed until keys, invitation-only access, first-admin bootstrap, and end-to-end login are verified.
-10. Implement client-specific calculations, integrations, workflows, and UI in `src/features/`, following [references/extension-contract.md](references/extension-contract.md).
+10. When personal AI credentials are enabled, generate a unique `SETTINGS_ENCRYPTION_KEY` per deployed application, store it only in the deployment environment, and verify `/settings` plus at least one conversation with a user-owned provider key.
+11. Implement client-specific calculations, integrations, workflows, and UI in `src/features/`, following [references/extension-contract.md](references/extension-contract.md).
 
 ## Delivery contract
 

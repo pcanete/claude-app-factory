@@ -11,7 +11,11 @@ export type AuditAction =
   | "user_update"
   | "user_status"
   | "user_invite"
-  | "user_link";
+  | "user_link"
+  | "ai_credential_save"
+  | "ai_credential_remove"
+  | "ai_preference_update"
+  | "application_settings_update";
 
 export type AuditEvent = {
   id: string;

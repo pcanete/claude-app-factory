@@ -6,7 +6,7 @@ import {
 } from "ai";
 import { canUseApplicationAssistant } from "@/features/ai/access";
 import { createApplicationAssistant, type ApplicationAssistantMessage } from "@/features/ai/agent";
-import { aiProviderIsConfigured, requireAllowedAiModel } from "@/features/ai/config";
+import { requireAllowedAiModel } from "@/features/ai/config";
 import {
   completeAiRun,
   createAiRun,
@@ -29,7 +29,6 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return errorResponse("Sesión requerida.", 401);
   if (!canUseApplicationAssistant(user)) return errorResponse("No tenés acceso al asistente.", 403);
-  if (!aiProviderIsConfigured()) return errorResponse("El proveedor de IA todavía no está configurado.", 503);
 
   let body: { id?: unknown; message?: unknown };
   try {
@@ -47,13 +46,13 @@ export async function POST(request: Request) {
 
   const conversation = await getAiConversation(user.id, body.id);
   if (!conversation) return errorResponse("Conversación inexistente.", 404);
-  requireAllowedAiModel(conversation.modelId);
+  await requireAllowedAiModel(user.id, conversation.modelId);
   const previousMessages = await loadAiMessages(user.id, conversation.id);
   if (previousMessages.length >= 120) {
     return errorResponse("Esta conversación alcanzó el límite de mensajes. Creá una nueva.", 413);
   }
 
-  const agent = createApplicationAssistant(user, conversation.modelId);
+  const agent = await createApplicationAssistant(user, conversation.modelId);
   let messages: ApplicationAssistantMessage[];
   try {
     messages = await validateUIMessages<ApplicationAssistantMessage>({

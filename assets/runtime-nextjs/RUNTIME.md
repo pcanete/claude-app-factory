@@ -62,7 +62,13 @@ Administrators can inspect the active definitions at `/rules`. The kernel delibe
 
 The runtime includes a persistent, read-only application assistant at `/assistant`. Its tools are derived from `app-spec.json` and call the same bounded repository functions used by the application. Every tool call checks the current user's generated entity permissions; the model never receives SQL or database credentials.
 
-Configure either `OPENAI_API_KEY` for direct OpenAI access or `AI_GATEWAY_API_KEY` for multi-provider routing. `AI_PROVIDER=openai|gateway` can select the mode explicitly; otherwise the runtime detects the available credential. Optionally restrict selectable models with `AI_ALLOWED_MODELS`. Conversations, UI messages, runs, token usage, and bounded tool-call metadata are stored in PostgreSQL. This first layer cannot create, update, delete, export, or call external systems. Those capabilities require explicit approval policies and reviewed feature adapters.
+Each authenticated user can open `/settings` and connect a personal OpenAI or Anthropic API key. Keys are encrypted with AES-256-GCM before PostgreSQL storage, never rendered back to the browser, and are isolated by user. Define `SETTINGS_ENCRYPTION_KEY` as exactly 32 random bytes encoded as base64 (or 64 hexadecimal characters); preserve and back it up because losing it makes stored credentials unreadable.
+
+The application may also provide `OPENAI_API_KEY` for shared direct OpenAI access or `AI_GATEWAY_API_KEY` for multi-provider routing. Personal provider credentials take precedence for their provider. Optionally restrict selectable models with `AI_ALLOWED_MODELS`. Conversations, UI messages, runs, token usage, and bounded tool-call metadata are stored in PostgreSQL. This first layer cannot create, update, delete, export, or call external systems. Those capabilities require explicit approval policies and reviewed feature adapters.
+
+## Application settings
+
+`/settings` is the extensible administration surface. Every user owns personal preferences and encrypted connections; administrators additionally manage application-wide locale and timezone. New connectors and module settings belong in the same namespaced `app_setting`, `app_user_setting`, and `app_user_secret` primitives instead of ad hoc environment variables or domain-specific tables.
 
 ## Ownership
 

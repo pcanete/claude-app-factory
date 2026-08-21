@@ -16,6 +16,10 @@ const actions: Array<{ key: AuditAction; label: string }> = [
   { key: "user_status", label: "Estado de usuario" },
   { key: "user_invite", label: "Invitación enviada" },
   { key: "user_link", label: "Identidad vinculada" },
+  { key: "ai_credential_save", label: "Credencial de IA guardada" },
+  { key: "ai_credential_remove", label: "Credencial de IA eliminada" },
+  { key: "ai_preference_update", label: "Preferencia de IA" },
+  { key: "application_settings_update", label: "Configuración actualizada" },
 ];
 
 export default async function AuditPage({
@@ -28,6 +32,9 @@ export default async function AuditPage({
   const auditEntities = [
     ...runtimeSpec.entities.map((entity) => ({ key: entity.key, label: entity.label, labelPlural: entity.label_plural })),
     { key: "app_user", label: "Usuario", labelPlural: "Usuarios" },
+    { key: "app_user_secret", label: "Credencial de IA", labelPlural: "Credenciales de IA" },
+    { key: "app_user_setting", label: "Preferencia", labelPlural: "Preferencias" },
+    { key: "app_setting", label: "Configuración", labelPlural: "Configuración" },
   ];
   const entityKey = auditEntities.some((entity) => entity.key === requested.entity)
     ? requested.entity
