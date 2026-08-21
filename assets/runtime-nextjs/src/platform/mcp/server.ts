@@ -147,7 +147,14 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
             description: entity.description,
             title_field: entity.title_field,
             fields: entity.fields,
-            relationships: entity.relationships ?? [],
+            // `writeAs` cierra la distancia entre descubrir y escribir: la AppSpec
+            // llama `client` a la relación y la columna es `client_id`. Ambos nombres
+            // se aceptan al escribir, y acá se declara cuál es cuál.
+            relationships: (entity.relationships ?? []).map((relationship) => ({
+              ...relationship,
+              writeAs: relationship.type === "belongs_to" ? `${relationship.key}_id` : null,
+              writable: relationship.type === "belongs_to",
+            })),
             attachments: entity.attachments,
           },
         },

@@ -277,9 +277,22 @@ export function recordInputFromObject(
   mode: "create" | "update",
 ) {
   const fieldKeys = new Set(entity.fields.map((field) => field.key));
-  const relationshipKeys = new Set(relationFields(entity).map((relationship) => `${relationship.key}_id`));
+  // Una relación se declara en la AppSpec como `client` y se almacena como `client_id`.
+  // Quien descubre el esquema lee el primer nombre, así que se aceptan los dos: de lo
+  // contrario un agente que lee la estructura y después escribe según lo que leyó falla.
+  const relationshipKeys = new Set(
+    relationFields(entity).flatMap((relationship) => [relationship.key, `${relationship.key}_id`]),
+  );
   const unknown = Object.keys(input).filter((key) => !fieldKeys.has(key) && !relationshipKeys.has(key));
   if (unknown.length) throw new Error(`Campos desconocidos: ${unknown.join(", ")}.`);
+
+  for (const relationship of relationFields(entity)) {
+    if (relationship.key in input && `${relationship.key}_id` in input) {
+      throw new Error(
+        `${relationship.label} llegó dos veces: usá ${relationship.key} o ${relationship.key}_id, no ambos.`,
+      );
+    }
+  }
 
   const result: Record<string, unknown> = {};
   for (const field of entity.fields) {
@@ -288,7 +301,7 @@ export function recordInputFromObject(
   }
   for (const relationship of relationFields(entity)) {
     const key = `${relationship.key}_id`;
-    const raw = input[key];
+    const raw = key in input ? input[key] : input[relationship.key];
     if (raw === undefined) {
       if (mode === "create" && relationship.required) throw new Error(`${relationship.label} es obligatorio.`);
       continue;

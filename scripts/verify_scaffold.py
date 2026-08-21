@@ -350,6 +350,18 @@ def main() -> int:
     for invariant in ("list_entities", "describe_entity", "query_records", "get_record", "export_snapshot", "startAgentToolEvent"):
         if invariant not in mcp_server:
             failures.append(f"MCP read tool surface is missing: {invariant}.")
+    # Descubrir el esquema y escribir tienen que hablar el mismo idioma: si
+    # describe_entity dice `client` y create_record exige `client_id`, un agente que
+    # lee la estructura y despues escribe segun lo que leyo falla.
+    if "writeAs" not in mcp_server:
+        failures.append(
+            "MCP describe_entity does not declare how a relationship is written, so discovery and writing disagree."
+        )
+    repository_path = project / "src/lib/repository.ts"
+    repository_source = repository_path.read_text(encoding="utf-8") if repository_path.is_file() else ""
+    if "relationship.key, `${relationship.key}_id`" not in repository_source:
+        failures.append("Record input does not accept both the relationship key and its column name.")
+
     for invariant in ("list_attachments", "read_attachment"):
         if invariant not in mcp_server:
             failures.append(f"MCP does not expose record files to agents: {invariant}.")
