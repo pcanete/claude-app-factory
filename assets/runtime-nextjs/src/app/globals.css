@@ -1,11 +1,11 @@
 :root {
   --background: #0b0d12;
-  --surface: __SURFACE__;
+  --surface: #0B1220;
   --surface-raised: #1a1d25;
   --border: #2a2e39;
   --text: #f4f5f7;
   --muted: #989eaa;
-  --primary: __PRIMARY__;
+  --primary: #0EA5E9;
   --primary-soft: color-mix(in srgb, var(--primary) 18%, transparent);
   --danger: #f06a6a;
   --radius: 14px;
@@ -55,6 +55,9 @@ button, input, select, textarea { font: inherit; }
 .session-name { font-size: 12px; font-weight: 700; line-height: 1.4; }
 .session-email { color: var(--muted); font-size: 11px; margin-top: 3px; word-break: break-all; }
 .session-action { border: 0; background: transparent; color: var(--primary); cursor: pointer; font-size: 12px; padding: 10px 0 0; }
+.auth-state { margin: 10vh auto; max-width: 620px; padding: 32px; text-align: center; }
+.auth-state .session-action { font-size: 14px; }
+.clerk-auth-state { align-items: center; display: flex; justify-content: center; max-width: none; }
 
 .main { padding: 38px clamp(24px, 5vw, 72px) 64px; overflow: hidden; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 28px; }
@@ -124,6 +127,8 @@ tbody tr:hover { background: #1a1d25; }
 .audit-badge.user_create { color: #5bd6a2; }
 .audit-badge.user_update { color: #7cb8ff; }
 .audit-badge.user_status { color: #f5ae6b; }
+.audit-badge.user_invite { color: #c59cff; }
+.audit-badge.user_link { color: #5bd6a2; }
 .record-id { color: var(--muted); font-size: 11px; }
 details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
 .audit-json { max-width: 460px; max-height: 320px; overflow: auto; background: #0b0d12; border: 1px solid var(--border); border-radius: 8px; color: #d9dce3; font-size: 11px; line-height: 1.5; padding: 12px; white-space: pre-wrap; word-break: break-word; }

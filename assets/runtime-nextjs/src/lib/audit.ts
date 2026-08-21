@@ -9,7 +9,9 @@ export type AuditAction =
   | "attachment_delete"
   | "user_create"
   | "user_update"
-  | "user_status";
+  | "user_status"
+  | "user_invite"
+  | "user_link";
 
 export type AuditEvent = {
   id: string;

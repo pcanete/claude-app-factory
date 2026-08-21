@@ -14,6 +14,8 @@ const actions: Array<{ key: AuditAction; label: string }> = [
   { key: "user_create", label: "Usuario creado" },
   { key: "user_update", label: "Usuario modificado" },
   { key: "user_status", label: "Estado de usuario" },
+  { key: "user_invite", label: "Invitación enviada" },
+  { key: "user_link", label: "Identidad vinculada" },
 ];
 
 export default async function AuditPage({

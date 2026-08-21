@@ -40,7 +40,7 @@ Never edit generated files to add client behavior. Add a feature module and regi
 - bespoke interfaces;
 - large-file, direct-upload, antivirus, OCR, or provider-specific storage adapters;
 - side effects such as email, payments, or external writes.
-- the production identity-provider adapter in `src/features/auth/adapter.ts`.
+- the Clerk identity adapter and invitation policy in `src/features/auth/`.
 
 ## Database evolution
 

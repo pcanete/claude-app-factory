@@ -3,8 +3,10 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { sendApplicationInvitation } from "@/features/auth/invitations";
 import {
   createManagedUser,
+  getManagedUser,
   getManagedUserForUpdate,
   isLocalPreviewIdentity,
   isManagedUserId,
@@ -25,6 +27,7 @@ function normalizedInput(formData: FormData): ManagedUserInput | null {
   if (!runtimeSpec.roles.some((role) => role.key === roleKey)) return null;
   return { email, displayName, roleKey, active: formData.get("active") === "on" };
 }
+
 function isUniqueViolation(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
@@ -56,8 +59,43 @@ export async function createUserAction(formData: FormData) {
     if (isUniqueViolation(error)) redirect("/users?error=email_exists");
     throw error;
   }
+  const invitation = input.active
+    ? await sendApplicationInvitation(input.email)
+    : "not_configured";
+  if (invitation === "sent") {
+    await withTransaction((client) => recordAuditEvent(client, {
+      actorId: actor.id,
+      entityKey: "app_user",
+      recordId: id,
+      action: "user_invite",
+      changes: { email: input.email },
+    }));
+  }
   refreshUsers(id);
-  redirect(`/users/${id}?saved=created`);
+  redirect(`/users/${id}?saved=created&invitation=${invitation}`);
+}
+
+export async function sendUserInvitationAction(id: string) {
+  const actor = await requireUserManagementAccess();
+  if (!isManagedUserId(id)) redirect("/users?error=not_found");
+  const user = await getManagedUser(id);
+  if (!user) redirect("/users?error=not_found");
+  if (!user.active) redirect(`/users/${id}?error=inactive_invitation`);
+  if (isLocalPreviewIdentity(user.authSubject)) redirect(`/users/${id}?error=local_identity`);
+  if (!user.authSubject.startsWith("pending:")) redirect(`/users/${id}?error=already_linked`);
+
+  const invitation = await sendApplicationInvitation(user.email);
+  if (invitation === "sent") {
+    await withTransaction((client) => recordAuditEvent(client, {
+      actorId: actor.id,
+      entityKey: "app_user",
+      recordId: id,
+      action: "user_invite",
+      changes: { email: user.email, resent: true },
+    }));
+  }
+  refreshUsers(id);
+  redirect(`/users/${id}?invitation=${invitation}`);
 }
 
 export async function updateUserAction(id: string, formData: FormData) {

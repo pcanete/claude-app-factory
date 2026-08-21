@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { updateUserAction } from "@/app/users/actions";
+import { sendUserInvitationAction, updateUserAction } from "@/app/users/actions";
+import { clerkAuthConfigured } from "@/features/auth/config";
 import { getManagedUser, isLocalPreviewIdentity, isManagedUserId, isPendingIdentity } from "@/features/users/store";
 import { requireUserManagementAccess } from "@/lib/auth";
 import { runtimeSpec } from "@/lib/spec";
@@ -12,6 +13,14 @@ const messages: Record<string, string> = {
   email_exists: "Ya existe otro usuario con ese correo.",
   local_identity: "Las identidades de vista local se administran automáticamente.",
   self_protection: "No podés desactivar tu propia cuenta ni quitarte el rol actual.",
+  inactive_invitation: "Activá el usuario antes de enviarle una invitación.",
+  already_linked: "La identidad de este usuario ya está vinculada.",
+};
+
+const invitationMessages: Record<string, string> = {
+  sent: "La invitación de acceso fue enviada por correo.",
+  failed: "El usuario quedó guardado, pero Clerk no pudo enviar la invitación. Podés reintentarla.",
+  not_configured: "El usuario quedó guardado. Configurá Clerk para poder enviar la invitación.",
 };
 
 export default async function UserDetailPage({
@@ -19,7 +28,7 @@ export default async function UserDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; invitation?: string }>;
 }) {
   const actor = await requireUserManagementAccess();
   const { id } = await params;
@@ -28,8 +37,10 @@ export default async function UserDetailPage({
   if (!user) notFound();
   const local = isLocalPreviewIdentity(user.authSubject);
   const self = actor.id === user.id;
-  const identityLabel = local ? "Vista local" : isPendingIdentity(user.authSubject) ? "Pendiente de vincular" : "Vinculada";
+  const pending = isPendingIdentity(user.authSubject);
+  const identityLabel = local ? "Vista local" : pending ? "Pendiente de vincular" : "Vinculada";
   const action = updateUserAction.bind(null, user.id);
+  const inviteAction = sendUserInvitationAction.bind(null, user.id);
 
   return (
     <>
@@ -42,6 +53,11 @@ export default async function UserDetailPage({
         <Link className="button secondary" href="/users">Volver a usuarios</Link>
       </div>
       {requested.saved && <div className="notice success">Los cambios quedaron guardados y auditados.</div>}
+      {requested.invitation && invitationMessages[requested.invitation] && (
+        <div className={`notice ${requested.invitation === "sent" ? "success" : "warning"}`}>
+          {invitationMessages[requested.invitation]}
+        </div>
+      )}
       {requested.error && messages[requested.error] && <div className="notice import-error">{messages[requested.error]}</div>}
       {local && <div className="notice warning">Esta cuenta pertenece a la vista local y se sincroniza automáticamente desde el selector de roles.</div>}
       {self && !local && <div className="notice">Tu rol y tu acceso activo están protegidos para evitar que te bloquees a vos mismo.</div>}
@@ -78,6 +94,14 @@ export default async function UserDetailPage({
           <div className="detail-item"><div className="detail-key">Creado</div><div className="detail-value">{user.createdAt.toLocaleString(runtimeSpec.app.locale)}</div></div>
           <div className="detail-item"><div className="detail-key">Actualizado</div><div className="detail-value">{user.updatedAt.toLocaleString(runtimeSpec.app.locale)}</div></div>
           <div className="detail-item full"><div className="detail-key">ID interno</div><div className="detail-value"><code>{user.id}</code></div></div>
+          {pending && !local && clerkAuthConfigured() && (
+            <div className="detail-item full">
+              <div className="detail-key">Invitación</div>
+              <form action={inviteAction}>
+                <button className="button secondary" disabled={!user.active} type="submit">Enviar invitación</button>
+              </form>
+            </div>
+          )}
         </aside>
       </div>
     </>

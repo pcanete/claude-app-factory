@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { clearDevelopmentRoleAction } from "@/app/dev-access/actions";
+import { SessionSignOut } from "@/components/session-sign-out";
+import { clerkAuthConfigured } from "@/features/auth/config";
 import { canUseApplicationAssistant } from "@/features/ai/access";
 import { canManageUsers, canViewAudit, canViewRules, getCurrentUser, hasPermission, hasViewAccess } from "@/lib/auth";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
@@ -49,9 +51,10 @@ export async function Sidebar() {
                 <button className="session-action" type="submit">Cambiar rol</button>
               </form>
             )}
+            {!localPreviewAuthEnabled() && clerkAuthConfigured() && <SessionSignOut />}
           </>
         ) : (
-          <Link className="session-action" href="/dev-access">Acceder</Link>
+          <Link className="session-action" href={localPreviewAuthEnabled() ? "/dev-access" : "/sign-in"}>Acceder</Link>
         )}
       </div>
     </aside>

@@ -149,8 +149,8 @@
     },
     {
       "status": "unresolved",
-      "topic": "authentication_provider",
-      "statement": "Seleccionar proveedor o implementación de autenticación antes del despliegue"
+      "topic": "authentication_policy",
+      "statement": "Configurar la instancia Clerk, restringir el alta pública y verificar el flujo de invitación antes del despliegue"
     }
   ]
 }

@@ -7,7 +7,13 @@ function createPool() {
   if (!connectionString) {
     throw new Error("Falta DATABASE_URL. Copiá .env.example a .env.local y configurá PostgreSQL.");
   }
-  return new Pool({ connectionString, max: 10 });
+  const configuredMax = Number(process.env.DATABASE_POOL_MAX);
+  const max = Number.isInteger(configuredMax) && configuredMax > 0
+    ? configuredMax
+    : process.env.VERCEL
+      ? 3
+      : 10;
+  return new Pool({ connectionString, max });
 }
 
 export function getPool() {

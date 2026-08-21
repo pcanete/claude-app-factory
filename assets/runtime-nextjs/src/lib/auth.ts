@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { productionAuthAdapter } from "@/features/auth/adapter";
 import { generatedPermissions } from "@/generated/permissions";
+import { recordAuditEvent } from "@/lib/audit";
 import type { PermissionAction, RuntimeUser } from "@/lib/auth-types";
-import { sql } from "@/lib/db";
+import { sql, transactionSql, withTransaction } from "@/lib/db";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { type EntitySpec, type ViewSpec, relationFields, requireEntity, requireView, runtimeSpec } from "@/lib/spec";
 
@@ -20,7 +22,15 @@ type AppUserRow = {
   email: string;
   display_name: string;
   role_key: string;
+  active: boolean;
 };
+
+export type CurrentAccess =
+  | { kind: "granted"; user: RuntimeUser }
+  | { kind: "unauthenticated" }
+  | { kind: "unverified_email" }
+  | { kind: "not_invited" }
+  | { kind: "inactive" };
 
 function toRuntimeUser(row: AppUserRow): RuntimeUser {
   return {
@@ -52,29 +62,85 @@ async function developmentUser(roleKey: string): Promise<RuntimeUser | null> {
   return rows[0] ? toRuntimeUser(rows[0]) : null;
 }
 
-async function productionUser(): Promise<RuntimeUser | null> {
-  const identity = await productionAuthAdapter.currentIdentity();
-  if (!identity) return null;
+async function productionAccess(): Promise<CurrentAccess> {
+  const subject = await productionAuthAdapter.currentSubject();
+  if (!subject) return { kind: "unauthenticated" };
   const rows = await sql<AppUserRow>(
-    `SELECT id, auth_subject, email, display_name, role_key
+    `SELECT id, auth_subject, email, display_name, role_key, active
        FROM app_user
-      WHERE auth_subject = $1 AND active = TRUE
+      WHERE auth_subject = $1
       LIMIT 1`,
-    [identity.subject],
+    [subject],
   );
-  return rows[0] ? toRuntimeUser(rows[0]) : null;
+  if (rows[0]) {
+    return rows[0].active
+      ? { kind: "granted", user: toRuntimeUser(rows[0]) }
+      : { kind: "inactive" };
+  }
+
+  const identity = await productionAuthAdapter.provisioningIdentity(subject);
+  if (!identity?.emailVerified || !identity.email) return { kind: "unverified_email" };
+
+  return withTransaction(async (client): Promise<CurrentAccess> => {
+    const candidates = await transactionSql<AppUserRow>(
+      client,
+      `SELECT id, auth_subject, email, display_name, role_key, active
+         FROM app_user
+        WHERE auth_subject = $1
+           OR (lower(email) = $2 AND auth_subject LIKE 'pending:%')
+        FOR UPDATE`,
+      [subject, identity.email],
+    );
+    const alreadyLinked = candidates.find((candidate) => candidate.auth_subject === subject);
+    if (alreadyLinked) {
+      return alreadyLinked.active
+        ? { kind: "granted", user: toRuntimeUser(alreadyLinked) }
+        : { kind: "inactive" };
+    }
+    const pending = candidates.find((candidate) => candidate.auth_subject.startsWith("pending:"));
+    if (!pending) return { kind: "not_invited" };
+    if (!pending.active) return { kind: "inactive" };
+
+    const linked = await transactionSql<AppUserRow>(
+      client,
+      `UPDATE app_user
+          SET auth_subject = $2,
+              identity_linked_at = now(),
+              updated_at = now()
+        WHERE id = $1 AND auth_subject LIKE 'pending:%'
+        RETURNING id, auth_subject, email, display_name, role_key, active`,
+      [pending.id, subject],
+    );
+    if (!linked[0]) return { kind: "not_invited" };
+    await recordAuditEvent(client, {
+      actorId: linked[0].id,
+      entityKey: "app_user",
+      recordId: linked[0].id,
+      action: "user_link",
+      changes: { provider: "clerk", email: identity.email },
+    });
+    return { kind: "granted", user: toRuntimeUser(linked[0]) };
+  });
 }
 
-export async function getCurrentUser(): Promise<RuntimeUser | null> {
-  if (!localPreviewAuthEnabled()) return productionUser();
+const currentAccess = cache(async (): Promise<CurrentAccess> => {
+  if (!localPreviewAuthEnabled()) return productionAccess();
   const roleKey = (await cookies()).get(DEVELOPMENT_SESSION_COOKIE)?.value;
-  return roleKey ? developmentUser(roleKey) : null;
+  const user = roleKey ? await developmentUser(roleKey) : null;
+  return user ? { kind: "granted", user } : { kind: "unauthenticated" };
+});
+
+export async function getCurrentUser(): Promise<RuntimeUser | null> {
+  const access = await currentAccess();
+  return access.kind === "granted" ? access.user : null;
 }
 
 export async function requireUser(): Promise<RuntimeUser> {
-  const user = await getCurrentUser();
-  if (user) return user;
-  redirect(localPreviewAuthEnabled() ? "/dev-access" : productionAuthAdapter.signInPath);
+  const access = await currentAccess();
+  if (access.kind === "granted") return access.user;
+  if (localPreviewAuthEnabled()) redirect("/dev-access");
+  if (access.kind === "unauthenticated") redirect(productionAuthAdapter.signInPath);
+  redirect(`/access-pending?reason=${access.kind}`);
 }
 
 export function hasPermission(user: RuntimeUser, entityKey: string, action: PermissionAction) {

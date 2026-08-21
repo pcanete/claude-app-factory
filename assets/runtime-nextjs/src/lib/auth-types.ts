@@ -4,6 +4,7 @@ export type ExternalIdentity = {
   subject: string;
   email: string;
   displayName: string;
+  emailVerified: boolean;
 };
 
 export type RuntimeUser = {
@@ -15,6 +16,7 @@ export type RuntimeUser = {
 };
 
 export type ProductionAuthAdapter = {
-  currentIdentity(): Promise<ExternalIdentity | null>;
+  currentSubject(): Promise<string | null>;
+  provisioningIdentity(subject: string): Promise<ExternalIdentity | null>;
   signInPath: string;
 };

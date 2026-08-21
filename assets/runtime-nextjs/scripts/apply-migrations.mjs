@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import pg from "pg";
 
 const { Client } = pg;
-const connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("Falta DATABASE_URL.");
 }

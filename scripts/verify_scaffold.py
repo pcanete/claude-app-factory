@@ -18,6 +18,7 @@ EXPECTED_FILES = {
     "database/custom/EXTENSIONS.md",
     "database/custom/100_ai_foundation.sql",
     "database/custom/110_user_management.sql",
+    "database/custom/120_clerk_authentication.sql",
     "src/generated/app-spec.ts",
     "src/generated/navigation.ts",
     "src/generated/permissions.ts",
@@ -34,6 +35,9 @@ EXPECTED_FILES = {
     "src/app/users/actions.ts",
     "src/app/users/page.tsx",
     "src/app/users/[id]/page.tsx",
+    "src/app/sign-in/[[...sign-in]]/page.tsx",
+    "src/app/sign-up/[[...sign-up]]/page.tsx",
+    "src/app/access-pending/page.tsx",
     "src/app/dev-access/actions.ts",
     "src/app/dev-access/page.tsx",
     "src/app/forbidden/page.tsx",
@@ -61,7 +65,10 @@ EXPECTED_FILES = {
     "src/components/operational-kanban.tsx",
     "src/components/operational-calendar.tsx",
     "src/components/pagination.tsx",
+    "src/components/session-sign-out.tsx",
     "src/features/auth/adapter.ts",
+    "src/features/auth/config.ts",
+    "src/features/auth/invitations.ts",
     "src/features/ai/access.ts",
     "src/features/ai/agent.ts",
     "src/features/ai/config.ts",
@@ -81,7 +88,9 @@ EXPECTED_FILES = {
     "src/lib/rules.ts",
     "src/lib/view-query.ts",
     "scripts/apply-migrations.mjs",
+    "scripts/bootstrap-admin.mjs",
     "scripts/smoke-crud.mjs",
+    "src/proxy.ts",
 }
 
 
@@ -150,8 +159,8 @@ def main() -> int:
     report = report_path.read_text(encoding="utf-8") if report_path.is_file() else ""
     if "not production-ready" not in report:
         failures.append("Build report does not preserve the production-readiness gate.")
-    if "authentication adapter" not in report:
-        failures.append("Build report does not identify the authentication gate.")
+    if "Clerk" not in report:
+        failures.append("Build report does not identify the production identity integration.")
     if "permission matrix is enforced server-side" not in report:
         failures.append("Build report does not describe server-side authorization.")
     runtime_access_path = project / "src/lib/runtime-access.ts"
@@ -230,8 +239,17 @@ def main() -> int:
         failures.append("Migration runner does not include custom feature migrations.")
     production_adapter_path = project / "src/features/auth/adapter.ts"
     production_adapter = production_adapter_path.read_text(encoding="utf-8") if production_adapter_path.is_file() else ""
-    if "return null" not in production_adapter:
-        failures.append("Default production authentication adapter does not fail closed.")
+    for invariant in ("auth()", "currentUser()", "emailVerified"):
+        if invariant not in production_adapter:
+            failures.append(f"Production authentication adapter is missing: {invariant}.")
+    production_auth_path = project / "src/features/auth/invitations.ts"
+    production_auth = production_auth_path.read_text(encoding="utf-8") if production_auth_path.is_file() else ""
+    if "createInvitation" not in production_auth or "ignoreExisting" not in production_auth:
+        failures.append("Production invitation delivery is incomplete.")
+    proxy_path = project / "src/proxy.ts"
+    proxy_source = proxy_path.read_text(encoding="utf-8") if proxy_path.is_file() else ""
+    if "clerkMiddleware" not in proxy_source:
+        failures.append("Clerk middleware is missing from the Next.js proxy.")
     package_path = project / "package.json"
     try:
         package = json.loads(package_path.read_text(encoding="utf-8"))
@@ -244,6 +262,10 @@ def main() -> int:
         for dependency in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "zod"):
             if dependency not in package.get("dependencies", {}):
                 failures.append(f"Application assistant dependency is missing: {dependency}.")
+        if "@clerk/nextjs" not in package.get("dependencies", {}):
+            failures.append("Clerk authentication dependency is missing.")
+        if "auth:bootstrap" not in package.get("scripts", {}):
+            failures.append("Production administrator bootstrap command is missing.")
     except (OSError, json.JSONDecodeError) as error:
         failures.append(f"Cannot read package.json: {error}")
 

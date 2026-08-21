@@ -947,7 +947,9 @@ def compile_report(spec: dict[str, Any]) -> str:
         "- The generated permission matrix is enforced server-side on record pages and mutations.",
         "- User administration assigns versioned AppSpec roles, prevents self-lockout, deactivates instead of deleting, and audits every mutation transactionally.",
         "- Local role sessions are HTTP-only and accepted only outside production.",
-        "- Production fails closed through a client-owned authentication adapter boundary.",
+        "- Clerk proves identity in production while PostgreSQL remains authoritative for active status, AppSpec role, and permissions.",
+        "- Production fails closed when Clerk credentials are absent or the authenticated identity is not an active invited application user.",
+        "- First access links only a verified Clerk email to an active, explicitly invited pending user and records that link in the audit log.",
         "- Create, update, and delete operations write an audit event in the same database transaction.",
         "- CSV/XLSX imports are size-limited, prevalidated, staged per user, committed atomically, and audited per record.",
         "- AppSpec rules use a validated expression tree with only deterministic set/block actions; arbitrary code and side effects are rejected.",
@@ -958,8 +960,8 @@ def compile_report(spec: dict[str, Any]) -> str:
         "",
         "## Production gates",
         "",
-        "- Select and implement the production authentication adapter in `src/features/auth/adapter.ts`.",
-        "- Connect the production identity provider and replace each managed user's pending subject with its stable external identity subject.",
+        "- Configure Clerk production keys and disable unrestricted public sign-up so access remains invitation-only.",
+        "- Bootstrap the first pending administrator, send or create that Clerk identity, and verify first-login linking.",
         "- Add provider-specific end-to-end authentication, sign-out, and authorization tests.",
         "- Define audit-log retention, export, and access-review policy for the client.",
         "- Schedule deletion of expired import-preview batches and define the client's import retention policy.",
@@ -1014,8 +1016,8 @@ through an explicit adapter; do not edit files in `src/generated/`.
 `ai/` contains the neutral read-only application assistant. Extend its tool registry
 through reviewed feature adapters; never bypass application permissions with direct SQL.
 
-`auth/adapter.ts` is the production identity boundary. Replace its fail-closed stub
-with a reviewed provider integration and keep application roles in PostgreSQL.
+`auth/adapter.ts` uses Clerk only as the production identity boundary. Keep active
+status, AppSpec roles, permissions, and invitation provisioning in PostgreSQL.
 """
 
 
