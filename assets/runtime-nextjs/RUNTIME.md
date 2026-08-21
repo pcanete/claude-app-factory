@@ -25,6 +25,14 @@ For a new deployment, connect Neon and Clerk to the Vercel project. Production d
 
 Outside Vercel, set `DATABASE_URL_DIRECT`, run `pnpm db:apply`, define `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`, then run `pnpm auth:bootstrap`.
 
+## Production verification and recovery
+
+Treat a successful Vercel build as the beginning of production verification, not its end. Confirm the deployed source commit, migration logs, `GET /api/health`, unauthenticated redirect, invited administrator login, one permission-checked CRUD path, audit events, `/users`, `/settings`, and one AI conversation when AI is enabled. Review runtime logs for the verified flow.
+
+Keep one independent Vercel project, Neon database, Clerk application, and credential set for this application. Store production secrets only in the deployment environment and an approved recovery system; never commit them. Back up `SETTINGS_ENCRYPTION_KEY` before users connect providers. Losing it makes encrypted credentials unreadable.
+
+A code rollback does not roll back PostgreSQL. Prefer additive, backward-compatible migrations and require an explicit data backup, migration, and rollback plan for destructive changes. Configure database backup or point-in-time recovery appropriate to the application and test restoration. Record who owns recovery for source, data, identity, environment variables, and encryption keys.
+
 Every entity also exposes generic CSV/XLSX transfer tools:
 
 - export and template downloads require the entity's server-side permissions;

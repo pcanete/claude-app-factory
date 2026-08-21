@@ -1,0 +1,23 @@
+name: Validate factory
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compiler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run compiler tests
+        run: python scripts/test_scaffold.py
+      - name: Generate and verify the reference application
+        run: |
+          python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/riel-reference-app
+          python scripts/verify_scaffold.py /tmp/riel-reference-app

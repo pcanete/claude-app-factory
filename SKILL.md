@@ -29,7 +29,9 @@ Build an independent application foundation from business language. Treat exampl
 8. Run `scripts/verify_scaffold.py <generated-directory>` before presenting the result. When a dev server is started, also verify the rendered UI and at least one complete CRUD path in a real browser.
 9. Use `ALLOW_UNSAFE_LOCAL_PREVIEW=true` only for local development. Production uses Clerk for identity and PostgreSQL for active status, roles, and server-side permissions; keep it closed until keys, invitation-only access, first-admin bootstrap, and end-to-end login are verified.
 10. When personal AI credentials are enabled, generate a unique `SETTINGS_ENCRYPTION_KEY` per deployed application, store it only in the deployment environment, and verify `/settings` plus at least one conversation with a user-owned provider key.
-11. Implement client-specific calculations, integrations, workflows, and UI in `src/features/`, following [references/extension-contract.md](references/extension-contract.md).
+11. Before a Vercel production deployment, read and follow [references/deployment-vercel.md](references/deployment-vercel.md). Verify the deployed commit, migrations, health endpoint, closed authentication, first-admin link, permissions, audit trail, settings encryption, runtime logs, and an authenticated browser flow. A successful build alone is not production verification.
+12. Keep the deployed source on the repository's default branch and maintain separate recovery ownership for PostgreSQL data, identity configuration, deployment variables, and `SETTINGS_ENCRYPTION_KEY`. Code backup is not data backup; code rollback is not database rollback.
+13. Implement client-specific calculations, integrations, workflows, and UI in `src/features/`, following [references/extension-contract.md](references/extension-contract.md).
 
 ## Delivery contract
 
