@@ -78,3 +78,15 @@ Las mutaciones generan además el mismo evento de auditoría transaccional que u
 Desactivá o hacé vencer la credencial en `app_agent` cuando deje de utilizarse. Nunca compartas una misma credencial entre agentes o ambientes independientes.
 
 El asistente embebido es opcional e independiente. MCP debe funcionar aunque la aplicación no tenga claves de OpenAI, Anthropic o AI Gateway.
+
+## Al probar el endpoint a mano
+
+El servidor responde `text/event-stream`, así que un cliente que espere JSON plano tiene que quedarse
+con la línea `data:` de la respuesta.
+
+Y una advertencia que cuesta un rato descubrir: **no pases el JSON por el shell en Windows.** Git Bash
+con una configuración regional que no sea UTF-8 reemplaza cada carácter acentuado por `U+FFFD` antes
+de que `curl` lo envíe, y los datos llegan corruptos a la base. Parece un defecto del servidor y no lo
+es: el mismo pedido enviado desde Node con `fetch` llega intacto.
+
+Si al probar aparecen acentos rotos, verificá el cliente antes que la aplicación.
