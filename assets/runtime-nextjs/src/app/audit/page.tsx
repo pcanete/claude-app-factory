@@ -76,7 +76,7 @@ export default async function AuditPage({
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Usuario</th>
+                <th>Ejecutado por</th>
                 <th>Entidad</th>
                 <th>Acción</th>
                 <th>Registro</th>
@@ -88,8 +88,8 @@ export default async function AuditPage({
                 <tr key={event.id}>
                   <td>{formatValue(event.created_at, runtimeSpec.app.locale)}</td>
                   <td>
-                    <div>{event.actor_name ?? "Usuario eliminado"}</div>
-                    <div className="table-secondary">{event.actor_email ?? "—"}</div>
+                    <div>{event.agent_name ? `Agente: ${event.agent_name}` : event.actor_name ?? "Identidad eliminada"}</div>
+                    <div className="table-secondary">{event.agent_id ? "MCP" : event.actor_email ?? "—"}</div>
                   </td>
                   <td>{entityLabels[event.entity_key] ?? event.entity_key}</td>
                   <td><span className={`audit-badge ${event.action}`}>{actionLabels[event.action]}</span></td>

@@ -95,7 +95,7 @@ export async function listRecords(entityKey: string, options: ListRecordOptions 
   const entity = requireEntity(entityKey);
   const columns = columnsFor(entity).map(identifier).join(", ");
   const { values, where } = listWhere(entity, options);
-  const sortable = new Set([...entity.fields.map((field) => field.key), "created_at", "updated_at"]);
+  const sortable = new Set(["id", ...entity.fields.map((field) => field.key), "created_at", "updated_at"]);
   const sort = options.sort && sortable.has(options.sort) ? options.sort : "updated_at";
   const direction = options.direction === "asc" ? "ASC" : "DESC";
   const limit = Math.min(500, Math.max(1, options.limit ?? 100));
@@ -214,6 +214,97 @@ function parseScalar(field: FieldSpec, raw: FormDataEntryValue | null, mode: "cr
     }
   }
   return value;
+}
+
+function parseObjectScalar(field: FieldSpec, raw: unknown, mode: "create" | "update") {
+  if (raw === undefined) {
+    if (mode === "create" && field.required && !("default" in field)) {
+      throw new Error(`El campo ${field.label} es obligatorio.`);
+    }
+    return undefined;
+  }
+  if (raw === null || raw === "") {
+    if (field.required) throw new Error(`El campo ${field.label} es obligatorio.`);
+    return null;
+  }
+  if (field.type === "boolean") {
+    if (typeof raw !== "boolean") throw new Error(`${field.label} debe ser verdadero o falso.`);
+    return raw;
+  }
+  if (field.type === "integer") {
+    if (typeof raw !== "number" || !Number.isSafeInteger(raw)) throw new Error(`${field.label} debe ser un número entero.`);
+    return raw;
+  }
+  if (field.type === "decimal") {
+    if (typeof raw !== "number" || !Number.isFinite(raw)) throw new Error(`${field.label} debe ser un número decimal.`);
+    return raw;
+  }
+  if (field.type === "json" || field.type === "file") {
+    if (typeof raw !== "object") throw new Error(`${field.label} debe contener JSON válido.`);
+    return raw;
+  }
+  if (typeof raw !== "string") throw new Error(`${field.label} debe ser texto.`);
+  const value = raw.trim();
+  if (!value) {
+    if (field.required) throw new Error(`El campo ${field.label} es obligatorio.`);
+    return null;
+  }
+  if (field.type === "enum" && !field.options?.some((option) => option.key === value)) {
+    throw new Error(`${field.label} contiene una opción inválida.`);
+  }
+  if (field.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${field.label} debe usar el formato AAAA-MM-DD.`);
+  }
+  if (field.type === "datetime" && Number.isNaN(Date.parse(value))) {
+    throw new Error(`${field.label} debe contener una fecha y hora ISO válida.`);
+  }
+  if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw new Error(`${field.label} debe contener un correo válido.`);
+  }
+  if (field.type === "url") {
+    try {
+      new URL(value);
+    } catch {
+      throw new Error(`${field.label} debe contener una URL válida.`);
+    }
+  }
+  return value;
+}
+
+export function recordInputFromObject(
+  entity: EntitySpec,
+  input: Record<string, unknown>,
+  mode: "create" | "update",
+) {
+  const fieldKeys = new Set(entity.fields.map((field) => field.key));
+  const relationshipKeys = new Set(relationFields(entity).map((relationship) => `${relationship.key}_id`));
+  const unknown = Object.keys(input).filter((key) => !fieldKeys.has(key) && !relationshipKeys.has(key));
+  if (unknown.length) throw new Error(`Campos desconocidos: ${unknown.join(", ")}.`);
+
+  const result: Record<string, unknown> = {};
+  for (const field of entity.fields) {
+    const value = parseObjectScalar(field, input[field.key], mode);
+    if (value !== undefined) result[field.key] = value;
+  }
+  for (const relationship of relationFields(entity)) {
+    const key = `${relationship.key}_id`;
+    const raw = input[key];
+    if (raw === undefined) {
+      if (mode === "create" && relationship.required) throw new Error(`${relationship.label} es obligatorio.`);
+      continue;
+    }
+    if (raw === null || raw === "") {
+      if (relationship.required) throw new Error(`${relationship.label} es obligatorio.`);
+      result[key] = null;
+      continue;
+    }
+    if (typeof raw !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)) {
+      throw new Error(`${relationship.label} debe ser un UUID válido.`);
+    }
+    result[key] = raw;
+  }
+  if (mode === "update" && !Object.keys(result).length) throw new Error("La actualización no contiene campos válidos.");
+  return result;
 }
 
 export function recordInputFromForm(entity: EntitySpec, formData: FormData, mode: "create" | "update") {

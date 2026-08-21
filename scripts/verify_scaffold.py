@@ -97,6 +97,17 @@ EXPECTED_FILES = {
     "src/lib/rules.ts",
     "src/lib/view-query.ts",
     ".github/workflows/backup.yml",
+    "database/platform/140_mcp_agents.sql",
+    "database/platform/150_mcp_write.sql",
+    "src/app/agents/page.tsx",
+    "src/app/api/mcp/route.ts",
+    "src/platform/mcp/access.ts",
+    "src/platform/mcp/admin.ts",
+    "src/platform/mcp/mutations.ts",
+    "src/platform/mcp/server.ts",
+    "src/platform/mcp/store.ts",
+    "scripts/create-agent-token.mjs",
+    "scripts/smoke-mcp-write.mjs",
     "scripts/db-connection.mjs",
     "scripts/apply-migrations.mjs",
     "scripts/bootstrap-admin.mjs",
@@ -303,6 +314,71 @@ def main() -> int:
             failures.append("Clerk authentication dependency is missing.")
         if "auth:bootstrap" not in package.get("scripts", {}):
             failures.append("Production administrator bootstrap command is missing.")
+        if "vercel-build" not in package.get("scripts", {}):
+            failures.append("Production migration build command is missing.")
+    except (OSError, json.JSONDecodeError) as error:
+        failures.append(f"Cannot read package.json: {error}")
+
+    mcp_migration_path = project / "database/platform/140_mcp_agents.sql"
+    mcp_migration = mcp_migration_path.read_text(encoding="utf-8") if mcp_migration_path.is_file() else ""
+    for invariant in ("app_agent", "token_hash", "app_agent_event", "records:read"):
+        if invariant not in mcp_migration:
+            failures.append(f"MCP agent migration is missing: {invariant}.")
+    mcp_write_migration_path = project / "database/platform/150_mcp_write.sql"
+    mcp_write_migration = mcp_write_migration_path.read_text(encoding="utf-8") if mcp_write_migration_path.is_file() else ""
+    for invariant in ("records:write", "records:delete", "app_agent_mutation", "agent_event_id"):
+        if invariant not in mcp_write_migration:
+            failures.append(f"MCP write migration is missing: {invariant}.")
+    mcp_route_path = project / "src/app/api/mcp/route.ts"
+    mcp_route = mcp_route_path.read_text(encoding="utf-8") if mcp_route_path.is_file() else ""
+    for invariant in ("authenticateAgentToken", "createMcpHandler", "authorization", "factoryAgent"):
+        if invariant not in mcp_route:
+            failures.append(f"MCP endpoint is missing: {invariant}.")
+    mcp_server_path = project / "src/platform/mcp/server.ts"
+    mcp_server = mcp_server_path.read_text(encoding="utf-8") if mcp_server_path.is_file() else ""
+    for invariant in ("list_entities", "describe_entity", "query_records", "get_record", "export_snapshot", "startAgentToolEvent"):
+        if invariant not in mcp_server:
+            failures.append(f"MCP read tool surface is missing: {invariant}.")
+    for invariant in ("create_record", "update_record", "delete_record", "executeIdempotentMutation", "recordAuditEvent", "applyRules"):
+        if invariant not in mcp_server:
+            failures.append(f"MCP write tool surface is missing: {invariant}.")
+    agent_page_path = project / "src/app/agents/page.tsx"
+    agent_page = agent_page_path.read_text(encoding="utf-8") if agent_page_path.is_file() else ""
+    for invariant in ("requireAuditAccess", "listManagedAgents", "listAgentEvents"):
+        if invariant not in agent_page:
+            failures.append(f"Agent activity page is missing: {invariant}.")
+    migration_runner_path = project / "scripts/apply-migrations.mjs"
+    migration_runner = migration_runner_path.read_text(encoding="utf-8") if migration_runner_path.is_file() else ""
+    if 'resolve("database/custom")' not in migration_runner:
+        failures.append("Migration runner does not include custom feature migrations.")
+    proxy_path = project / "src/proxy.ts"
+    proxy_source = proxy_path.read_text(encoding="utf-8") if proxy_path.is_file() else ""
+    if "clerkMiddleware" not in proxy_source:
+        failures.append("Clerk middleware is missing from the Next.js proxy.")
+    package_path = project / "package.json"
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+        if "next" not in package.get("dependencies", {}):
+            failures.append("Next.js runtime dependency is missing.")
+        if "db:smoke" not in package.get("scripts", {}):
+            failures.append("Generic database smoke command is missing.")
+        if "exceljs" not in package.get("dependencies", {}):
+            failures.append("Excel import/export dependency is missing.")
+        for dependency in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "@ai-sdk/anthropic", "zod"):
+            if dependency not in package.get("dependencies", {}):
+                failures.append(f"Application assistant dependency is missing: {dependency}.")
+        if "@clerk/nextjs" not in package.get("dependencies", {}):
+            failures.append("Clerk authentication dependency is missing.")
+        if "@modelcontextprotocol/server" not in package.get("dependencies", {}):
+            failures.append("MCP server dependency is missing.")
+        if "@modelcontextprotocol/client" not in package.get("devDependencies", {}):
+            failures.append("MCP interoperability test client is missing.")
+        if "auth:bootstrap" not in package.get("scripts", {}):
+            failures.append("Production administrator bootstrap command is missing.")
+        if "mcp:agent:create" not in package.get("scripts", {}):
+            failures.append("MCP agent bootstrap command is missing.")
+        if "mcp:smoke:write" not in package.get("scripts", {}):
+            failures.append("MCP write interoperability smoke command is missing.")
         if "vercel-build" not in package.get("scripts", {}):
             failures.append("Production migration build command is missing.")
     except (OSError, json.JSONDecodeError) as error:

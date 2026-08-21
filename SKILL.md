@@ -37,7 +37,12 @@ Build an independent application foundation from business language. Treat exampl
 10. When personal AI credentials are enabled, generate a unique `SETTINGS_ENCRYPTION_KEY` per deployed application, store it only in the deployment environment, and verify `/settings` plus at least one conversation with a user-owned provider key.
 11. Before a Vercel production deployment, read and follow [references/deployment-vercel.md](references/deployment-vercel.md). Verify the deployed commit, migrations, health endpoint, closed authentication, first-admin link, permissions, audit trail, settings encryption, runtime logs, and an authenticated browser flow. A successful build alone is not production verification.
 12. Keep the deployed source on the repository's default branch and maintain separate recovery ownership for PostgreSQL data, identity configuration, deployment variables, and `SETTINGS_ENCRYPTION_KEY`. Code backup is not data backup; code rollback is not database rollback.
-13. Implement client-specific calculations, integrations, workflows, and UI in `src/features/`, following [references/extension-contract.md](references/extension-contract.md). Never edit `src/platform/` or `database/platform/` for one client: wrap them from a feature instead.
+13. To change an application that already exists, do not regenerate over it: follow
+[references/evolution.md](references/evolution.md) and run `scripts/evolve_app.py` in plan mode first.
+Blocked operations need a reviewed data migration, not a flag.
+14. When agents will operate the application, read [references/mcp.md](references/mcp.md). Issue one
+credential per agent with the least scopes it needs and an expiry; never share a human session with an agent.
+15. Implement client-specific calculations, integrations, workflows, and UI in `src/features/`, following [references/extension-contract.md](references/extension-contract.md). Never edit `src/platform/` or `database/platform/` for one client: wrap them from a feature instead.
 
 ## Delivery contract
 

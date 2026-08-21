@@ -14,8 +14,8 @@ Three zones, not two. Collapsing platform code into the client zone is what make
 
 **Platform** — ships with the factory, updated by the factory, never edited per client:
 
-- `src/platform/` (identity adapter, application settings, user administration, read-only assistant)
-- `database/platform/` (migrations `100`–`499` supporting those features)
+- `src/platform/` (identity adapter, application settings, user administration, read-only assistant, MCP server for agents)
+- `database/platform/` (migrations `100`–`499` supporting those features, including agent identities and their activity log)
 
 **Client** — owned by humans and agents working for this client, never written by the factory:
 

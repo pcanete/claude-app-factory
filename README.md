@@ -19,7 +19,9 @@ The history before the ownership-zones commit belongs to the original repository
 - deterministic validation and mutation rules;
 - Clerk authentication and application-level user management;
 - a read-only AI assistant with per-user encrypted OpenAI or Anthropic keys;
-- explicit extension zones for client-specific behavior.
+- explicit extension zones for client-specific behavior;
+- an MCP endpoint where agents authenticate with their own hashed, expiring, scoped tokens, read and write under the AppSpec permissions of a role, and leave a per-tool trail;
+- incremental schema evolution that writes the next migration instead of rewriting an applied one.
 
 Every client application gets its own repository, database, deployment, credentials, and lifecycle. The generated application does not call Claude App Factory in production.
 
@@ -68,9 +70,9 @@ Three ownership zones:
 - To change platform behavior for one client, wrap it from a feature — do not edit it.
 - Integrations, approvals, external writes, and domain calculations require reviewed feature adapters.
 
-Regeneration is the promise this boundary exists to keep, and it is **not implemented yet**: `scaffold_app.py`
-requires an empty output directory, so today the factory generates a foundation once. The zones are what will
-make an incremental recompile possible without touching client code.
+Regeneration is implemented: `scripts/evolve_app.py` plans a change, reports what is blocked, and on
+`--apply` writes the next migration and refreshes only factory-owned artifacts. See
+[AppSpec evolution](references/evolution.md).
 
 See [AppSpec v0](references/app-spec-v0.md) and the [extension contract](references/extension-contract.md).
 
