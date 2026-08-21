@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import pg from "pg";
+import { databaseConfig } from "./db-connection.mjs";
 
 const { Client: PgClient } = pg;
 
@@ -30,13 +31,11 @@ if (!entityKey || !/^[a-z][a-z0-9_]{0,47}$/.test(entityKey)) {
 }
 const createValues = jsonArgument("create-values");
 const updateValues = jsonArgument("update-values");
-const connectionString = process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL;
-if (!connectionString) throw new Error("Falta DATABASE_URL.");
 
 const token = `factory_mcp_${randomBytes(32).toString("base64url")}`;
 const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
 const agentName = `Smoke MCP ${new Date().toISOString()} ${randomUUID().slice(0, 8)}`;
-const database = new PgClient({ connectionString });
+const database = new PgClient(databaseConfig({ direct: true }));
 await database.connect();
 
 let agentId;

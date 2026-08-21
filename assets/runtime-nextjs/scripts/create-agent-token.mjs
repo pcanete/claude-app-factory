@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import pg from "pg";
+import { databaseConfig } from "./db-connection.mjs";
 
 const { Client } = pg;
 
@@ -32,12 +33,10 @@ const scopes = [
   ...(access === "full" ? ["records:delete"] : []),
 ];
 
-const connectionString = process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL;
-if (!connectionString) throw new Error("Falta DATABASE_URL.");
 
 const token = `factory_mcp_${randomBytes(32).toString("base64url")}`;
 const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
-const client = new Client({ connectionString });
+const client = new Client(databaseConfig({ direct: true }));
 await client.connect();
 
 try {

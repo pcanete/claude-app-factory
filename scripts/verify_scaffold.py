@@ -282,6 +282,15 @@ def main() -> int:
     for invariant in ("auth()", "currentUser()", "emailVerified"):
         if invariant not in production_adapter:
             failures.append(f"Production authentication adapter is missing: {invariant}.")
+    for script_name in ("apply-migrations.mjs", "bootstrap-admin.mjs", "smoke-crud.mjs",
+                        "create-agent-token.mjs", "smoke-mcp-write.mjs"):
+        script_path = project / "scripts" / script_name
+        script_source = script_path.read_text(encoding="utf-8") if script_path.is_file() else ""
+        # Un script que arma la conexion por su cuenta se saltea el TLS y la convencion
+        # POSTGRES_URL, y falla contra cualquier PostgreSQL gestionado.
+        if "db-connection.mjs" not in script_source:
+            failures.append(f"{script_name} does not use the shared connection resolver.")
+
     bootstrap_path = project / "scripts/bootstrap-admin.mjs"
     bootstrap = bootstrap_path.read_text(encoding="utf-8") if bootstrap_path.is_file() else ""
     if "manage_users" not in bootstrap or "app-spec.json" not in bootstrap:
