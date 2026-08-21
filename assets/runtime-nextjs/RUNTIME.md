@@ -82,4 +82,6 @@ The application may also provide `OPENAI_API_KEY` for shared direct OpenAI acces
 
 Do not add client behavior to `src/generated/` or `database/generated/` (compiled from `app-spec.json`) or to `src/platform/` or `database/platform/` (shipped and updated by the factory). Use `src/features/`, `src/components/custom/`, and `database/custom/`; number custom migrations from `500` up.
 
+Un PostgreSQL gestionado (Supabase, Neon, RDS) presenta un certificado firmado por su propia autoridad, y `pg` trata `sslmode=require` como verificación completa: sin configurar TLS la conexión falla con `SELF_SIGNED_CERT_IN_CHAIN`. Pegá el certificado de la autoridad del proveedor en `DATABASE_CA_CERT` para verificar al servidor, o usá `DATABASE_SSL=relaxed` para cifrar sin autenticarlo — suficiente dentro de la red del proveedor, no frente a una red hostil.
+
 Migration files must not open their own transaction: `pnpm db:apply` wraps each file together with its `app_migration` ledger entry in a single transaction, so a migration and the record that it ran commit or roll back together. Applied migrations are checksummed and editing one afterwards is refused.

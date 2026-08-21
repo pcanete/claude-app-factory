@@ -29,7 +29,7 @@ export default async function DevelopmentAccessPage() {
         <button className="button" type="submit">Ingresar a la aplicación</button>
       </form>
       <div className="notice warning">
-        La identidad de producción se conecta en <code>src/features/auth/adapter.ts</code>; los roles siempre se leen desde PostgreSQL.
+        La identidad de producción se conecta en <code>src/platform/auth/adapter.ts</code>; los roles siempre se leen desde PostgreSQL.
       </div>
     </section>
   );

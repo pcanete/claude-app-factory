@@ -2,12 +2,9 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import pg from "pg";
+import { databaseConfig } from "./db-connection.mjs";
 
 const { Client } = pg;
-const connectionString = process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("Falta DATABASE_URL.");
-}
 
 // Orden por zona de propiedad: estructura de la AppSpec, luego plataforma del
 // kernel, luego extensiones del cliente. Nunca al reves.
@@ -30,7 +27,7 @@ const migrations = (
     ),
   )
 ).flat();
-const client = new Client({ connectionString });
+const client = new Client(databaseConfig({ direct: true }));
 await client.connect();
 
 try {

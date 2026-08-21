@@ -86,6 +86,7 @@ EXPECTED_FILES = {
     "src/platform/settings/store.ts",
     "src/platform/users/store.ts",
     "src/lib/auth-types.ts",
+    "src/lib/connection.ts",
     "src/lib/auth.ts",
     "src/lib/audit.ts",
     "src/lib/attachments.ts",
@@ -95,6 +96,7 @@ EXPECTED_FILES = {
     "src/lib/runtime-access.ts",
     "src/lib/rules.ts",
     "src/lib/view-query.ts",
+    "scripts/db-connection.mjs",
     "scripts/apply-migrations.mjs",
     "scripts/bootstrap-admin.mjs",
     "scripts/smoke-crud.mjs",
@@ -266,6 +268,16 @@ def main() -> int:
     for invariant in ("auth()", "currentUser()", "emailVerified"):
         if invariant not in production_adapter:
             failures.append(f"Production authentication adapter is missing: {invariant}.")
+    bootstrap_path = project / "scripts/bootstrap-admin.mjs"
+    bootstrap = bootstrap_path.read_text(encoding="utf-8") if bootstrap_path.is_file() else ""
+    if "manage_users" not in bootstrap or "app-spec.json" not in bootstrap:
+        failures.append(
+            "First administrator does not derive its role from the AppSpec; a neutral application "
+            "must not require a role named 'admin'."
+        )
+    if "'admin'" in bootstrap or '"admin"' in bootstrap:
+        failures.append("First administrator hard-codes an 'admin' role name.")
+
     production_auth_path = project / "src/platform/auth/invitations.ts"
     production_auth = production_auth_path.read_text(encoding="utf-8") if production_auth_path.is_file() else ""
     if "createInvitation" not in production_auth or "ignoreExisting" not in production_auth:

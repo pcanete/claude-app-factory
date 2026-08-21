@@ -1,12 +1,11 @@
 import { readFile } from "node:fs/promises";
 import pg from "pg";
+import { databaseConfig } from "./db-connection.mjs";
 
 const { Client } = pg;
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,47}$/;
 const keep = process.argv.includes("--keep");
 const spec = JSON.parse(await readFile(new URL("../app-spec.json", import.meta.url), "utf8"));
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("Falta DATABASE_URL.");
 
 function identifier(value) {
   if (!IDENTIFIER.test(value)) throw new Error(`Identificador inseguro: ${value}`);
@@ -59,7 +58,7 @@ async function insertEntity(client, entity, inserted) {
   return true;
 }
 
-const client = new Client({ connectionString });
+const client = new Client(databaseConfig());
 await client.connect();
 const inserted = new Map();
 
