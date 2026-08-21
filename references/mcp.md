@@ -23,6 +23,19 @@ Herramientas de escritura:
 
 No se ofrece SQL arbitrario, ejecución de código ni acceso directo a tablas internas.
 
+## Archivos
+
+`list_attachments` devuelve la metadata de los archivos de un registro —nombre, tipo, tamaño y
+hash— sin el contenido. `read_attachment` devuelve el contenido en base64 junto con su `sha256`,
+que el agente puede verificar antes de usarlo.
+
+El permiso se resuelve sobre la entidad dueña del archivo y exige `read`, así que conocer el
+identificador de un archivo no permite saltear la matriz de permisos. Ambas herramientas quedan
+registradas en la actividad del agente como cualquier otra.
+
+El límite sigue siendo el del adaptador incluido: 4 MB por archivo almacenados en PostgreSQL. Un
+agente que necesite archivos grandes requiere un adaptador de almacenamiento propio.
+
 ## Identidad, alcances y autorización
 
 Después de aplicar migraciones, creá una credencial distinta por agente:

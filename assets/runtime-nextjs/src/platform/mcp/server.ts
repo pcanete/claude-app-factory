@@ -18,7 +18,12 @@ import {
   updateRecord,
 } from "@/lib/repository";
 import { recordAuditEvent } from "@/lib/audit";
-import { deleteAttachmentsForRecord } from "@/lib/attachments";
+import {
+  deleteAttachmentsForRecord,
+  getAttachmentContent,
+  listAttachments,
+  resolveAttachmentPolicy,
+} from "@/lib/attachments";
 import { applyRules } from "@/lib/rules";
 import { relationFields, requireEntity, runtimeSpec } from "@/lib/spec";
 
@@ -148,6 +153,88 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
         },
       };
     }),
+  );
+
+  server.registerTool(
+    "list_attachments",
+    {
+      description:
+        "Lista los archivos adjuntos de un registro, con nombre, tipo, tamaño y hash. No devuelve el contenido.",
+      inputSchema: z.object({
+        entityKey: entityKeySchema,
+        recordId: z.string().uuid(),
+      }),
+    },
+    async ({ entityKey, recordId }) => traced(
+      agent,
+      "list_attachments",
+      { entityKey, recordId },
+      async () => {
+        // Los adjuntos heredan el permiso de lectura de su entidad, igual que en la interfaz.
+        const entity = requireAgentPermission(agent, entityKey, "read");
+        if (!resolveAttachmentPolicy(entity)) {
+          throw new Error(`${entity.label_plural} no acepta archivos adjuntos.`);
+        }
+        const files = await listAttachments(entity.key, recordId);
+        return {
+          value: {
+            entityKey: entity.key,
+            recordId,
+            attachments: files.map((file) => ({
+              id: file.id,
+              name: file.original_name,
+              contentType: file.content_type,
+              sizeBytes: file.size_bytes,
+              sha256: file.sha256,
+              createdAt: file.created_at,
+            })),
+          },
+          resultCount: files.length,
+        };
+      },
+    ),
+  );
+
+  server.registerTool(
+    "read_attachment",
+    {
+      description:
+        "Devuelve el contenido de un archivo adjunto en base64, junto con su tipo y hash para verificarlo.",
+      inputSchema: z.object({
+        attachmentId: z.string().uuid(),
+      }),
+    },
+    async ({ attachmentId }) => traced(
+      agent,
+      "read_attachment",
+      { attachmentId },
+      async () => {
+        const file = await getAttachmentContent(attachmentId);
+        if (!file) throw new Error("El archivo no existe.");
+        // El permiso se resuelve sobre la entidad dueña del archivo, no sobre el archivo:
+        // un identificador conocido no puede saltear la matriz de permisos.
+        const entity = requireAgentPermission(agent, file.entity_key, "read");
+        const content = Buffer.from(file.content);
+        const digest = createHash("sha256").update(content).digest("hex");
+        if (digest !== file.sha256) {
+          throw new Error("El contenido del archivo no coincide con su hash registrado.");
+        }
+        return {
+          value: {
+            id: file.id,
+            entityKey: entity.key,
+            recordId: file.record_id,
+            name: file.original_name,
+            contentType: file.content_type,
+            sizeBytes: file.size_bytes,
+            sha256: file.sha256,
+            encoding: "base64",
+            content: content.toString("base64"),
+          },
+          resultCount: 1,
+        };
+      },
+    ),
   );
 
   server.registerTool(

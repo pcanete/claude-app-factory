@@ -339,6 +339,13 @@ def main() -> int:
     for invariant in ("list_entities", "describe_entity", "query_records", "get_record", "export_snapshot", "startAgentToolEvent"):
         if invariant not in mcp_server:
             failures.append(f"MCP read tool surface is missing: {invariant}.")
+    for invariant in ("list_attachments", "read_attachment"):
+        if invariant not in mcp_server:
+            failures.append(f"MCP does not expose record files to agents: {invariant}.")
+    if "requireAgentPermission(agent, file.entity_key" not in mcp_server:
+        failures.append(
+            "MCP file reads must resolve permission on the owning entity, so a known id cannot bypass the matrix."
+        )
     for invariant in ("create_record", "update_record", "delete_record", "executeIdempotentMutation", "recordAuditEvent", "applyRules"):
         if invariant not in mcp_server:
             failures.append(f"MCP write tool surface is missing: {invariant}.")
