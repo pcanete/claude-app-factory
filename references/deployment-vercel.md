@@ -29,7 +29,7 @@ Keep values scoped to the smallest required Vercel environments.
 |---|---|---|
 | `DATABASE_URL` | Production, runtime | Pooled connection used by the application. A Vercel marketplace PostgreSQL integration injects `POSTGRES_URL` instead, which the runtime also accepts |
 | `DATABASE_URL_DIRECT` | Production, build | Direct/unpooled connection preferred for migrations (`POSTGRES_URL_NON_POOLING` is also accepted) |
-| `DATABASE_CA_CERT` or `DATABASE_SSL` | Production | TLS against a managed PostgreSQL. Without one of these, providers that sign with their own authority fail with `SELF_SIGNED_CERT_IN_CHAIN` |
+| `DATABASE_CA_CERT` or `DATABASE_SSL` | Production | TLS against a managed PostgreSQL. Without one of these, providers that sign with their own authority fail with `SELF_SIGNED_CERT_IN_CHAIN`. Use the inline certificate here, never `DATABASE_CA_CERT_FILE`: a relative path does not resolve in the serverless runtime and the deployment comes up unable to reach its database |
 | `NEXT_PUBLIC_APP_URL` | Production | Canonical application origin used in links |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Production | Public Clerk application identifier |
 | `CLERK_SECRET_KEY` | Production, sensitive | Server-side Clerk operations |

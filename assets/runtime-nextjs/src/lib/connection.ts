@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 /**
  * Resolución de la conexión a PostgreSQL.
  *
@@ -38,8 +40,23 @@ export function directConnectionString() {
  * Orden: el certificado de la autoridad si está declarado (lo correcto), luego el
  * modo explícito, y si no hay nada se deja decidir a la cadena de conexión.
  */
+/**
+ * El certificado de la autoridad no es un secreto: es público y verificable. Puede
+ * venir en `DATABASE_CA_CERT` o, más cómodo para trabajar en local, como ruta en
+ * `DATABASE_CA_CERT_FILE`. Un PEM que pasa por un archivo `.env` pierde sus saltos
+ * de línea, así que se restauran antes de usarlo.
+ */
+function certificateAuthority() {
+  const file = process.env.DATABASE_CA_CERT_FILE?.trim();
+  if (file) return readFileSync(file, "utf8");
+
+  const inline = process.env.DATABASE_CA_CERT?.trim();
+  if (!inline) return "";
+  return inline.replaceAll("\\n", "\n");
+}
+
 export function databaseSsl() {
-  const ca = process.env.DATABASE_CA_CERT?.trim();
+  const ca = certificateAuthority();
   if (ca) return { ca, rejectUnauthorized: true };
 
   switch (process.env.DATABASE_SSL?.trim().toLowerCase()) {

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 // Espejo de src/lib/connection.ts para los scripts, que corren fuera del bundle de
 // Next y no pueden importar TypeScript. Cambiar uno implica cambiar el otro.
 
@@ -13,8 +15,21 @@ function direct() {
   );
 }
 
+// El certificado de la autoridad no es un secreto: es público y verificable. Puede
+// venir en DATABASE_CA_CERT o, más cómodo para trabajar en local, como ruta en
+// DATABASE_CA_CERT_FILE. Un PEM que pasa por un archivo .env pierde sus saltos de
+// línea, así que se restauran antes de usarlo.
+function certificateAuthority() {
+  const file = process.env.DATABASE_CA_CERT_FILE?.trim();
+  if (file) return readFileSync(file, "utf8");
+
+  const inline = process.env.DATABASE_CA_CERT?.trim();
+  if (!inline) return "";
+  return inline.replaceAll("\\n", "\n");
+}
+
 function databaseSsl() {
-  const ca = process.env.DATABASE_CA_CERT?.trim();
+  const ca = certificateAuthority();
   if (ca) return { ca, rejectUnauthorized: true };
   const mode = process.env.DATABASE_SSL?.trim().toLowerCase();
   if (mode === "off") return false;
