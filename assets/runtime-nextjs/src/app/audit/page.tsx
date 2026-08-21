@@ -20,6 +20,8 @@ const actions: Array<{ key: AuditAction; label: string }> = [
   { key: "ai_credential_remove", label: "Credencial de IA eliminada" },
   { key: "ai_preference_update", label: "Preferencia de IA" },
   { key: "application_settings_update", label: "Configuración actualizada" },
+  { key: "agent_create", label: "Conexión de agente creada" },
+  { key: "agent_status", label: "Acceso de agente modificado" },
 ];
 
 export default async function AuditPage({
@@ -35,6 +37,7 @@ export default async function AuditPage({
     { key: "app_user_secret", label: "Credencial de IA", labelPlural: "Credenciales de IA" },
     { key: "app_user_setting", label: "Preferencia", labelPlural: "Preferencias" },
     { key: "app_setting", label: "Configuración", labelPlural: "Configuración" },
+    { key: "app_agent", label: "Agente", labelPlural: "Agentes" },
   ];
   const entityKey = auditEntities.some((entity) => entity.key === requested.entity)
     ? requested.entity

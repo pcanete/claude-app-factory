@@ -15,7 +15,9 @@ export type AuditAction =
   | "ai_credential_save"
   | "ai_credential_remove"
   | "ai_preference_update"
-  | "application_settings_update";
+  | "application_settings_update"
+  | "agent_create"
+  | "agent_status";
 
 export type AuditEvent = {
   id: string;

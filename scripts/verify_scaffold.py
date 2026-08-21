@@ -99,7 +99,9 @@ EXPECTED_FILES = {
     ".github/workflows/backup.yml",
     "database/platform/140_mcp_agents.sql",
     "database/platform/150_mcp_write.sql",
+    "src/app/agents/actions.ts",
     "src/app/agents/page.tsx",
+    "src/components/agent-create-form.tsx",
     "src/app/api/mcp/route.ts",
     "src/platform/mcp/access.ts",
     "src/platform/mcp/admin.ts",
@@ -351,7 +353,17 @@ def main() -> int:
             failures.append(f"MCP write tool surface is missing: {invariant}.")
     agent_page_path = project / "src/app/agents/page.tsx"
     agent_page = agent_page_path.read_text(encoding="utf-8") if agent_page_path.is_file() else ""
-    for invariant in ("requireAuditAccess", "listManagedAgents", "listAgentEvents"):
+    actions_path = project / "src/app/agents/actions.ts"
+    agent_actions = actions_path.read_text(encoding="utf-8") if actions_path.is_file() else ""
+    # Crear un agente con un rol es delegarle ese rol: si bastara con leer la auditoria,
+    # un rol de solo lectura podria fabricarse una credencial de administrador.
+    if "requireUserManagementAccess" not in agent_actions:
+        failures.append(
+            "Agent credentials can be issued without the user-management capability, which allows privilege escalation."
+        )
+    if "randomBytes" not in agent_actions or "createHash" not in agent_actions:
+        failures.append("Agent tokens must be generated randomly and stored only as a hash.")
+    for invariant in ("requireUserManagementAccess", "listManagedAgents", "listAgentEvents"):
         if invariant not in agent_page:
             failures.append(f"Agent activity page is missing: {invariant}.")
     migration_runner_path = project / "scripts/apply-migrations.mjs"

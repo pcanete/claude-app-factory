@@ -1,4 +1,5 @@
-import { sql } from "@/lib/db";
+import type { PoolClient } from "pg";
+import { sql, transactionSql } from "@/lib/db";
 
 export type ManagedAgent = {
   id: string;
@@ -25,6 +26,58 @@ export type AgentEvent = {
   error_message: string | null;
   started_at: Date;
 };
+
+export type ManagedAgentInput = {
+  name: string;
+  roleKey: string;
+  scopes: string[];
+  tokenHash: string;
+  expiresAt: string;
+};
+
+export type ManagedAgentForUpdate = {
+  id: string;
+  name: string;
+  active: boolean;
+};
+
+export function isManagedAgentId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+export async function createManagedAgent(client: PoolClient, input: ManagedAgentInput) {
+  const rows = await transactionSql<{ id: string }>(
+    client,
+    `INSERT INTO app_agent (name, token_hash, role_key, scopes, expires_at)
+     VALUES ($1, $2, $3, $4::text[], $5)
+     RETURNING id`,
+    [input.name, input.tokenHash, input.roleKey, input.scopes, input.expiresAt],
+  );
+  return rows[0].id;
+}
+
+export async function getManagedAgentForUpdate(client: PoolClient, id: string) {
+  const rows = await transactionSql<ManagedAgentForUpdate>(
+    client,
+    `SELECT id, name, active
+       FROM app_agent
+      WHERE id = $1
+      FOR UPDATE`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+export async function setManagedAgentActive(client: PoolClient, id: string, active: boolean) {
+  await transactionSql(
+    client,
+    `UPDATE app_agent
+        SET active = $2,
+            updated_at = now()
+      WHERE id = $1`,
+    [id, active],
+  );
+}
 
 export async function listManagedAgents() {
   return sql<ManagedAgent>(

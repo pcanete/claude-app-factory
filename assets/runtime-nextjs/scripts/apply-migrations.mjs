@@ -6,6 +6,17 @@ import { databaseConfig } from "./db-connection.mjs";
 
 const { Client } = pg;
 
+// Git, Windows y las APIs de despliegue pueden representar el mismo SQL con
+// distintos fines de linea. Normalizarlos hace que la verificacion de integridad
+// detecte ediciones reales y no diferencias de transporte.
+const CR = String.fromCharCode(13);
+const LF = String.fromCharCode(10);
+function migrationChecksum(source) {
+  const normalized = source.split(CR + LF).join(LF).split(CR).join(LF);
+  return createHash("sha256").update(normalized).digest("hex");
+}
+
+
 // Orden por zona de propiedad: estructura de la AppSpec, luego plataforma del
 // kernel, luego extensiones del cliente. Nunca al reves.
 const migrationDirectories = [
@@ -42,7 +53,7 @@ try {
   for (const migration of migrations) {
     const { file, name, directory } = migration;
     const source = await readFile(resolve(directory, file), "utf8");
-    const checksum = createHash("sha256").update(source).digest("hex");
+    const checksum = migrationChecksum(source);
     const existing = await client.query("SELECT checksum FROM app_migration WHERE name = $1", [name]);
     if (existing.rowCount) {
       if (existing.rows[0].checksum !== checksum) {

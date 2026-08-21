@@ -1,12 +1,26 @@
+import { setAgentStatusAction } from "@/app/agents/actions";
+import { AgentCreateForm } from "@/components/agent-create-form";
 import { listAgentEvents, listManagedAgents } from "@/platform/mcp/admin";
-import { requireAuditAccess } from "@/lib/auth";
+import { requireUserManagementAccess } from "@/lib/auth";
 import { formatDateTimeValue } from "@/lib/presentation";
 import { runtimeSpec } from "@/lib/spec";
 
 export const dynamic = "force-dynamic";
 
-export default async function AgentsPage() {
-  await requireAuditAccess();
+const successMessages: Record<string, string> = {
+  revoked: "El acceso fue revocado inmediatamente.",
+  reactivated: "La conexión volvió a estar activa.",
+};
+
+// Un agente es una identidad con un rol: crearlo equivale a delegar ese rol,
+// así que se gobierna con la misma capacidad que administra personas.
+export default async function AgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; saved?: string }>;
+}) {
+  await requireUserManagementAccess();
+  const requested = await searchParams;
   const [agents, events] = await Promise.all([listManagedAgents(), listAgentEvents()]);
   return (
     <>
@@ -14,16 +28,23 @@ export default async function AgentsPage() {
         <div>
           <p className="eyebrow">Operación mediante MCP</p>
           <h1>Agentes</h1>
-          <p className="subtitle">Identidades autorizadas, alcances de lectura o escritura y sus últimas ejecuciones.</p>
+          <p className="subtitle">Creá y controlá conexiones para Claude, Riel u otros agentes sin usar la terminal.</p>
         </div>
       </div>
+      {requested.error === "not_found" && <div className="notice import-error">La conexión solicitada no existe.</div>}
+      {requested.saved && successMessages[requested.saved] && <div className="notice success">{successMessages[requested.saved]}</div>}
 
       <section>
-        <div className="section-heading"><h2>Identidades</h2></div>
+        <div className="section-heading"><div><h2>Nueva conexión</h2><p className="subtitle">Elegí qué puede hacer y copiá el acceso listo para usar.</p></div></div>
+        <AgentCreateForm roles={runtimeSpec.roles.map((role) => ({ key: role.key, label: role.label }))} />
+      </section>
+
+      <section>
+        <div className="section-heading"><div><h2>Conexiones existentes</h2><p className="subtitle">Revocar corta el acceso inmediatamente sin borrar el historial.</p></div></div>
         <div className="table-wrap">
           {agents.length ? (
             <table className="audit-table">
-              <thead><tr><th>Agente</th><th>Rol</th><th>Estado</th><th>Vencimiento</th><th>Último uso</th><th>Llamadas</th></tr></thead>
+              <thead><tr><th>Agente</th><th>Rol</th><th>Estado</th><th>Vencimiento</th><th>Último uso</th><th>Llamadas</th><th>Acción</th></tr></thead>
               <tbody>
                 {agents.map((agent) => (
                   <tr key={agent.id}>
@@ -33,11 +54,18 @@ export default async function AgentsPage() {
                     <td>{agent.expires_at ? formatDateTimeValue(agent.expires_at, runtimeSpec.app.locale) : "Sin vencimiento"}</td>
                     <td>{agent.last_used_at ? formatDateTimeValue(agent.last_used_at, runtimeSpec.app.locale) : "Nunca"}</td>
                     <td>{agent.event_count}</td>
+                    <td>
+                      <form action={setAgentStatusAction}>
+                        <input name="id" type="hidden" value={agent.id} />
+                        <input name="active" type="hidden" value={agent.active ? "false" : "true"} />
+                        <button className={`button ${agent.active ? "danger" : "secondary"}`} type="submit">{agent.active ? "Revocar" : "Reactivar"}</button>
+                      </form>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : <div className="empty">Todavía no hay agentes MCP. Creá uno con <code>pnpm mcp:agent:create</code>.</div>}
+          ) : <div className="empty">Todavía no hay conexiones. Creá la primera con el formulario de arriba.</div>}
         </div>
       </section>
 

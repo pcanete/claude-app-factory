@@ -1,0 +1,5 @@
+# Las migraciones se identifican por checksum: su fin de linea no puede depender
+# del sistema donde se clone el repositorio.
+*.sql text eol=lf
+*.mjs text eol=lf
+*.pem text eol=lf

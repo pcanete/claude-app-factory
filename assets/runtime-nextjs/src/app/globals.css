@@ -129,6 +129,8 @@ tbody tr:hover { background: #1a1d25; }
 .audit-badge.user_status { color: #f5ae6b; }
 .audit-badge.user_invite { color: #c59cff; }
 .audit-badge.user_link { color: #5bd6a2; }
+.audit-badge.agent_create { color: #5bd6a2; }
+.audit-badge.agent_status { color: #f5ae6b; }
 .record-id { color: var(--muted); font-size: 11px; }
 details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
 .audit-json { max-width: 460px; max-height: 320px; overflow: auto; background: #0b0d12; border: 1px solid var(--border); border-radius: 8px; color: #d9dce3; font-size: 11px; line-height: 1.5; padding: 12px; white-space: pre-wrap; word-break: break-word; }
@@ -141,6 +143,14 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
 .field-help { color: var(--muted); font-size: 11px; line-height: 1.4; }
 .checkbox { display: flex; align-items: center; gap: 9px; min-height: 42px; }
 .form-actions { display: flex; gap: 10px; margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px; }
+.agent-create-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, .7fr); gap: 18px; align-items: start; }
+.agent-create-form { max-width: none; }
+.agent-form-notice { margin: 18px 0 0; }
+.agent-token-card { display: grid; gap: 16px; background: var(--surface); border: 1px solid color-mix(in srgb, #22c58b 44%, var(--border)); border-radius: var(--radius); padding: 24px; }
+.agent-token-card h3, .agent-token-card p { margin: 0; }
+.agent-copy-block { display: grid; gap: 8px; }
+.agent-copy-block > span { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.agent-copy-block code { display: block; overflow-wrap: anywhere; background: #0b0d12; border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: #d9dce3; font-size: 11px; line-height: 1.5; }
 
 .notice { border: 1px solid color-mix(in srgb, var(--primary) 44%, var(--border)); background: var(--primary-soft); border-radius: 10px; padding: 12px 14px; color: #d8d5ff; font-size: 13px; margin-bottom: 20px; }
 .notice.warning { margin-top: 22px; color: var(--muted); }
@@ -346,7 +356,7 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
   .page-header { flex-direction: column; }
   .header-actions { justify-content: flex-start; }
   .import-guide { grid-template-columns: 1fr; }
-  .form-grid, .detail-list { grid-template-columns: 1fr; }
+  .form-grid, .detail-list, .agent-create-layout { grid-template-columns: 1fr; }
   .attachment-upload { grid-template-columns: 1fr; }
   .attachment-upload .field-help { grid-column: auto; }
   .calendar-toolbar { align-items: stretch; flex-direction: column; }
