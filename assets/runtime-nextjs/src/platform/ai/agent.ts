@@ -17,7 +17,7 @@ function entityContext(user: RuntimeUser) {
 export async function createApplicationAssistant(user: RuntimeUser, modelId: string) {
   const modelAdapter = await getAiModelAdapter(user.id, modelId);
   return new ToolLoopAgent({
-    id: "riel-application-assistant",
+    id: "application-assistant",
     model: modelAdapter.model,
     instructions: `Sos el asistente interno de ${runtimeSpec.app.name}.
 

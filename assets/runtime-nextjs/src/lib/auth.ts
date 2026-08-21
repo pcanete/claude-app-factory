@@ -9,7 +9,7 @@ import { sql, transactionSql, withTransaction } from "@/lib/db";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { type EntitySpec, type ViewSpec, relationFields, requireEntity, requireView, runtimeSpec } from "@/lib/spec";
 
-export const DEVELOPMENT_SESSION_COOKIE = "riel_development_role";
+export const DEVELOPMENT_SESSION_COOKIE = "app_development_role";
 
 const permissionMatrix = generatedPermissions as unknown as Record<
   string,

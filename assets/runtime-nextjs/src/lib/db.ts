@@ -1,6 +1,6 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
-const globalForDb = globalThis as unknown as { rielPool?: Pool };
+const globalForDb = globalThis as unknown as { appPool?: Pool };
 
 function createPool() {
   const connectionString = process.env.DATABASE_URL;
@@ -17,8 +17,8 @@ function createPool() {
 }
 
 export function getPool() {
-  globalForDb.rielPool ??= createPool();
-  return globalForDb.rielPool;
+  globalForDb.appPool ??= createPool();
+  return globalForDb.appPool;
 }
 
 export async function sql<T extends QueryResultRow = QueryResultRow>(text: string, values: unknown[] = []) {

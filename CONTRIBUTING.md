@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve Riel App Factory.
+Thank you for helping improve Claude App Factory.
 
 ## Before changing code
 

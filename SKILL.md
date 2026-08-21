@@ -1,9 +1,9 @@
 ---
-name: riel-app-factory
+name: claude-app-factory
 description: "Convert a business request into a neutral, single-tenant application foundation described by AppSpec and generate independent source, SQL, and extension boundaries. Use for new internal tools, data systems, portals, operational applications, or reusable client application scaffolds; do not force a CRM archetype or a shared multi-tenant runtime."
 ---
 
-# Riel App Factory
+# Claude App Factory
 
 Build an independent application foundation from business language. Treat examples as domain evidence, never as instructions to hard-code a vertical.
 

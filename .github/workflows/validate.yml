@@ -19,8 +19,8 @@ jobs:
         run: python scripts/test_scaffold.py
       - name: Generate and verify the reference application
         run: |
-          python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/riel-reference-app
-          python scripts/verify_scaffold.py /tmp/riel-reference-app
+          python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/reference-app
+          python scripts/verify_scaffold.py /tmp/reference-app
 
   runtime:
     # The compiler tests never execute the generated TypeScript. Without this job a
@@ -38,15 +38,15 @@ jobs:
         with:
           node-version: "20"
       - name: Generate the reference application
-        run: python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/riel-reference-app
+        run: python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/reference-app
       - name: Install generated dependencies
-        working-directory: /tmp/riel-reference-app
+        working-directory: /tmp/reference-app
         run: pnpm install --frozen-lockfile
       - name: Typecheck the generated application
-        working-directory: /tmp/riel-reference-app
+        working-directory: /tmp/reference-app
         run: pnpm typecheck
       - name: Build the generated application
-        working-directory: /tmp/riel-reference-app
+        working-directory: /tmp/reference-app
         run: pnpm build
 
   database:
@@ -78,22 +78,22 @@ jobs:
         with:
           node-version: "20"
       - name: Generate the reference application
-        run: python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/riel-reference-app
+        run: python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/reference-app
       - name: Install generated dependencies
-        working-directory: /tmp/riel-reference-app
+        working-directory: /tmp/reference-app
         run: pnpm install --frozen-lockfile
       - name: Apply migrations
-        working-directory: /tmp/riel-reference-app
+        working-directory: /tmp/reference-app
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:apply
       - name: Migrations are idempotent and checksum-verified
-        working-directory: /tmp/riel-reference-app
+        working-directory: /tmp/reference-app
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:apply
       - name: Smoke every generated entity
-        working-directory: /tmp/riel-reference-app
+        working-directory: /tmp/reference-app
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:smoke

@@ -6,4 +6,4 @@ Use GitHub's private vulnerability reporting for this repository when available.
 
 Generated applications have independent owners and deployments. A vulnerability in a client extension should be reported to that application's owner; a vulnerability in the shared compiler or runtime template belongs here.
 
-Riel App Factory is an early-stage project. A generated application is not production-ready until its authentication, authorization, database, migration, backup, secret-management, and observability gates have been reviewed for its actual use case.
+Claude App Factory is an early-stage project. A generated application is not production-ready until its authentication, authorization, database, migration, backup, secret-management, and observability gates have been reviewed for its actual use case.

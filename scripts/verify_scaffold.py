@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify observable invariants of a generated Riel application foundation."""
+"""Verify observable invariants of a generated application foundation."""
 
 from __future__ import annotations
 

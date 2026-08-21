@@ -1,8 +1,15 @@
-# Riel App Factory
+# Claude App Factory
 
-Riel App Factory turns a business request into an independent, single-tenant application foundation. It models the request as an **AppSpec** and generates ordinary Next.js and PostgreSQL source code that can be extended, deployed, and maintained without depending on the factory at runtime.
+Claude App Factory turns a business request into an independent, single-tenant application foundation. It models the request as an **AppSpec** and generates ordinary Next.js and PostgreSQL source code that can be extended, deployed, and maintained without depending on the factory at runtime.
 
 > En español: convierte un pedido de negocio en una base web neutral e independiente por cliente. No presupone que la aplicación sea un CRM, ERP ni otro vertical.
+
+## Origin
+
+This project began as [riel-app-factory](https://github.com/pcanete/riel-app-factory), authored with
+OpenAI Codex, and continues here as the Claude line: same MIT license and same author, developed and
+maintained independently. Both are engines for the same idea, and neither reads or writes the other.
+The history before the ownership-zones commit belongs to the original repository.
 
 ## What it generates
 
@@ -14,7 +21,7 @@ Riel App Factory turns a business request into an independent, single-tenant app
 - a read-only AI assistant with per-user encrypted OpenAI or Anthropic keys;
 - explicit extension zones for client-specific behavior.
 
-Every client application gets its own repository, database, deployment, credentials, and lifecycle. The generated application does not call Riel App Factory in production.
+Every client application gets its own repository, database, deployment, credentials, and lifecycle. The generated application does not call Claude App Factory in production.
 
 ## Quick start
 
@@ -71,7 +78,6 @@ See [AppSpec v0](references/app-spec-v0.md) and the [extension contract](referen
 
 ```text
 SKILL.md                     Agent skill instructions
-agents/openai.yaml           Skill UI metadata
 references/                  AppSpec, extension, and deployment contracts
 scripts/                     Deterministic compiler and verification
 assets/runtime-nextjs/       Portable generated-application runtime
@@ -91,7 +97,18 @@ See [SECURITY.md](SECURITY.md) before reporting a vulnerability.
 
 ## Project status
 
-Riel App Factory is an early public foundation, not a hosted no-code product and not a blanket production-readiness guarantee. The safest contributions improve neutrality, determinism, portability, security, or verification without introducing shared multi-tenancy.
+Claude App Factory is an early foundation, not a hosted no-code product and not a blanket
+production-readiness guarantee.
+
+What is proven today: the compiler is deterministic and tested, the generated application typechecks
+and builds, the generated migrations apply to a real PostgreSQL, and every generated entity survives
+a CRUD smoke test — all of it enforced on every push by CI.
+
+What is not built yet: regeneration over an existing project, row-level permissions, and
+`many_to_many` relationships. Each is documented where it matters rather than implied to work.
+
+The safest contributions improve neutrality, determinism, portability, security, or verification
+without introducing shared multi-tenancy.
 
 Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md).
 

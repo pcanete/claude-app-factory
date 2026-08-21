@@ -63,4 +63,4 @@ To change platform behavior, import it from a feature and wrap it. To change gen
 
 ## Independence
 
-Each generated project must be runnable from its own repository and documented environment variables. It may use ordinary open-source packages or chosen infrastructure, but it must not call Riel App Factory at runtime.
+Each generated project must be runnable from its own repository and documented environment variables. It may use ordinary open-source packages or chosen infrastructure, but it must not call Claude App Factory at runtime.
