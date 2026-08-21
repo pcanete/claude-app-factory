@@ -16,7 +16,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Run compiler tests
-        run: python scripts/test_scaffold.py
+        run: |
+          python scripts/test_scaffold.py
+          python scripts/test_evolve_app.py
       - name: Generate and verify the reference application
         run: |
           python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/reference-app
@@ -97,3 +99,100 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:smoke
+
+  evolution:
+    # Una evolución que rompe los datos existentes es peor que no tener evolución.
+    # Este job aplica la v1, carga datos, evoluciona el esquema y comprueba que los
+    # datos siguen ahí.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generate v1 and apply it
+        run: |
+          python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/evolving-app
+          cd /tmp/evolving-app
+          pnpm install --frozen-lockfile
+          pnpm db:apply
+
+      - name: Load data that must survive the evolution
+        run: |
+          cd /tmp/evolving-app
+          node -e "
+            const pg = require('pg');
+            (async () => {
+              const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
+              await c.connect();
+              await c.query(\"INSERT INTO equipment (name, status) VALUES ('bomba-1', 'active')\");
+              await c.end();
+            })();
+          "
+
+      - name: Evolve the schema
+        run: |
+          python - <<'SPEC'
+          import json
+          from pathlib import Path
+          spec = json.loads(Path("references/example-maintenance.app-spec.json").read_text(encoding="utf-8"))
+          equipment = next(e for e in spec["entities"] if e["key"] == "equipment")
+          equipment["fields"].append({"key": "location", "label": "Location", "type": "text", "searchable": True})
+          spec["entities"].append({
+              "key": "supplier", "label": "Supplier", "label_plural": "Suppliers", "title_field": "name",
+              "fields": [{"key": "name", "label": "Name", "type": "text", "required": True}],
+              "permissions": {role["key"]: ["list", "read"] for role in spec["roles"]},
+          })
+          Path("/tmp/v2.app-spec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+          SPEC
+          python scripts/evolve_app.py --project /tmp/evolving-app --spec /tmp/v2.app-spec.json --apply --migration-name ci_evolution
+
+      - name: Apply the evolution migration
+        run: cd /tmp/evolving-app && pnpm db:apply
+
+      - name: The data survived and the new schema is live
+        run: |
+          cd /tmp/evolving-app
+          node -e "
+            const pg = require('pg');
+            (async () => {
+              const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
+              await c.connect();
+              const kept = await c.query(\"SELECT location FROM equipment WHERE name = 'bomba-1'\");
+              if (kept.rowCount !== 1) throw new Error('Los datos previos no sobrevivieron a la evolucion.');
+              if (kept.rows[0].location !== null) throw new Error('La columna nueva deberia llegar vacia.');
+              await c.query(\"INSERT INTO supplier (name) VALUES ('proveedor-1')\");
+              const rls = await c.query(\"SELECT rowsecurity FROM pg_tables WHERE tablename = 'supplier'\");
+              if (!rls.rows[0].rowsecurity) throw new Error('La entidad nueva nacio sin RLS.');
+              await c.end();
+              console.log('Datos preservados, columna agregada, entidad nueva cerrada.');
+            })();
+          "
+
+      - name: Typecheck the evolved application
+        run: cd /tmp/evolving-app && pnpm typecheck
+
+      - name: Smoke every entity after evolving
+        run: cd /tmp/evolving-app && pnpm db:smoke
