@@ -15,6 +15,11 @@ Build an independent application foundation from business language. Treat exampl
 - Keep three ownership zones separate: generated (`src/generated/`, `database/generated/`), platform (`src/platform/`, `database/platform/`), and client (`src/features/`, `src/components/custom/`, `database/custom/`). Regeneration must not overwrite client extensions.
 - Produce ordinary source and PostgreSQL artifacts that remain usable without this skill.
 - Do not introduce multi-tenancy, billing, a visual builder, a plugin marketplace, or a proprietary runtime unless the user asks.
+- **The generated UI is capped at its current scope.** It exists as the on-ramp for people who do not
+  yet operate agentically, and as a window onto what agents did — not as a product surface that grows.
+  New capability belongs in the API, the agent interface, and the schema, never in more screens.
+  Adding a view type, a bulk operation, or a workflow to the runtime needs an explicit decision from
+  the maintainer; extending an existing generated view from the AppSpec does not.
 - Do not claim production readiness while a generated project still has unresolved security, authentication, authorization, migration, backup, or observability gates.
 
 ## Workflow
