@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { sendApplicationInvitation } from "@/features/auth/invitations";
+import { sendApplicationInvitation } from "@/platform/auth/invitations";
 import {
   createManagedUser,
   getManagedUser,
@@ -12,7 +12,7 @@ import {
   isManagedUserId,
   updateManagedUser,
   type ManagedUserInput,
-} from "@/features/users/store";
+} from "@/platform/users/store";
 import { recordAuditEvent } from "@/lib/audit";
 import { requireUserManagementAccess } from "@/lib/auth";
 import { withTransaction } from "@/lib/db";

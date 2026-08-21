@@ -2,15 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAllowedAiModel } from "@/features/ai/config";
-import { isPersonalAiProviderKey } from "@/features/settings/catalog";
-import { encryptSecret, settingsEncryptionConfigured } from "@/features/settings/crypto";
+import { requireAllowedAiModel } from "@/platform/ai/config";
+import { isPersonalAiProviderKey } from "@/platform/settings/catalog";
+import { encryptSecret, settingsEncryptionConfigured } from "@/platform/settings/crypto";
 import {
   deleteUserAiSecret,
   setApplicationGeneralSettings,
   setUserAiPreferredModel,
   upsertUserAiSecret,
-} from "@/features/settings/store";
+} from "@/platform/settings/store";
 import { recordAuditEvent } from "@/lib/audit";
 import { requireUser, requireUserManagementAccess } from "@/lib/auth";
 import { withTransaction } from "@/lib/db";

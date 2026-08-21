@@ -4,10 +4,10 @@ import {
   saveAiPreferenceAction,
   saveApplicationSettingsAction,
 } from "@/app/settings/actions";
-import { getUserAiConfiguration } from "@/features/ai/config";
-import { AI_MODEL_CATALOG, PERSONAL_AI_PROVIDERS } from "@/features/settings/catalog";
-import { settingsEncryptionConfigured } from "@/features/settings/crypto";
-import { getApplicationSettings, getUserAiSettings } from "@/features/settings/store";
+import { getUserAiConfiguration } from "@/platform/ai/config";
+import { AI_MODEL_CATALOG, PERSONAL_AI_PROVIDERS } from "@/platform/settings/catalog";
+import { settingsEncryptionConfigured } from "@/platform/settings/crypto";
+import { getApplicationSettings, getUserAiSettings } from "@/platform/settings/store";
 import { canManageUsers, requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";

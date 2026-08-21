@@ -1,5 +1,4 @@
 -- USER MANAGEMENT HARDENING. SAFE TO REAPPLY.
-BEGIN;
 
 UPDATE app_user SET email = lower(trim(email));
 
@@ -18,5 +17,3 @@ BEGIN
     ALTER TABLE app_user ADD CONSTRAINT app_user_auth_subject_check CHECK (length(trim(auth_subject)) > 0);
   END IF;
 END $$;
-
-COMMIT;

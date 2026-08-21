@@ -13,7 +13,7 @@ This project is a local application foundation generated from `app-spec.json`.
 
 `ALLOW_UNSAFE_LOCAL_PREVIEW=true` enables a passwordless role selector only outside production. Every page and mutation still enforces the generated permission matrix on the server. Production ignores this local path. Clerk proves identity; PostgreSQL remains authoritative for account status, role, and permissions. Without both Clerk keys the production login stays closed.
 
-Every create, update, and delete operation writes `app_audit_log` in the same database transaction. Roles with full list/read/delete access across every entity can review and filter the history at `/audit`.
+Every create, update, and delete operation writes `app_audit_log` in the same database transaction. Roles that declare the `view_audit` capability in `app-spec.json` can review and filter the history at `/audit`; when the AppSpec declares no capabilities at all, access falls back to roles holding list/read/delete on every entity.
 
 ## User management
 
@@ -80,4 +80,6 @@ The application may also provide `OPENAI_API_KEY` for shared direct OpenAI acces
 
 ## Ownership
 
-Do not add client behavior to `src/generated/` or `database/generated/`. Use `src/features/`, `src/components/custom/`, and `database/custom/`.
+Do not add client behavior to `src/generated/` or `database/generated/` (compiled from `app-spec.json`) or to `src/platform/` or `database/platform/` (shipped and updated by the factory). Use `src/features/`, `src/components/custom/`, and `database/custom/`; number custom migrations from `500` up.
+
+Migration files must not open their own transaction: `pnpm db:apply` wraps each file together with its `app_migration` ledger entry in a single transaction, so a migration and the record that it ran commit or roll back together. Applied migrations are checksummed and editing one afterwards is refused.

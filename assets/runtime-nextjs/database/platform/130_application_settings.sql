@@ -1,5 +1,4 @@
 -- GENERIC SETTINGS AND ENCRYPTED USER SECRETS. SAFE TO REAPPLY.
-BEGIN;
 
 CREATE TABLE IF NOT EXISTS app_setting (
   namespace text NOT NULL,
@@ -39,6 +38,3 @@ CREATE TABLE IF NOT EXISTS app_user_secret (
 
 CREATE INDEX IF NOT EXISTS app_user_secret_user_updated_idx
   ON app_user_secret (user_id, updated_at DESC);
-
-COMMIT;
-

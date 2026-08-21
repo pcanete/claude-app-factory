@@ -2,9 +2,9 @@ import "server-only";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { gateway, type GatewayModelId, type LanguageModel } from "ai";
-import { getGlobalAiProviderMode } from "@/features/ai/config";
-import { findAiModel } from "@/features/settings/catalog";
-import { getUserAiSecret } from "@/features/settings/store";
+import { getGlobalAiProviderMode } from "@/platform/ai/config";
+import { findAiModel } from "@/platform/settings/catalog";
+import { getUserAiSecret } from "@/platform/settings/store";
 
 export type AiModelAdapter = {
   key: string;

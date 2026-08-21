@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createAiConversationAction } from "@/app/assistant/actions";
-import { canUseApplicationAssistant } from "@/features/ai/access";
-import { getUserAiConfiguration } from "@/features/ai/config";
-import { AI_MODEL_CATALOG } from "@/features/settings/catalog";
-import { listAiConversations } from "@/features/ai/store";
+import { canUseApplicationAssistant } from "@/platform/ai/access";
+import { getUserAiConfiguration } from "@/platform/ai/config";
+import { AI_MODEL_CATALOG } from "@/platform/settings/catalog";
+import { listAiConversations } from "@/platform/ai/store";
 import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";

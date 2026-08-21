@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createAiConversationAction } from "@/app/assistant/actions";
-import { ApplicationAssistantChat } from "@/features/ai/components/application-assistant-chat";
-import type { ApplicationAssistantMessage } from "@/features/ai/agent";
-import { canUseApplicationAssistant } from "@/features/ai/access";
-import { getUserAiConfiguration } from "@/features/ai/config";
-import { AI_MODEL_CATALOG } from "@/features/settings/catalog";
-import { getAiConversation, isAiConversationId, listAiConversations, loadAiMessages } from "@/features/ai/store";
+import { ApplicationAssistantChat } from "@/platform/ai/components/application-assistant-chat";
+import type { ApplicationAssistantMessage } from "@/platform/ai/agent";
+import { canUseApplicationAssistant } from "@/platform/ai/access";
+import { getUserAiConfiguration } from "@/platform/ai/config";
+import { AI_MODEL_CATALOG } from "@/platform/settings/catalog";
+import { getAiConversation, isAiConversationId, listAiConversations, loadAiMessages } from "@/platform/ai/store";
 import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";

@@ -21,3 +21,79 @@ jobs:
         run: |
           python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/riel-reference-app
           python scripts/verify_scaffold.py /tmp/riel-reference-app
+
+  runtime:
+    # The compiler tests never execute the generated TypeScript. Without this job a
+    # runtime change can break every future application while CI stays green.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generate the reference application
+        run: python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/riel-reference-app
+      - name: Install generated dependencies
+        working-directory: /tmp/riel-reference-app
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck the generated application
+        working-directory: /tmp/riel-reference-app
+        run: pnpm typecheck
+      - name: Build the generated application
+        working-directory: /tmp/riel-reference-app
+        run: pnpm build
+
+  database:
+    # A migration that does not apply is a migration that does not exist. This runs the
+    # real schema against a real PostgreSQL and exercises CRUD on every generated entity.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generate the reference application
+        run: python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/riel-reference-app
+      - name: Install generated dependencies
+        working-directory: /tmp/riel-reference-app
+        run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        working-directory: /tmp/riel-reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: pnpm db:apply
+      - name: Migrations are idempotent and checksum-verified
+        working-directory: /tmp/riel-reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: pnpm db:apply
+      - name: Smoke every generated entity
+        working-directory: /tmp/riel-reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: pnpm db:smoke

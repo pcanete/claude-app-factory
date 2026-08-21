@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { ApplicationAssistantMessage } from "@/features/ai/agent";
+import type { ApplicationAssistantMessage } from "@/platform/ai/agent";
 
 type ToolState = ApplicationAssistantMessage["parts"][number] extends { state: infer STATE }
   ? STATE

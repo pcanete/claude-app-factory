@@ -1,5 +1,5 @@
 import { SessionSignOut } from "@/components/session-sign-out";
-import { clerkAuthConfigured } from "@/features/auth/config";
+import { clerkAuthConfigured } from "@/platform/auth/config";
 
 export const dynamic = "force-dynamic";
 

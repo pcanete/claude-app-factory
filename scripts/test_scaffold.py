@@ -9,7 +9,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scaffold_app import SpecError, compile_report, compile_sql, scaffold, validate_spec
+from scaffold_app import (
+    SpecError,
+    compile_permissions,
+    compile_report,
+    compile_sql,
+    declared_capabilities,
+    scaffold,
+    validate_spec,
+)
 
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "references" / "example-maintenance.app-spec.json"
@@ -186,13 +194,16 @@ class ScaffoldTests(unittest.TestCase):
             self.assertGreaterEqual(len(written), 25)
             self.assertTrue((output / "BUILD_REPORT.md").is_file())
             self.assertTrue((output / "src/features/EXTENSIONS.md").is_file())
+            self.assertTrue((output / "src/platform/OWNERSHIP.md").is_file())
+            self.assertTrue((output / "database/platform/OWNERSHIP.md").is_file())
+            self.assertFalse((output / "src/platform/auth/adapter.ts").read_text(encoding="utf-8").strip() == "")
             self.assertTrue((output / "src/app/records/[entity]/page.tsx").is_file())
             self.assertTrue((output / "src/app/records/[entity]/import/page.tsx").is_file())
             self.assertTrue((output / "src/app/records/[entity]/export/route.ts").is_file())
             self.assertTrue((output / "src/app/rules/page.tsx").is_file())
             self.assertTrue((output / "src/app/sign-in/[[...sign-in]]/page.tsx").is_file())
             self.assertTrue((output / "src/proxy.ts").is_file())
-            self.assertTrue((output / "database/custom/120_clerk_authentication.sql").is_file())
+            self.assertTrue((output / "database/platform/120_clerk_authentication.sql").is_file())
             self.assertTrue((output / "src/lib/rules.ts").is_file())
             self.assertTrue((output / "src/app/views/[view]/page.tsx").is_file())
             self.assertTrue((output / "src/app/attachments/actions.ts").is_file())
@@ -205,6 +216,45 @@ class ScaffoldTests(unittest.TestCase):
             self.assertTrue((output / "src/components/operational-calendar.tsx").is_file())
             self.assertTrue((output / "package.json").is_file())
             self.assertIn("uuid: 11.1.1", (output / "pnpm-workspace.yaml").read_text(encoding="utf-8"))
+
+    def test_unknown_capability_is_rejected(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["roles"][0]["capabilities"] = ["manage_everything"]
+        errors = validate_spec(spec)
+        self.assertTrue(any("unknown capability" in error for error in errors))
+
+    def test_capabilities_without_an_administrator_are_rejected(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        for role in spec["roles"]:
+            role["capabilities"] = ["view_audit"]
+        errors = validate_spec(spec)
+        self.assertTrue(any("manage_users" in error for error in errors))
+
+    def test_declared_capabilities_reach_the_generated_matrix(self) -> None:
+        capabilities = declared_capabilities(self.spec)
+        self.assertIsNotNone(capabilities)
+        self.assertIn("manage_users", capabilities["admin"])
+        self.assertNotIn("manage_users", capabilities["technician"])
+        compiled = compile_permissions(self.spec)
+        self.assertIn("generatedCapabilities", compiled)
+        self.assertIn("manage_users", compiled)
+
+    def test_missing_capabilities_fall_back_and_are_reported_as_a_gate(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        for role in spec["roles"]:
+            role.pop("capabilities", None)
+        self.assertEqual(validate_spec(spec), [])
+        self.assertIsNone(declared_capabilities(spec))
+        compiled = compile_permissions(spec)
+        self.assertIn("generatedCapabilities", compiled)
+        self.assertIn("null;", compiled)
+        self.assertIn("no role declares it", compile_report(spec))
+
+    def test_generated_sql_does_not_open_its_own_transaction(self) -> None:
+        # El runner envuelve cada migracion junto con su registro en el ledger.
+        sql = compile_sql(self.spec)
+        self.assertNotIn("BEGIN;", sql)
+        self.assertNotIn("COMMIT;", sql)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import "server-only";
-import { AI_MODEL_CATALOG, type AiModelOption } from "@/features/settings/catalog";
-import { getUserAiSettings } from "@/features/settings/store";
+import { AI_MODEL_CATALOG, type AiModelOption } from "@/platform/settings/catalog";
+import { getUserAiSettings } from "@/platform/settings/store";
 
 const MODEL_ID = /^[a-z0-9][a-z0-9._-]{0,47}\/[a-z0-9][a-z0-9._-]{0,95}$/i;
 export type GlobalAiProviderMode = "gateway" | "openai";

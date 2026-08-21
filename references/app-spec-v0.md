@@ -44,13 +44,23 @@ Each role has a stable key and label. Entity permissions list one or more of `li
 ```json
 {
   "roles": [
-    {"key": "admin", "label": "Administrador"},
-    {"key": "technician", "label": "Técnico"}
+    {"key": "admin", "label": "Administrador", "capabilities": ["manage_users", "view_audit", "view_rules"]},
+    {"key": "technician", "label": "Técnico", "capabilities": []}
   ]
 }
 ```
 
 Every entity must define permissions explicitly. The compiler rejects unknown roles or actions.
+
+`capabilities` declares administrative access that is not expressible as an entity permission:
+
+| Capability | Grants |
+|---|---|
+| `manage_users` | Invite, deactivate, and reassign application users |
+| `view_audit` | Read the audit log |
+| `view_rules` | Review the compiled rule set |
+
+Capabilities are optional but recommended. When at least one role declares them, the declaration is authoritative and at least one role must hold `manage_users`. When no role declares them, the runtime falls back to a legacy heuristic — any role holding `list`, `read`, and `delete` on *every* entity inherits all three capabilities — and the build report records that as a production gate. That fallback grants administration to roles nobody declared as administrators; declare capabilities instead.
 
 ## Entities
 
@@ -226,5 +236,6 @@ Allowed statuses are `confirmed`, `assumption`, and `unresolved`.
 - View fields exist on the referenced entity.
 - Attachment policies are bounded and contain valid MIME patterns.
 - Kanban, calendar, bulk-edit, sorting, and dashboard widget fields are type-compatible.
-- Generated SQL uses only validated identifiers.
+- Generated SQL uses only validated identifiers and opens no transaction of its own.
+- Declared capabilities are known values, and at least one role holds `manage_users`.
 - Output never overwrites a non-empty project directory.

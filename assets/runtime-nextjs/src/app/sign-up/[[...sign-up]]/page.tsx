@@ -1,6 +1,6 @@
 import { SignUp } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
-import { clerkAuthConfigured } from "@/features/auth/config";
+import { clerkAuthConfigured } from "@/platform/auth/config";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 
 export const dynamic = "force-dynamic";

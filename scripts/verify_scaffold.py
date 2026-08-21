@@ -16,14 +16,16 @@ EXPECTED_FILES = {
     "BUILD_REPORT.md",
     "database/generated/001_initial.sql",
     "database/custom/EXTENSIONS.md",
-    "database/custom/100_ai_foundation.sql",
-    "database/custom/110_user_management.sql",
-    "database/custom/120_clerk_authentication.sql",
-    "database/custom/130_application_settings.sql",
+    "database/platform/OWNERSHIP.md",
+    "database/platform/100_ai_foundation.sql",
+    "database/platform/110_user_management.sql",
+    "database/platform/120_clerk_authentication.sql",
+    "database/platform/130_application_settings.sql",
     "src/generated/app-spec.ts",
     "src/generated/navigation.ts",
     "src/generated/permissions.ts",
     "src/features/EXTENSIONS.md",
+    "src/platform/OWNERSHIP.md",
     "src/components/custom/EXTENSIONS.md",
     "package.json",
     "pnpm-workspace.yaml",
@@ -69,20 +71,20 @@ EXPECTED_FILES = {
     "src/components/operational-calendar.tsx",
     "src/components/pagination.tsx",
     "src/components/session-sign-out.tsx",
-    "src/features/auth/adapter.ts",
-    "src/features/auth/config.ts",
-    "src/features/auth/invitations.ts",
-    "src/features/ai/access.ts",
-    "src/features/ai/agent.ts",
-    "src/features/ai/config.ts",
-    "src/features/ai/model-adapter.ts",
-    "src/features/ai/store.ts",
-    "src/features/ai/tools.ts",
-    "src/features/ai/components/application-assistant-chat.tsx",
-    "src/features/settings/catalog.ts",
-    "src/features/settings/crypto.ts",
-    "src/features/settings/store.ts",
-    "src/features/users/store.ts",
+    "src/platform/auth/adapter.ts",
+    "src/platform/auth/config.ts",
+    "src/platform/auth/invitations.ts",
+    "src/platform/ai/access.ts",
+    "src/platform/ai/agent.ts",
+    "src/platform/ai/config.ts",
+    "src/platform/ai/model-adapter.ts",
+    "src/platform/ai/store.ts",
+    "src/platform/ai/tools.ts",
+    "src/platform/ai/components/application-assistant-chat.tsx",
+    "src/platform/settings/catalog.ts",
+    "src/platform/settings/crypto.ts",
+    "src/platform/settings/store.ts",
+    "src/platform/users/store.ts",
     "src/lib/auth-types.ts",
     "src/lib/auth.ts",
     "src/lib/audit.ts",
@@ -235,7 +237,7 @@ def main() -> int:
     for invariant in ("getCurrentUser", "canUseApplicationAssistant", "validateUIMessages", "createAgentUIStreamResponse", "saveAiMessages"):
         if invariant not in assistant_route:
             failures.append(f"Application assistant route is missing: {invariant}.")
-    assistant_tools_path = project / "src/features/ai/tools.ts"
+    assistant_tools_path = project / "src/platform/ai/tools.ts"
     assistant_tools = assistant_tools_path.read_text(encoding="utf-8") if assistant_tools_path.is_file() else ""
     for invariant in ("hasPermission", "countFilteredRecords", "listRecords", "getRecord"):
         if invariant not in assistant_tools:
@@ -245,12 +247,12 @@ def main() -> int:
     for invariant in ("encryptSecret", "requireUser", "requireUserManagementAccess", "recordAuditEvent", "withTransaction"):
         if invariant not in settings_actions:
             failures.append(f"Application settings actions are missing: {invariant}.")
-    settings_crypto_path = project / "src/features/settings/crypto.ts"
+    settings_crypto_path = project / "src/platform/settings/crypto.ts"
     settings_crypto = settings_crypto_path.read_text(encoding="utf-8") if settings_crypto_path.is_file() else ""
     for invariant in ("aes-256-gcm", "SETTINGS_ENCRYPTION_KEY", "authenticationTag"):
         if invariant not in settings_crypto:
             failures.append(f"Encrypted user settings are missing: {invariant}.")
-    settings_migration_path = project / "database/custom/130_application_settings.sql"
+    settings_migration_path = project / "database/platform/130_application_settings.sql"
     settings_migration = settings_migration_path.read_text(encoding="utf-8") if settings_migration_path.is_file() else ""
     for invariant in ("app_setting", "app_user_setting", "app_user_secret"):
         if invariant not in settings_migration:
@@ -259,12 +261,12 @@ def main() -> int:
     migration_runner = migration_runner_path.read_text(encoding="utf-8") if migration_runner_path.is_file() else ""
     if 'resolve("database/custom")' not in migration_runner:
         failures.append("Migration runner does not include custom feature migrations.")
-    production_adapter_path = project / "src/features/auth/adapter.ts"
+    production_adapter_path = project / "src/platform/auth/adapter.ts"
     production_adapter = production_adapter_path.read_text(encoding="utf-8") if production_adapter_path.is_file() else ""
     for invariant in ("auth()", "currentUser()", "emailVerified"):
         if invariant not in production_adapter:
             failures.append(f"Production authentication adapter is missing: {invariant}.")
-    production_auth_path = project / "src/features/auth/invitations.ts"
+    production_auth_path = project / "src/platform/auth/invitations.ts"
     production_auth = production_auth_path.read_text(encoding="utf-8") if production_auth_path.is_file() else ""
     if "createInvitation" not in production_auth or "ignoreExisting" not in production_auth:
         failures.append("Production invitation delivery is incomplete.")

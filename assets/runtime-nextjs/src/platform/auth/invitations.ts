@@ -1,7 +1,7 @@
 import "server-only";
 
 import { clerkClient } from "@clerk/nextjs/server";
-import { applicationUrl, clerkAuthConfigured } from "@/features/auth/config";
+import { applicationUrl, clerkAuthConfigured } from "@/platform/auth/config";
 
 export type InvitationResult = "sent" | "not_configured" | "failed";
 

@@ -1,5 +1,4 @@
 -- PRODUCTION IDENTITY LINKING. SAFE TO REAPPLY.
-BEGIN;
 
 ALTER TABLE app_user
   ADD COLUMN IF NOT EXISTS identity_linked_at timestamptz;
@@ -12,5 +11,3 @@ UPDATE app_user
 CREATE INDEX IF NOT EXISTS app_user_pending_email_idx
   ON app_user (lower(email))
   WHERE auth_subject LIKE 'pending:%';
-
-COMMIT;

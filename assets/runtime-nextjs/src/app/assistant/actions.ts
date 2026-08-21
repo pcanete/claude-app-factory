@@ -1,9 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { canUseApplicationAssistant } from "@/features/ai/access";
-import { requireAllowedAiModel } from "@/features/ai/config";
-import { createAiConversation } from "@/features/ai/store";
+import { canUseApplicationAssistant } from "@/platform/ai/access";
+import { requireAllowedAiModel } from "@/platform/ai/config";
+import { createAiConversation } from "@/platform/ai/store";
 import { requireUser } from "@/lib/auth";
 
 export async function createAiConversationAction(formData: FormData) {

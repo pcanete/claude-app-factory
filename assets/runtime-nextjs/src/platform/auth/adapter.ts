@@ -1,6 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import type { ProductionAuthAdapter } from "@/lib/auth-types";
-import { clerkAuthConfigured } from "@/features/auth/config";
+import { clerkAuthConfigured } from "@/platform/auth/config";
 
 /**
  * Client-owned production extension point.

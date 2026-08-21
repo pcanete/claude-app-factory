@@ -1,7 +1,7 @@
 import "server-only";
 import type { PoolClient } from "pg";
-import type { PersonalAiProviderKey } from "@/features/settings/catalog";
-import { decryptSecret, type EncryptedSecret } from "@/features/settings/crypto";
+import type { PersonalAiProviderKey } from "@/platform/settings/catalog";
+import { decryptSecret, type EncryptedSecret } from "@/platform/settings/crypto";
 import { sql, transactionSql } from "@/lib/db";
 
 type SecretRow = {

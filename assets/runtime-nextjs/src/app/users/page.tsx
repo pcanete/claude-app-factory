@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createUserAction } from "@/app/users/actions";
-import { isLocalPreviewIdentity, isPendingIdentity, listManagedUsers } from "@/features/users/store";
+import { isLocalPreviewIdentity, isPendingIdentity, listManagedUsers } from "@/platform/users/store";
 import { requireUserManagementAccess } from "@/lib/auth";
 import { runtimeSpec } from "@/lib/spec";
 

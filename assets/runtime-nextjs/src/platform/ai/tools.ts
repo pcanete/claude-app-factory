@@ -4,7 +4,7 @@ import type { RuntimeUser } from "@/lib/auth-types";
 import { hasPermission } from "@/lib/auth";
 import { countFilteredRecords, getRecord, listRecords } from "@/lib/repository";
 import { relationFields, requireEntity } from "@/lib/spec";
-import { assistantEntities } from "@/features/ai/access";
+import { assistantEntities } from "@/platform/ai/access";
 
 function assertPermission(user: RuntimeUser, entityKey: string, action: "list" | "read") {
   const entity = requireEntity(entityKey);

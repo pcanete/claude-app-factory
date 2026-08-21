@@ -1,4 +1,3 @@
-BEGIN;
 
 CREATE TABLE IF NOT EXISTS ai_conversation (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -50,5 +49,3 @@ CREATE TABLE IF NOT EXISTS ai_tool_call (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (run_id, tool_call_id)
 );
-
-COMMIT;

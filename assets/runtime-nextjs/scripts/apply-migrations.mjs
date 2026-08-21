@@ -9,14 +9,17 @@ if (!connectionString) {
   throw new Error("Falta DATABASE_URL.");
 }
 
+// Orden por zona de propiedad: estructura de la AppSpec, luego plataforma del
+// kernel, luego extensiones del cliente. Nunca al reves.
 const migrationDirectories = [
   { key: "generated", directory: resolve("database/generated") },
+  { key: "platform", directory: resolve("database/platform") },
   { key: "custom", directory: resolve("database/custom") },
 ];
 const migrations = (
   await Promise.all(
     migrationDirectories.map(async ({ key, directory }) =>
-      (await readdir(directory))
+      (await readdir(directory).catch(() => []))
         .filter((file) => file.endsWith(".sql"))
         .sort()
         .map((file) => ({
@@ -51,9 +54,13 @@ try {
       console.log(`skip ${name}`);
       continue;
     }
+    // El archivo no abre su propia transaccion: la abre el runner para que el
+    // efecto de la migracion y su registro se confirmen o se descarten juntos.
     try {
+      await client.query("BEGIN");
       await client.query(source);
       await client.query("INSERT INTO app_migration (name, checksum) VALUES ($1, $2)", [name, checksum]);
+      await client.query("COMMIT");
       console.log(`apply ${name}`);
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);

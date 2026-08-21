@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { sendUserInvitationAction, updateUserAction } from "@/app/users/actions";
-import { clerkAuthConfigured } from "@/features/auth/config";
-import { getManagedUser, isLocalPreviewIdentity, isManagedUserId, isPendingIdentity } from "@/features/users/store";
+import { clerkAuthConfigured } from "@/platform/auth/config";
+import { getManagedUser, isLocalPreviewIdentity, isManagedUserId, isPendingIdentity } from "@/platform/users/store";
 import { requireUserManagementAccess } from "@/lib/auth";
 import { runtimeSpec } from "@/lib/spec";
 

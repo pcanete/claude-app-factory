@@ -4,9 +4,9 @@ import {
   validateUIMessages,
   type UIMessage,
 } from "ai";
-import { canUseApplicationAssistant } from "@/features/ai/access";
-import { createApplicationAssistant, type ApplicationAssistantMessage } from "@/features/ai/agent";
-import { requireAllowedAiModel } from "@/features/ai/config";
+import { canUseApplicationAssistant } from "@/platform/ai/access";
+import { createApplicationAssistant, type ApplicationAssistantMessage } from "@/platform/ai/agent";
+import { requireAllowedAiModel } from "@/platform/ai/config";
 import {
   completeAiRun,
   createAiRun,
@@ -16,7 +16,7 @@ import {
   loadAiMessages,
   recordAiRunStep,
   saveAiMessages,
-} from "@/features/ai/store";
+} from "@/platform/ai/store";
 import { getCurrentUser } from "@/lib/auth";
 
 export const maxDuration = 60;

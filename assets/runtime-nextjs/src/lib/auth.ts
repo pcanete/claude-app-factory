@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { productionAuthAdapter } from "@/features/auth/adapter";
-import { generatedPermissions } from "@/generated/permissions";
+import { productionAuthAdapter } from "@/platform/auth/adapter";
+import { generatedCapabilities, generatedPermissions } from "@/generated/permissions";
 import { recordAuditEvent } from "@/lib/audit";
 import type { PermissionAction, RuntimeUser } from "@/lib/auth-types";
 import { sql, transactionSql, withTransaction } from "@/lib/db";
@@ -177,7 +177,19 @@ export function canAccessRelationshipOptions(user: RuntimeUser, entity: EntitySp
   );
 }
 
-export function canViewAudit(user: RuntimeUser) {
+export type Capability = "manage_users" | "view_audit" | "view_rules";
+
+/**
+ * Administracion explicita: la AppSpec declara que rol administra usuarios, ve la
+ * auditoria y consulta las reglas. Cuando ningun rol declara capacidades se cae en
+ * la heuristica historica (tener todos los permisos sobre todas las entidades), que
+ * concede administracion sin que nadie la haya declarado; el BUILD_REPORT la reporta
+ * como puerta pendiente.
+ */
+export function hasCapability(user: RuntimeUser, capability: Capability) {
+  if (generatedCapabilities) {
+    return generatedCapabilities[user.roleKey]?.includes(capability) ?? false;
+  }
   return runtimeSpec.entities.every(
     (entity) =>
       hasPermission(user, entity.key, "list") &&
@@ -186,13 +198,19 @@ export function canViewAudit(user: RuntimeUser) {
   );
 }
 
+export function canViewAudit(user: RuntimeUser) {
+  return hasCapability(user, "view_audit");
+}
+
 export async function requireAuditAccess() {
   const user = await requireUser();
   if (!canViewAudit(user)) redirect("/forbidden");
   return user;
 }
 
-export const canManageUsers = canViewAudit;
+export function canManageUsers(user: RuntimeUser) {
+  return hasCapability(user, "manage_users");
+}
 
 export async function requireUserManagementAccess() {
   const user = await requireUser();
@@ -200,7 +218,9 @@ export async function requireUserManagementAccess() {
   return user;
 }
 
-export const canViewRules = canViewAudit;
+export function canViewRules(user: RuntimeUser) {
+  return hasCapability(user, "view_rules");
+}
 
 export async function requireRulesAccess() {
   const user = await requireUser();

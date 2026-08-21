@@ -48,23 +48,38 @@ Read the complete [Vercel production runbook](references/deployment-vercel.md) b
 
 ## Architecture boundary
 
+Three ownership zones:
+
+| Zone | Directories | Owner |
+|---|---|---|
+| Generated | `src/generated/`, `database/generated/` | Compiled from `app-spec.json`; replaced on every build |
+| Platform | `src/platform/`, `database/platform/` | Ships and updates with the factory; never edited per client |
+| Client | `src/features/`, `src/components/custom/`, `database/custom/` | The application; never written by the factory |
+
 - `app-spec.json` is the source of truth for generated structure.
-- `src/generated/` and `database/generated/` are replaceable output.
-- `src/features/`, `src/components/custom/`, and `database/custom/` belong to the application.
 - Regeneration must never overwrite client-specific behavior.
+- To change platform behavior for one client, wrap it from a feature — do not edit it.
 - Integrations, approvals, external writes, and domain calculations require reviewed feature adapters.
+
+Regeneration is the promise this boundary exists to keep, and it is **not implemented yet**: `scaffold_app.py`
+requires an empty output directory, so today the factory generates a foundation once. The zones are what will
+make an incremental recompile possible without touching client code.
 
 See [AppSpec v0](references/app-spec-v0.md) and the [extension contract](references/extension-contract.md).
 
 ## Repository structure
 
 ```text
-SKILL.md                     Codex skill instructions
+SKILL.md                     Agent skill instructions
 agents/openai.yaml           Skill UI metadata
 references/                  AppSpec, extension, and deployment contracts
 scripts/                     Deterministic compiler and verification
 assets/runtime-nextjs/       Portable generated-application runtime
 ```
+
+CI validates three things on every push: the compiler tests, a typecheck and production build of the
+generated application, and the generated migrations applied to a real PostgreSQL with a CRUD smoke test
+over every entity.
 
 ## Security and data ownership
 

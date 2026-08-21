@@ -1,9 +1,9 @@
 import { InferAgentUIMessage, isStepCount, ToolLoopAgent } from "ai";
 import type { RuntimeUser } from "@/lib/auth-types";
 import { runtimeSpec } from "@/lib/spec";
-import { assistantEntities } from "@/features/ai/access";
-import { getAiModelAdapter } from "@/features/ai/model-adapter";
-import { createReadOnlyApplicationTools } from "@/features/ai/tools";
+import { assistantEntities } from "@/platform/ai/access";
+import { getAiModelAdapter } from "@/platform/ai/model-adapter";
+import { createReadOnlyApplicationTools } from "@/platform/ai/tools";
 
 function entityContext(user: RuntimeUser) {
   return assistantEntities(user)
