@@ -21,7 +21,9 @@ Users with full administrative access can manage application users at `/users`: 
 
 Local-preview identities are read-only and the current administrator cannot deactivate their own account or remove their own role. The module intentionally does not edit role permissions at runtime: roles and their permission matrices remain versioned in AppSpec. On first production login, a verified Clerk email is atomically matched to an active `pending:` user, replaced with the stable Clerk subject, and audited.
 
-For a new deployment, set `DATABASE_URL_DIRECT`, run `pnpm db:apply`, define `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`, then run `pnpm auth:bootstrap`. Configure Clerk for invitation-only access and either invite that same email from Clerk or create the first identity there. Subsequent invitations can be sent from `/users`.
+For a new deployment, connect Neon and Clerk to the Vercel project. Production deployments run the idempotent database migrations before `next build`; preview deployments never mutate the production database. Define `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME` in the Production environment before the first deployment to create the pending PostgreSQL administrator automatically. Configure Clerk for invitation-only access and invite that same email from Clerk or create the first identity there. Its first verified login links the Clerk identity to the pending PostgreSQL user. Subsequent invitations can be sent from `/users`.
+
+Outside Vercel, set `DATABASE_URL_DIRECT`, run `pnpm db:apply`, define `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`, then run `pnpm auth:bootstrap`.
 
 Every entity also exposes generic CSV/XLSX transfer tools:
 

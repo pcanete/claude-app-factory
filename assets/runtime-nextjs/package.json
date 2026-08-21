@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "node scripts/vercel-build.mjs",
     "start": "next start",
     "db:apply": "node --env-file-if-exists=.env.local scripts/apply-migrations.mjs",
     "db:smoke": "node --env-file-if-exists=.env.local scripts/smoke-crud.mjs",

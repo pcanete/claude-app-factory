@@ -90,6 +90,7 @@ EXPECTED_FILES = {
     "scripts/apply-migrations.mjs",
     "scripts/bootstrap-admin.mjs",
     "scripts/smoke-crud.mjs",
+    "scripts/vercel-build.mjs",
     "src/proxy.ts",
 }
 
@@ -266,6 +267,8 @@ def main() -> int:
             failures.append("Clerk authentication dependency is missing.")
         if "auth:bootstrap" not in package.get("scripts", {}):
             failures.append("Production administrator bootstrap command is missing.")
+        if "vercel-build" not in package.get("scripts", {}):
+            failures.append("Production migration build command is missing.")
     except (OSError, json.JSONDecodeError) as error:
         failures.append(f"Cannot read package.json: {error}")
 
