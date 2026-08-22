@@ -272,28 +272,27 @@ class ScaffoldTests(unittest.TestCase):
     def test_tags_field_is_an_indexed_array(self) -> None:
         # Un texto con comas no se puede consultar por contenido: el punto del tipo es
         # poder preguntar que registros llevan una etiqueta.
-        spec = copy.deepcopy(self.spec)
-        spec["entities"][0]["fields"].append({"key": "etiquetas", "label": "Etiquetas", "type": "tags"})
-        self.assertEqual(validate_spec(spec), [])
-        sql = compile_sql(spec)
+        sql = compile_sql(self.spec)
         self.assertIn('"etiquetas" text[]', sql)
         self.assertIn("DEFAULT '{}'::text[]", sql)
         self.assertIn("USING GIN", sql)
-        self.assertIn("cardinality(\"etiquetas\") <= 50", sql)
+        self.assertIn('cardinality("etiquetas") <= 50', sql)
 
     def test_tags_with_options_are_restricted_to_them(self) -> None:
-        spec = copy.deepcopy(self.spec)
-        spec["entities"][0]["fields"].append({
-            "key": "temas", "label": "Temas", "type": "tags",
-            "options": [{"key": "electrico", "label": "Eléctrico"}, {"key": "mecanico", "label": "Mecánico"}],
-        })
-        self.assertEqual(validate_spec(spec), [])
-        self.assertIn("<@ ARRAY['electrico', 'mecanico']::text[]", compile_sql(spec))
+        self.assertIn("<@ ARRAY['electrico', 'mecanico', 'seguridad']::text[]", compile_sql(self.spec))
 
     def test_tags_options_when_declared_cannot_be_empty(self) -> None:
         spec = copy.deepcopy(self.spec)
-        spec["entities"][0]["fields"].append({"key": "temas", "label": "Temas", "type": "tags", "options": []})
+        entidad = spec["entities"][0]
+        campo = next(f for f in entidad["fields"] if f["key"] == "temas")
+        campo["options"] = []
         self.assertTrue(any("options" in error for error in validate_spec(spec)))
+
+    def test_tags_field_can_be_added_to_a_new_entity(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["entities"][0]["fields"].append({"key": "canales", "label": "Canales", "type": "tags"})
+        self.assertEqual(validate_spec(spec), [])
+        self.assertIn('"canales" text[]', compile_sql(spec))
 
 
 if __name__ == "__main__":
