@@ -31,6 +31,13 @@ button, input, select, textarea { font: inherit; }
   min-height: 100vh;
 }
 
+.nav-shell { display: contents; }
+/* En escritorio el desplegable no se nota: la marca se ve, el control de plegado no,
+   y el encabezado deja de comportarse como un botón. */
+.nav-toggle { display: block; list-style: none; pointer-events: none; }
+.nav-toggle::-webkit-details-marker { display: none; }
+.nav-toggle-icon { display: none; }
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -310,8 +317,49 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
 
 @media (max-width: 760px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
-  .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* La navegación se pliega: con todos los enlaces desplegados ocupaba 633 de los
+     812 píxeles de pantalla y el contenido empezaba fuera de la vista. */
+  .nav-shell { display: block; }
+  .sidebar {
+    background: #101217;
+    border-bottom: 1px solid var(--border);
+    border-right: 0;
+    height: auto;
+    padding: 0;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .nav-toggle {
+    align-items: center;
+    pointer-events: auto;
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    list-style: none;
+    padding: 12px 16px;
+  }
+  .nav-toggle .brand { margin: 0; }
+  .nav-toggle .brand-description { display: none; }
+  .nav-toggle-icon {
+    display: block;
+    border-bottom: 2px solid currentColor;
+    border-right: 2px solid currentColor;
+    color: var(--muted);
+    height: 9px;
+    transform: rotate(45deg);
+    transition: transform .15s ease;
+    width: 9px;
+  }
+  .nav-shell[open] .nav-toggle-icon { transform: rotate(-135deg); }
+  .nav-shell[open] .nav-toggle { border-bottom: 1px solid var(--border); }
+  .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 16px; }
+  /* Un objetivo táctil cómodo: los enlaces medían 36 píxeles de alto. */
+  .nav-link { min-height: 44px; display: flex; align-items: center; }
+  .nav-section { grid-column: 1 / -1; }
+  .session-panel { padding: 0 16px 16px; }
+
   .main { padding: 28px 18px 48px; }
   .page-header { flex-direction: column; }
   .header-actions { justify-content: flex-start; }
