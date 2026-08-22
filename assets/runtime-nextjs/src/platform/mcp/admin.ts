@@ -132,7 +132,17 @@ export async function listManagedAgents() {
   );
 }
 
-export async function listAgentEvents(limit = 200) {
+export async function countAgentEvents() {
+  const filas = await sql<{ total: number }>("SELECT count(*)::int AS total FROM app_agent_event");
+  return filas[0]?.total ?? 0;
+}
+
+/**
+ * La actividad de agentes es el listado que más rápido crece de la aplicación: una
+ * fila por cada llamada MCP. Sin paginar, la pantalla se vuelve un rollo infinito y
+ * la consulta trae cientos de filas para mostrar las primeras diez.
+ */
+export async function listAgentEvents({ limit = 25, offset = 0 } = {}) {
   return sql<AgentEvent>(
     `SELECT event.id,
             agent.name AS agent_name,
@@ -147,7 +157,7 @@ export async function listAgentEvents(limit = 200) {
        FROM app_agent_event AS event
        JOIN app_agent AS agent ON agent.id = event.agent_id
       ORDER BY event.started_at DESC
-      LIMIT $1`,
-    [Math.min(500, Math.max(1, limit))],
+      LIMIT $1 OFFSET $2`,
+    [Math.min(200, Math.max(1, limit)), Math.max(0, offset)],
   );
 }

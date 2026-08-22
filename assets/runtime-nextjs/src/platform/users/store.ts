@@ -70,9 +70,10 @@ export function isPendingIdentity(authSubject: string) {
   return authSubject.startsWith("pending:");
 }
 
-export async function listManagedUsers(filters: { query?: string; active?: boolean } = {}) {
+type UserFilters = { query?: string; active?: boolean };
+
+function userWhere(filters: UserFilters, values: unknown[]) {
   const conditions: string[] = [];
-  const values: unknown[] = [];
   if (filters.query) {
     values.push(`%${filters.query}%`);
     conditions.push(`(users.display_name ILIKE $${values.length} OR users.email ILIKE $${values.length})`);
@@ -81,12 +82,51 @@ export async function listManagedUsers(filters: { query?: string; active?: boole
     values.push(filters.active);
     conditions.push(`users.active = $${values.length}`);
   }
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  return conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+}
+
+/**
+ * Los totales de la cabecera se cuentan en la base, no sobre la página que se está
+ * mostrando: contar las filas traídas daría "50 usuarios" en cuanto hubiera 51.
+ */
+export async function userSummary() {
+  const filas = await sql<{ total: number; activos: number; pendientes: number }>(
+    `SELECT count(*)::int AS total,
+            count(*) FILTER (WHERE active)::int AS activos,
+            count(*) FILTER (WHERE auth_subject LIKE 'pending:%')::int AS pendientes
+       FROM app_user`,
+  );
+  return filas[0] ?? { total: 0, activos: 0, pendientes: 0 };
+}
+
+export async function countManagedUsers(filters: UserFilters = {}) {
+  const values: unknown[] = [];
+  const where = userWhere(filters, values);
+  const filas = await sql<{ total: number }>(
+    `SELECT count(*)::int AS total FROM app_user AS users ${where}`,
+    values,
+  );
+  return filas[0]?.total ?? 0;
+}
+
+/**
+ * Antes cortaba en 250 sin decirlo: el usuario 251 no aparecía y nada lo señalaba.
+ * Un techo silencioso es peor que una página: al menos la página se ve.
+ */
+export async function listManagedUsers(
+  filters: UserFilters & { limit?: number; offset?: number } = {},
+) {
+  const values: unknown[] = [];
+  const where = userWhere(filters, values);
+  values.push(filters.limit ?? 50);
+  const limitPlaceholder = `$${values.length}`;
+  values.push(filters.offset ?? 0);
+  const offsetPlaceholder = `$${values.length}`;
   const rows = await sql<ManagedUserRow>(
     `${USER_SELECT}
       ${where}
       ORDER BY users.active DESC, users.display_name ASC
-      LIMIT 250`,
+      LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
     values,
   );
   return rows.map(mapUser);

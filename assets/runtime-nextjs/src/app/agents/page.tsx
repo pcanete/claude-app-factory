@@ -1,6 +1,7 @@
 import { deleteAgentAction, setAgentStatusAction } from "@/app/agents/actions";
 import { AgentCreateForm } from "@/components/agent-create-form";
-import { listAgentEvents, listManagedAgents } from "@/platform/mcp/admin";
+import { countAgentEvents, listAgentEvents, listManagedAgents } from "@/platform/mcp/admin";
+import { Pagination } from "@/components/pagination";
 import { requireUserManagementAccess } from "@/lib/auth";
 import { formatDateTimeValue } from "@/lib/presentation";
 import { runtimeSpec } from "@/lib/spec";
@@ -18,11 +19,19 @@ const successMessages: Record<string, string> = {
 export default async function AgentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; page?: string }>;
 }) {
   await requireUserManagementAccess();
   const requested = await searchParams;
-  const [agents, events] = await Promise.all([listManagedAgents(), listAgentEvents()]);
+  const POR_PAGINA = 25;
+  const totalEventos = await countAgentEvents();
+  const paginas = Math.max(1, Math.ceil(totalEventos / POR_PAGINA));
+  const solicitada = Number(requested.page ?? "1");
+  const page = Number.isInteger(solicitada) && solicitada > 0 ? Math.min(solicitada, paginas) : 1;
+  const [agents, events] = await Promise.all([
+    listManagedAgents(),
+    listAgentEvents({ limit: POR_PAGINA, offset: (page - 1) * POR_PAGINA }),
+  ]);
   return (
     <>
       <div className="page-header">
@@ -88,7 +97,15 @@ export default async function AgentsPage({
       </section>
 
       <section>
-        <div className="section-heading"><h2>Actividad reciente</h2></div>
+        <div className="section-heading">
+          <div>
+            <h2>Actividad reciente</h2>
+            <p className="subtitle">
+              {totalEventos.toLocaleString("es-AR")} llamadas registradas. Se conservan con la
+              misma ventana que la auditoría.
+            </p>
+          </div>
+        </div>
         <div className="table-wrap">
           {events.length ? (
             <table className="audit-table">
@@ -109,6 +126,15 @@ export default async function AgentsPage({
             </table>
           ) : <div className="empty">Todavía no hay actividad de agentes.</div>}
         </div>
+        {totalEventos > POR_PAGINA && (
+          <Pagination
+            baseHref="/agents"
+            page={page}
+            pageSize={POR_PAGINA}
+            query={requested}
+            total={totalEventos}
+          />
+        )}
       </section>
     </>
   );

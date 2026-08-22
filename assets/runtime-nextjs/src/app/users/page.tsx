@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { createUserAction } from "@/app/users/actions";
-import { isLocalPreviewIdentity, isPendingIdentity, listManagedUsers } from "@/platform/users/store";
+import {
+  countManagedUsers,
+  isLocalPreviewIdentity,
+  isPendingIdentity,
+  listManagedUsers,
+  userSummary,
+} from "@/platform/users/store";
+import { Pagination } from "@/components/pagination";
 import { requireUserManagementAccess } from "@/lib/auth";
 import { runtimeSpec } from "@/lib/spec";
 
@@ -12,18 +19,30 @@ const errorMessages: Record<string, string> = {
   not_found: "El usuario solicitado no existe.",
 };
 
+const POR_PAGINA = 50;
+
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; error?: string; saved?: string; page?: string }>;
 }) {
   await requireUserManagementAccess();
   const requested = await searchParams;
   const query = requested.q?.trim().slice(0, 120) || undefined;
   const active = requested.status === "active" ? true : requested.status === "inactive" ? false : undefined;
-  const [users, allUsers] = await Promise.all([listManagedUsers({ query, active }), listManagedUsers()]);
-  const activeCount = allUsers.filter((user) => user.active).length;
-  const pendingCount = allUsers.filter((user) => isPendingIdentity(user.authSubject)).length;
+  const [resumen, totalFiltrado] = await Promise.all([
+    userSummary(),
+    countManagedUsers({ query, active }),
+  ]);
+  const paginas = Math.max(1, Math.ceil(totalFiltrado / POR_PAGINA));
+  const solicitada = Number(requested.page ?? "1");
+  const page = Number.isInteger(solicitada) && solicitada > 0 ? Math.min(solicitada, paginas) : 1;
+  const users = await listManagedUsers({
+    query,
+    active,
+    limit: POR_PAGINA,
+    offset: (page - 1) * POR_PAGINA,
+  });
 
   return (
     <>
@@ -35,10 +54,11 @@ export default async function UsersPage({
         </div>
       </div>
       {requested.error && errorMessages[requested.error] && <div className="notice import-error">{errorMessages[requested.error]}</div>}
+      {requested.saved === "deleted" && <div className="notice success">El usuario se eliminó. No tenía actividad registrada.</div>}
       <div className="user-stats">
-        <article className="card"><div className="card-label">Usuarios</div><div className="metric">{allUsers.length}</div></article>
-        <article className="card"><div className="card-label">Activos</div><div className="metric">{activeCount}</div></article>
-        <article className="card"><div className="card-label">Pendientes de vincular</div><div className="metric">{pendingCount}</div></article>
+        <article className="card"><div className="card-label">Usuarios</div><div className="metric">{resumen.total}</div></article>
+        <article className="card"><div className="card-label">Activos</div><div className="metric">{resumen.activos}</div></article>
+        <article className="card"><div className="card-label">Pendientes de vincular</div><div className="metric">{resumen.pendientes}</div></article>
       </div>
       <div className="user-layout">
         <section className="form-card user-create-card">
@@ -104,6 +124,15 @@ export default async function UsersPage({
           </table>
         ) : <div className="empty">No hay usuarios que coincidan con el filtro.</div>}
       </div>
+      {totalFiltrado > POR_PAGINA && (
+        <Pagination
+          baseHref="/users"
+          page={page}
+          pageSize={POR_PAGINA}
+          query={requested}
+          total={totalFiltrado}
+        />
+      )}
     </>
   );
 }

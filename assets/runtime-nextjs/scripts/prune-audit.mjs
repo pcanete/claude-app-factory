@@ -36,6 +36,7 @@ try {
   }
 
   const anteriores = await client.query("SELECT count(*)::int AS total FROM app_audit_log");
+  const eventosAntes = await client.query("SELECT count(*)::int AS total FROM app_agent_event");
   const borrados = await client.query(
     `WITH borrados AS (
        DELETE FROM app_audit_log
@@ -46,12 +47,30 @@ try {
     [String(dias)],
   );
 
+  // La actividad de agentes crece más rápido que la auditoría --una fila por llamada
+  // MCP-- así que vencerla con la misma ventana es parte del mismo problema. Va
+  // después: la auditoría referencia estos eventos, y aunque la clave foránea los
+  // desvincula sola, conviene que el orden sea el mismo que el de la dependencia.
+  const eventosBorrados = await client.query(
+    `WITH borrados AS (
+       DELETE FROM app_agent_event
+        WHERE started_at < now() - ($1 || ' days')::interval
+        RETURNING 1
+     )
+     SELECT count(*)::int AS eliminados FROM borrados`,
+    [String(dias)],
+  );
+
   const eliminados = borrados.rows[0].eliminados;
   const quedan = anteriores.rows[0].total - eliminados;
+  const eventosEliminados = eventosBorrados.rows[0].eliminados;
+  const eventosQuedan = eventosAntes.rows[0].total - eventosEliminados;
   console.log(
-    eliminados === 0
-      ? `Retención de ${dias} días: no había nada vencido. Quedan ${quedan} eventos.`
-      : `Retención de ${dias} días: se vencieron ${eliminados} eventos. Quedan ${quedan}.`,
+    `Retención de ${dias} días.`,
+    `
+  Auditoría: se vencieron ${eliminados}, quedan ${quedan}.`,
+    `
+  Actividad de agentes: se vencieron ${eventosEliminados}, quedan ${eventosQuedan}.`,
   );
 } finally {
   await client.end();
