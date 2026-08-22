@@ -176,7 +176,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIn("CSV/XLSX imports are size-limited", report)
         self.assertIn("Generic imports create new records only", report)
         self.assertIn("validated expression tree", report)
-        self.assertIn("persistent application assistant", report)
+        self.assertIn("key/value primitive", report)
         self.assertIn("bundled assistant is read-only", report)
 
     def test_scaffold_refuses_non_empty_output(self) -> None:

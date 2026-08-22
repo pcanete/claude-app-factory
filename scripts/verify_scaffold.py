@@ -17,7 +17,6 @@ EXPECTED_FILES = {
     "database/generated/001_initial.sql",
     "database/custom/EXTENSIONS.md",
     "database/platform/OWNERSHIP.md",
-    "database/platform/100_ai_foundation.sql",
     "database/platform/110_user_management.sql",
     "database/platform/120_clerk_authentication.sql",
     "database/platform/130_application_settings.sql",
@@ -47,13 +46,11 @@ EXPECTED_FILES = {
     "src/app/rules/page.tsx",
     "src/app/settings/actions.ts",
     "src/app/settings/page.tsx",
+    "src/components/settings-editor.tsx",
+    "database/platform/160_retirar_asistente.sql",
     "src/app/views/[view]/page.tsx",
     "src/app/attachments/actions.ts",
     "src/app/attachments/[id]/route.ts",
-    "src/app/assistant/actions.ts",
-    "src/app/assistant/page.tsx",
-    "src/app/assistant/[id]/page.tsx",
-    "src/app/api/assistant/route.ts",
     "src/app/record-operations/actions.ts",
     "src/app/records/[entity]/page.tsx",
     "src/app/records/[entity]/new/page.tsx",
@@ -74,15 +71,6 @@ EXPECTED_FILES = {
     "src/platform/auth/adapter.ts",
     "src/platform/auth/config.ts",
     "src/platform/auth/invitations.ts",
-    "src/platform/ai/access.ts",
-    "src/platform/ai/agent.ts",
-    "src/platform/ai/config.ts",
-    "src/platform/ai/model-adapter.ts",
-    "src/platform/ai/store.ts",
-    "src/platform/ai/tools.ts",
-    "src/platform/ai/components/application-assistant-chat.tsx",
-    "src/platform/settings/catalog.ts",
-    "src/platform/settings/crypto.ts",
     "src/platform/settings/store.ts",
     "src/platform/users/store.ts",
     "src/lib/auth-types.ts",
@@ -254,31 +242,19 @@ def main() -> int:
     repository_source = repository_path.read_text(encoding="utf-8") if repository_path.is_file() else ""
     if "countFilteredRecords" not in repository_source or "OFFSET" not in repository_source:
         failures.append("Record lists are missing database-backed pagination.")
-    assistant_route_path = project / "src/app/api/assistant/route.ts"
-    assistant_route = assistant_route_path.read_text(encoding="utf-8") if assistant_route_path.is_file() else ""
-    for invariant in ("getCurrentUser", "canUseApplicationAssistant", "validateUIMessages", "createAgentUIStreamResponse", "saveAiMessages"):
-        if invariant not in assistant_route:
-            failures.append(f"Application assistant route is missing: {invariant}.")
-    assistant_tools_path = project / "src/platform/ai/tools.ts"
-    assistant_tools = assistant_tools_path.read_text(encoding="utf-8") if assistant_tools_path.is_file() else ""
-    for invariant in ("hasPermission", "countFilteredRecords", "listRecords", "getRecord"):
-        if invariant not in assistant_tools:
-            failures.append(f"Application assistant tools are missing: {invariant}.")
     settings_actions_path = project / "src/app/settings/actions.ts"
     settings_actions = settings_actions_path.read_text(encoding="utf-8") if settings_actions_path.is_file() else ""
-    for invariant in ("encryptSecret", "requireUser", "requireUserManagementAccess", "recordAuditEvent", "withTransaction"):
+    for invariant in ("setSetting", "deleteSetting", "requireUserManagementAccess", "recordAuditEvent", "withTransaction"):
         if invariant not in settings_actions:
-            failures.append(f"Application settings actions are missing: {invariant}.")
-    settings_crypto_path = project / "src/platform/settings/crypto.ts"
-    settings_crypto = settings_crypto_path.read_text(encoding="utf-8") if settings_crypto_path.is_file() else ""
-    for invariant in ("aes-256-gcm", "SETTINGS_ENCRYPTION_KEY", "authenticationTag"):
-        if invariant not in settings_crypto:
-            failures.append(f"Encrypted user settings are missing: {invariant}.")
+            failures.append(f"System configuration actions are missing: {invariant}.")
     settings_migration_path = project / "database/platform/130_application_settings.sql"
     settings_migration = settings_migration_path.read_text(encoding="utf-8") if settings_migration_path.is_file() else ""
-    for invariant in ("app_setting", "app_user_setting", "app_user_secret"):
+    for invariant in ("app_setting", "app_user_setting"):
         if invariant not in settings_migration:
-            failures.append(f"Application settings migration is missing: {invariant}.")
+            failures.append(f"System configuration migration is missing: {invariant}.")
+    # Sin asistente interno no hay credenciales de proveedores ajenas que custodiar.
+    if "app_user_secret" in settings_migration:
+        failures.append("The runtime no longer stores third-party provider credentials.")
     migration_runner_path = project / "scripts/apply-migrations.mjs"
     migration_runner = migration_runner_path.read_text(encoding="utf-8") if migration_runner_path.is_file() else ""
     if 'resolve("database/custom")' not in migration_runner:
@@ -324,9 +300,11 @@ def main() -> int:
             failures.append("Generic database smoke command is missing.")
         if "exceljs" not in package.get("dependencies", {}):
             failures.append("Excel import/export dependency is missing.")
-        for dependency in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "@ai-sdk/anthropic", "zod"):
-            if dependency not in package.get("dependencies", {}):
-                failures.append(f"Application assistant dependency is missing: {dependency}.")
+        if "zod" not in package.get("dependencies", {}):
+            failures.append("Schema validation dependency is missing.")
+        for retirada in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "@ai-sdk/anthropic"):
+            if retirada in package.get("dependencies", {}):
+                failures.append(f"The runtime no longer runs models: {retirada} should not be a dependency.")
         if "@clerk/nextjs" not in package.get("dependencies", {}):
             failures.append("Clerk authentication dependency is missing.")
         if "auth:bootstrap" not in package.get("scripts", {}):
@@ -412,9 +390,11 @@ def main() -> int:
             failures.append("Generic database smoke command is missing.")
         if "exceljs" not in package.get("dependencies", {}):
             failures.append("Excel import/export dependency is missing.")
-        for dependency in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "@ai-sdk/anthropic", "zod"):
-            if dependency not in package.get("dependencies", {}):
-                failures.append(f"Application assistant dependency is missing: {dependency}.")
+        if "zod" not in package.get("dependencies", {}):
+            failures.append("Schema validation dependency is missing.")
+        for retirada in ("ai", "@ai-sdk/react", "@ai-sdk/openai", "@ai-sdk/anthropic"):
+            if retirada in package.get("dependencies", {}):
+                failures.append(f"The runtime no longer runs models: {retirada} should not be a dependency.")
         if "@clerk/nextjs" not in package.get("dependencies", {}):
             failures.append("Clerk authentication dependency is missing.")
         if "@modelcontextprotocol/server" not in package.get("dependencies", {}):
@@ -431,6 +411,23 @@ def main() -> int:
             failures.append("Production migration build command is missing.")
     except (OSError, json.JSONDecodeError) as error:
         failures.append(f"Cannot read package.json: {error}")
+
+    settings_store = (project / "src/platform/settings/store.ts").read_text(encoding="utf-8")
+    # La configuracion es una primitiva del sistema: si deja de validar nombres o
+    # tamano, se convierte en almacenamiento sin control.
+    for invariant in ("listSettings", "setSetting", "deleteSetting", "MAXIMO_BYTES"):
+        if invariant not in settings_store:
+            failures.append(f"Settings primitive is missing: {invariant}.")
+    for invariant in ("list_settings", "get_setting", "set_setting", "delete_setting"):
+        if invariant not in mcp_server:
+            failures.append(f"MCP does not expose system configuration: {invariant}.")
+    if "manage_users" not in mcp_server:
+        failures.append("MCP settings writes are not gated by an administrative capability.")
+    # El asistente interno se retiro: el sistema no ejecuta modelos ni custodia
+    # credenciales de proveedores ajenos.
+    for retirado in ("src/platform/ai", "src/app/assistant", "src/app/api/assistant"):
+        if (project / retirado).exists():
+            failures.append(f"The internal assistant was removed but {retirado} is still generated.")
 
     if failures:
         print("Scaffold verification failed:", file=sys.stderr)

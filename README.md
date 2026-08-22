@@ -18,7 +18,7 @@ The history before the ownership-zones commit belongs to the original repository
 - table, kanban, calendar, and dashboard views;
 - deterministic validation and mutation rules;
 - Clerk authentication and application-level user management;
-- a read-only AI assistant with per-user encrypted OpenAI or Anthropic keys;
+- a key/value configuration primitive with JSON values, bounded and audited;
 - explicit extension zones for client-specific behavior;
 - an MCP endpoint where agents authenticate with their own hashed, expiring, scoped tokens, read and write under the AppSpec permissions of a role, and leave a per-tool trail;
 - incremental schema evolution that writes the next migration instead of rewriting an applied one.

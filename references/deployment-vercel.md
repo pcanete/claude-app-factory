@@ -35,13 +35,9 @@ Keep values scoped to the smallest required Vercel environments.
 | `CLERK_SECRET_KEY` | Production, sensitive | Server-side Clerk operations |
 | `BOOTSTRAP_ADMIN_EMAIL` | Production | Email for the first pending administrator |
 | `BOOTSTRAP_ADMIN_NAME` | Production | Optional display name for that administrator |
-| `SETTINGS_ENCRYPTION_KEY` | Production, sensitive | Unique 32-byte key for encrypted personal connections |
-| `OPENAI_API_KEY` or `AI_GATEWAY_API_KEY` | Optional, sensitive | Shared AI access when users do not provide personal keys |
-| `AI_ALLOWED_MODELS` | Optional | Comma-separated model allowlist |
 
 Never configure `ALLOW_UNSAFE_LOCAL_PREVIEW=true` in Vercel. Production ignores it, but its presence creates misleading operational state.
 
-Generate `SETTINGS_ENCRYPTION_KEY` from a cryptographically secure random source. Save a recoverable copy in the client's approved secret manager before users store provider keys. Do not rotate it without a data re-encryption plan.
 
 ## 4. Close identity before opening access
 

@@ -29,7 +29,7 @@ Outside Vercel, set `DATABASE_URL_DIRECT`, run `pnpm db:apply`, define `BOOTSTRA
 
 Treat a successful Vercel build as the beginning of production verification, not its end. Confirm the deployed source commit, migration logs, `GET /api/health`, unauthenticated redirect, invited administrator login, one permission-checked CRUD path, audit events, `/users`, `/settings`, and one AI conversation when AI is enabled. Review runtime logs for the verified flow.
 
-Keep one independent Vercel project, Neon database, Clerk application, and credential set for this application. Store production secrets only in the deployment environment and an approved recovery system; never commit them. Back up `SETTINGS_ENCRYPTION_KEY` before users connect providers. Losing it makes encrypted credentials unreadable.
+Keep one independent Vercel project, Neon database, Clerk application, and credential set for this application. Store production secrets only in the deployment environment and an approved recovery system; never commit them.
 
 A code rollback does not roll back PostgreSQL. Prefer additive, backward-compatible migrations and require an explicit data backup, migration, and rollback plan for destructive changes. Configure database backup or point-in-time recovery appropriate to the application and test restoration. Record who owns recovery for source, data, identity, environment variables, and encryption keys.
 
@@ -66,13 +66,25 @@ AppSpec rules execute before create, update, delete, or both create/update (`bef
 
 Administrators can inspect the active definitions at `/rules`. The kernel deliberately rejects arbitrary expressions and does not provide approvals, schedules, email, webhooks, external writes, or AI actions.
 
-## Application assistant
+## System configuration
 
-The runtime includes a persistent, read-only application assistant at `/assistant`. Its tools are derived from `app-spec.json` and call the same bounded repository functions used by the application. Every tool call checks the current user's generated entity permissions; the model never receives SQL or database credentials.
+`app_setting` stores key/value pairs with JSON values, scoped globally, and `app_user_setting` does
+the same per user. It is the application's options primitive: names are bounded, values are capped at
+256 KB, and every change is audited with who made it.
 
-Each authenticated user can open `/settings` and connect a personal OpenAI or Anthropic API key. Keys are encrypted with AES-256-GCM before PostgreSQL storage, never rendered back to the browser, and are isolated by user. Define `SETTINGS_ENCRYPTION_KEY` as exactly 32 random bytes encoded as base64 (or 64 hexadecimal characters); preserve and back it up because losing it makes stored credentials unreadable.
+Nothing is autoloaded — options are read when asked for. Loading every option on every request is what
+turns a table like this into the application's bottleneck.
 
-The application may also provide `OPENAI_API_KEY` for shared direct OpenAI access or `AI_GATEWAY_API_KEY` for multi-provider routing. Personal provider credentials take precedence for their provider. Optionally restrict selectable models with `AI_ALLOWED_MODELS`. Conversations, UI messages, runs, token usage, and bounded tool-call metadata are stored in PostgreSQL. This first layer cannot create, update, delete, export, or call external systems. Those capabilities require explicit approval policies and reviewed feature adapters.
+It is for configuration, not business data: what belongs to the domain goes in the AppSpec as an
+entity, where it has types, permissions, rules and per-record audit.
+
+Writing configuration requires the `manage_users` capability, from `/settings` or through MCP.
+
+## No model runs here
+
+The runtime does not execute language models and stores no third-party provider credentials. Agents
+connect over MCP and bring their own model, which is why there is no model catalog to keep current and
+no `SETTINGS_ENCRYPTION_KEY` to guard.
 
 ## Application settings
 

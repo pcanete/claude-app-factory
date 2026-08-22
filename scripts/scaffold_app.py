@@ -1029,7 +1029,7 @@ def compile_report(spec: dict[str, Any]) -> str:
         "- Record attachments inherit entity permissions, are size/type limited, stored transactionally in PostgreSQL, and audited.",
         "- Named table, kanban, calendar, and dashboard views execute only validated metadata and identifiers.",
         "- Pagination and opt-in bulk, kanban, and calendar mutations reuse server permissions, deterministic rules, transactions, and audit.",
-        "- The persistent application assistant exposes only bounded read tools and checks the current user's entity permissions on every call.",
+        "- System configuration lives in a key/value primitive with JSON values, bounded names and size, audited on every change; writing it requires an administrative capability.",
         "",
         "## Production gates",
         "",
@@ -1039,7 +1039,6 @@ def compile_report(spec: dict[str, Any]) -> str:
         "- Add provider-specific end-to-end authentication, sign-out, and authorization tests.",
         "- Define audit-log retention, export, and access-review policy for the client.",
         "- Schedule deletion of expired import-preview batches and define the client's import retention policy.",
-        "- Configure the AI provider secret, model allowlist, per-user budgets, retention policy, and provider data terms.",
         "- Configure deployment, secrets, logging, and monitoring per client.",
         "- Load the DATABASE_URL_DIRECT secret so the generated backup workflow can run, and restore one dump into a scratch database: an untested backup is not a backup.",
     ]

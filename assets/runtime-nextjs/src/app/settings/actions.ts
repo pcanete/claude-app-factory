@@ -1,102 +1,69 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { requireAllowedAiModel } from "@/platform/ai/config";
-import { isPersonalAiProviderKey } from "@/platform/settings/catalog";
-import { encryptSecret, settingsEncryptionConfigured } from "@/platform/settings/crypto";
-import {
-  deleteUserAiSecret,
-  setApplicationGeneralSettings,
-  setUserAiPreferredModel,
-  upsertUserAiSecret,
-} from "@/platform/settings/store";
 import { recordAuditEvent } from "@/lib/audit";
-import { requireUser, requireUserManagementAccess } from "@/lib/auth";
+import { requireUserManagementAccess } from "@/lib/auth";
 import { withTransaction } from "@/lib/db";
+import { deleteSetting, setSetting } from "@/platform/settings/store";
 
-function refreshSettings() {
-  revalidatePath("/settings");
-  revalidatePath("/assistant");
-  revalidatePath("/audit");
-}
+export type SettingsState = { error?: string; ok?: string };
 
-export async function saveAiCredentialAction(formData: FormData) {
-  const user = await requireUser();
-  const providerKey = String(formData.get("provider") ?? "");
-  const apiKey = String(formData.get("api_key") ?? "").trim();
-  if (!isPersonalAiProviderKey(providerKey) || apiKey.length < 20 || apiKey.length > 512 || /\s/.test(apiKey)) {
-    redirect("/settings?error=invalid_credential");
+function leerValor(crudo: string) {
+  const texto = crudo.trim();
+  if (!texto) throw new Error("El valor no puede quedar vacío. Usá null si querés registrar la ausencia.");
+  try {
+    return JSON.parse(texto) as unknown;
+  } catch {
+    // Un texto suelto es un valor JSON válido una vez entrecomillado: se acepta para
+    // que guardar una cadena no obligue a escribir comillas a mano.
+    return texto;
   }
-  if (!settingsEncryptionConfigured()) redirect("/settings?error=encryption_unavailable");
-  const encrypted = encryptSecret(apiKey);
-  await withTransaction(async (client) => {
-    await upsertUserAiSecret(client, user.id, providerKey, encrypted);
-    await recordAuditEvent(client, {
-      actorId: user.id,
-      entityKey: "app_user_secret",
-      recordId: user.id,
-      action: "ai_credential_save",
-      changes: { provider: providerKey },
-    });
-  });
-  refreshSettings();
-  redirect(`/settings?saved=credential&provider=${providerKey}`);
 }
 
-export async function removeAiCredentialAction(formData: FormData) {
-  const user = await requireUser();
-  const providerKey = String(formData.get("provider") ?? "");
-  if (!isPersonalAiProviderKey(providerKey)) redirect("/settings?error=invalid_provider");
-  await withTransaction(async (client) => {
-    await deleteUserAiSecret(client, user.id, providerKey);
-    await recordAuditEvent(client, {
-      actorId: user.id,
-      entityKey: "app_user_secret",
-      recordId: user.id,
-      action: "ai_credential_remove",
-      changes: { provider: providerKey },
-    });
-  });
-  refreshSettings();
-  redirect(`/settings?saved=removed&provider=${providerKey}`);
-}
+export async function saveSettingAction(_estado: SettingsState, formData: FormData): Promise<SettingsState> {
+  const actor = await requireUserManagementAccess();
+  const namespace = String(formData.get("namespace") ?? "").trim();
+  const key = String(formData.get("key") ?? "").trim();
 
-export async function saveAiPreferenceAction(formData: FormData) {
-  const user = await requireUser();
-  const modelId = String(formData.get("model_id") ?? "");
-  const model = await requireAllowedAiModel(user.id, modelId);
-  await withTransaction(async (client) => {
-    await setUserAiPreferredModel(client, user.id, model.id);
-    await recordAuditEvent(client, {
-      actorId: user.id,
-      entityKey: "app_user_setting",
-      recordId: user.id,
-      action: "ai_preference_update",
-      changes: { modelId: model.id },
+  try {
+    const value = leerValor(String(formData.get("value") ?? ""));
+    await withTransaction(async (client) => {
+      const guardada = await setSetting(client, { namespace, key, value, actorId: actor.id });
+      await recordAuditEvent(client, {
+        actorId: actor.id,
+        entityKey: "app_setting",
+        recordId: null,
+        action: "setting_save",
+        changes: { namespace: guardada.namespace, key: guardada.key },
+      });
     });
-  });
-  refreshSettings();
-  redirect("/settings?saved=preference");
-}
-
-export async function saveApplicationSettingsAction(formData: FormData) {
-  const user = await requireUserManagementAccess();
-  const locale = String(formData.get("locale") ?? "").trim();
-  const timezone = String(formData.get("timezone") ?? "").trim();
-  if (!/^[a-z]{2}(?:-[A-Z]{2})?$/.test(locale) || !/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+$/.test(timezone)) {
-    redirect("/settings?error=invalid_application_settings");
+    revalidatePath("/settings");
+    return { ok: `Se guardó ${namespace}.${key}.` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo guardar la opción." };
   }
-  await withTransaction(async (client) => {
-    await setApplicationGeneralSettings(client, user.id, { locale, timezone });
-    await recordAuditEvent(client, {
-      actorId: user.id,
-      entityKey: "app_setting",
-      recordId: "general",
-      action: "application_settings_update",
-      changes: { locale, timezone },
+}
+
+export async function deleteSettingAction(_estado: SettingsState, formData: FormData): Promise<SettingsState> {
+  const actor = await requireUserManagementAccess();
+  const namespace = String(formData.get("namespace") ?? "").trim();
+  const key = String(formData.get("key") ?? "").trim();
+
+  try {
+    await withTransaction(async (client) => {
+      const eliminada = await deleteSetting(client, namespace, key);
+      if (!eliminada) throw new Error(`La opción ${namespace}.${key} no existe.`);
+      await recordAuditEvent(client, {
+        actorId: actor.id,
+        entityKey: "app_setting",
+        recordId: null,
+        action: "setting_delete",
+        changes: { namespace, key, previous: eliminada.value },
+      });
     });
-  });
-  refreshSettings();
-  redirect("/settings?saved=application");
+    revalidatePath("/settings");
+    return { ok: `Se eliminó ${namespace}.${key}.` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "No se pudo eliminar la opción." };
+  }
 }

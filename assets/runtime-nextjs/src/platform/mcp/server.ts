@@ -26,8 +26,12 @@ import {
 } from "@/lib/attachments";
 import { applyRules } from "@/lib/rules";
 import { relationFields, requireEntity, runtimeSpec } from "@/lib/spec";
+import { deleteSetting, getSetting, listSettings, setSetting } from "@/platform/settings/store";
+import { withTransaction } from "@/lib/db";
+import { generatedCapabilities } from "@/generated/permissions";
 
 const entityKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
+const settingNameSchema = z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/);
 const filtersSchema = z.record(z.string(), z.string().max(500)).optional();
 const idempotencyKeySchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/);
 const mutationValuesSchema = z.record(z.string(), z.unknown()).superRefine((value, context) => {
@@ -159,6 +163,81 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
           },
         },
       };
+    }),
+  );
+
+  // La configuración del sistema es una primitiva propia: pares clave/valor con
+  // alcance global. Está fuera de la AppSpec a propósito --no es dominio-- así que su
+  // permiso no sale de la matriz de entidades sino de la capacidad administrativa del
+  // rol del agente.
+  const puedeAdministrar = generatedCapabilities
+    ? (generatedCapabilities[agent.roleKey] ?? []).includes("manage_users")
+    : false;
+
+  server.registerTool(
+    "list_settings",
+    {
+      description:
+        "Lista las opciones de configuración del sistema, opcionalmente acotadas a un espacio de nombres.",
+      inputSchema: z.object({ namespace: settingNameSchema.optional() }),
+    },
+    async ({ namespace }) => traced(agent, "list_settings", { namespace }, async () => {
+      const settings = await listSettings(namespace);
+      return { value: { namespace: namespace ?? null, settings }, resultCount: settings.length };
+    }),
+  );
+
+  server.registerTool(
+    "get_setting",
+    {
+      description: "Devuelve el valor de una opción de configuración, o null si no existe.",
+      inputSchema: z.object({ namespace: settingNameSchema, key: settingNameSchema }),
+    },
+    async ({ namespace, key }) => traced(agent, "get_setting", { namespace, key }, async () => {
+      const setting = await getSetting(namespace, key);
+      return { value: { namespace, key, found: Boolean(setting), setting }, resultCount: setting ? 1 : 0 };
+    }),
+  );
+
+  server.registerTool(
+    "set_setting",
+    {
+      description:
+        "Crea o reemplaza una opción de configuración. El valor es JSON: admite escalares, objetos y listas. Es para configuración, no para datos de negocio.",
+      inputSchema: z.object({
+        namespace: settingNameSchema,
+        key: settingNameSchema,
+        value: z.unknown(),
+      }),
+    },
+    async ({ namespace, key, value }) => traced(agent, "set_setting", { namespace, key }, async () => {
+      if (!puedeAdministrar) {
+        throw new Error("El agente no tiene permiso para cambiar la configuración del sistema.");
+      }
+      const setting = await withTransaction((client) =>
+        setSetting(client, { namespace, key, value, actorId: null }),
+      );
+      return { value: { namespace, key, setting }, resultCount: 1 };
+    }),
+  );
+
+  server.registerTool(
+    "delete_setting",
+    {
+      description: "Elimina una opción de configuración. Requiere confirmación explícita.",
+      inputSchema: z.object({
+        namespace: settingNameSchema,
+        key: settingNameSchema,
+        confirm: z.literal(true).describe("Confirmación explícita de que la opción debe eliminarse"),
+      }),
+    },
+    async ({ namespace, key }) => traced(agent, "delete_setting", { namespace, key }, async () => {
+      if (!puedeAdministrar) {
+        throw new Error("El agente no tiene permiso para cambiar la configuración del sistema.");
+      }
+      const eliminada = await withTransaction((client) => deleteSetting(client, namespace, key));
+      if (!eliminada) throw new Error(`La opción ${namespace}.${key} no existe.`);
+      return { value: { namespace, key, deleted: true, previous: eliminada.value }, resultCount: 1 };
     }),
   );
 

@@ -1,126 +1,150 @@
 import "server-only";
 import type { PoolClient } from "pg";
-import type { PersonalAiProviderKey } from "@/platform/settings/catalog";
-import { decryptSecret, type EncryptedSecret } from "@/platform/settings/crypto";
 import { sql, transactionSql } from "@/lib/db";
 
-type SecretRow = {
+/**
+ * Configuración del sistema: pares clave/valor con alcance global o por usuario.
+ *
+ * Es una primitiva deliberadamente abierta —el valor es JSON, así que admite
+ * escalares, objetos y listas— pero con una frontera clara: **es para configuración,
+ * no para datos de negocio**. Lo que pertenece al dominio va como entidad de la
+ * AppSpec, donde tiene tipos, permisos, reglas y auditoría por registro.
+ *
+ * No hay carga automática de todas las opciones: se leen las que se piden. Cargar
+ * todo en cada request es lo que convierte una tabla como esta en el cuello de
+ * botella de la aplicación.
+ */
+
+const NOMBRE = /^[a-z][a-z0-9_.-]{0,63}$/;
+const MAXIMO_BYTES = 256 * 1024;
+
+export type Setting = {
+  namespace: string;
   key: string;
-  ciphertext: string;
-  initialization_vector: string;
-  authentication_tag: string;
-  key_version: number;
-  updated_at: Date;
+  value: unknown;
+  updated_at: string;
+  updated_by: string | null;
+  updated_by_name: string | null;
 };
 
-type SettingRow = { key: string; value: unknown };
-
-export async function getUserAiSettings(userId: string) {
-  const [secrets, settings] = await Promise.all([
-    sql<SecretRow>(
-      `SELECT key, ciphertext, initialization_vector, authentication_tag, key_version, updated_at
-         FROM app_user_secret
-        WHERE user_id = $1 AND namespace = 'ai'`,
-      [userId],
-    ),
-    sql<SettingRow>(
-      `SELECT key, value
-         FROM app_user_setting
-        WHERE user_id = $1 AND namespace = 'ai'`,
-      [userId],
-    ),
-  ]);
-  const preference = settings.find((setting) => setting.key === "preferred_model")?.value;
-  return {
-    connectedProviders: new Set(secrets.map((secret) => secret.key as PersonalAiProviderKey)),
-    preferredModelId: typeof preference === "string" ? preference : null,
-    updatedAt: Object.fromEntries(secrets.map((secret) => [secret.key, secret.updated_at])) as Partial<Record<PersonalAiProviderKey, Date>>,
-  };
-}
-
-export async function getUserAiSecret(userId: string, providerKey: PersonalAiProviderKey) {
-  const rows = await sql<SecretRow>(
-    `SELECT key, ciphertext, initialization_vector, authentication_tag, key_version, updated_at
-       FROM app_user_secret
-      WHERE user_id = $1 AND namespace = 'ai' AND key = $2
-      LIMIT 1`,
-    [userId, providerKey],
-  );
-  const row = rows[0];
-  if (!row) return null;
-  return decryptSecret({
-    ciphertext: row.ciphertext,
-    initializationVector: row.initialization_vector,
-    authenticationTag: row.authentication_tag,
-    keyVersion: row.key_version,
-  });
-}
-
-export async function upsertUserAiSecret(
-  client: PoolClient,
-  userId: string,
-  providerKey: PersonalAiProviderKey,
-  secret: EncryptedSecret,
-) {
-  await transactionSql(
-    client,
-    `INSERT INTO app_user_secret
-       (user_id, namespace, key, ciphertext, initialization_vector, authentication_tag, key_version)
-     VALUES ($1, 'ai', $2, $3, $4, $5, $6)
-     ON CONFLICT (user_id, namespace, key) DO UPDATE
-       SET ciphertext = EXCLUDED.ciphertext,
-           initialization_vector = EXCLUDED.initialization_vector,
-           authentication_tag = EXCLUDED.authentication_tag,
-           key_version = EXCLUDED.key_version,
-           updated_at = now()`,
-    [userId, providerKey, secret.ciphertext, secret.initializationVector, secret.authenticationTag, secret.keyVersion],
-  );
-}
-
-export async function deleteUserAiSecret(client: PoolClient, userId: string, providerKey: PersonalAiProviderKey) {
-  await transactionSql(
-    client,
-    `DELETE FROM app_user_secret WHERE user_id = $1 AND namespace = 'ai' AND key = $2`,
-    [userId, providerKey],
-  );
-}
-
-export async function setUserAiPreferredModel(client: PoolClient, userId: string, modelId: string) {
-  await transactionSql(
-    client,
-    `INSERT INTO app_user_setting (user_id, namespace, key, value)
-     VALUES ($1, 'ai', 'preferred_model', to_jsonb($2::text))
-     ON CONFLICT (user_id, namespace, key) DO UPDATE
-       SET value = EXCLUDED.value, updated_at = now()`,
-    [userId, modelId],
-  );
-}
-
-export async function getApplicationSettings() {
-  const rows = await sql<SettingRow>(
-    `SELECT key, value FROM app_setting WHERE namespace = 'general'`,
-  );
-  const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
-  return {
-    locale: typeof values.locale === "string" ? values.locale : "es-AR",
-    timezone: typeof values.timezone === "string" ? values.timezone : "America/Buenos_Aires",
-  };
-}
-
-export async function setApplicationGeneralSettings(
-  client: PoolClient,
-  actorId: string,
-  input: { locale: string; timezone: string },
-) {
-  for (const [key, value] of Object.entries(input)) {
-    await transactionSql(
-      client,
-      `INSERT INTO app_setting (namespace, key, value, updated_by)
-       VALUES ('general', $1, to_jsonb($2::text), $3)
-       ON CONFLICT (namespace, key) DO UPDATE
-         SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-      [key, value, actorId],
-    );
+function validarNombre(namespace: string, key: string) {
+  if (!NOMBRE.test(namespace)) {
+    throw new Error(`Espacio de nombres inválido: ${namespace}. Usá minúsculas, dígitos, punto, guion o guion bajo.`);
+  }
+  if (!NOMBRE.test(key)) {
+    throw new Error(`Clave inválida: ${key}. Usá minúsculas, dígitos, punto, guion o guion bajo.`);
   }
 }
 
+function serializar(value: unknown) {
+  if (value === undefined) throw new Error("El valor no puede estar vacío: usá null si querés registrar la ausencia.");
+  const texto = JSON.stringify(value);
+  if (texto === undefined) throw new Error("El valor no es serializable como JSON.");
+  // Un límite explícito evita que la configuración se convierta en almacenamiento.
+  if (Buffer.byteLength(texto, "utf8") > MAXIMO_BYTES) {
+    throw new Error("El valor supera 256 KB. La configuración no es el lugar para guardar contenido.");
+  }
+  return texto;
+}
+
+/** Opciones globales, opcionalmente acotadas a un espacio de nombres. */
+export async function listSettings(namespace?: string) {
+  const filtrado = typeof namespace === "string";
+  if (filtrado) validarNombre(namespace, "x");
+  return sql<Setting>(
+    `SELECT s.namespace,
+            s.key,
+            s.value,
+            s.updated_at,
+            s.updated_by,
+            actor.display_name AS updated_by_name
+       FROM app_setting AS s
+       LEFT JOIN app_user AS actor ON actor.id = s.updated_by
+      ${filtrado ? "WHERE s.namespace = $1" : ""}
+      ORDER BY s.namespace ASC, s.key ASC`,
+    filtrado ? [namespace] : [],
+  );
+}
+
+export async function getSetting(namespace: string, key: string) {
+  validarNombre(namespace, key);
+  const filas = await sql<Setting>(
+    `SELECT s.namespace, s.key, s.value, s.updated_at, s.updated_by,
+            actor.display_name AS updated_by_name
+       FROM app_setting AS s
+       LEFT JOIN app_user AS actor ON actor.id = s.updated_by
+      WHERE s.namespace = $1 AND s.key = $2
+      LIMIT 1`,
+    [namespace, key],
+  );
+  return filas[0] ?? null;
+}
+
+export async function setSetting(
+  client: PoolClient,
+  input: { namespace: string; key: string; value: unknown; actorId?: string | null },
+) {
+  validarNombre(input.namespace, input.key);
+  const filas = await transactionSql<Setting>(
+    client,
+    `INSERT INTO app_setting (namespace, key, value, updated_by, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, now())
+     ON CONFLICT (namespace, key)
+     DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()
+     RETURNING namespace, key, value, updated_at, updated_by, NULL::text AS updated_by_name`,
+    [input.namespace, input.key, serializar(input.value), input.actorId ?? null],
+  );
+  return filas[0];
+}
+
+export async function deleteSetting(client: PoolClient, namespace: string, key: string) {
+  validarNombre(namespace, key);
+  const filas = await transactionSql<{ namespace: string; key: string; value: unknown }>(
+    client,
+    `DELETE FROM app_setting WHERE namespace = $1 AND key = $2
+     RETURNING namespace, key, value`,
+    [namespace, key],
+  );
+  return filas[0] ?? null;
+}
+
+/** Preferencias del usuario que las carga. No las ve nadie más. */
+export async function listUserSettings(userId: string, namespace?: string) {
+  const filtrado = typeof namespace === "string";
+  if (filtrado) validarNombre(namespace, "x");
+  return sql<{ namespace: string; key: string; value: unknown; updated_at: string }>(
+    `SELECT namespace, key, value, updated_at
+       FROM app_user_setting
+      WHERE user_id = $1 ${filtrado ? "AND namespace = $2" : ""}
+      ORDER BY namespace ASC, key ASC`,
+    filtrado ? [userId, namespace] : [userId],
+  );
+}
+
+export async function setUserSetting(
+  client: PoolClient,
+  input: { userId: string; namespace: string; key: string; value: unknown },
+) {
+  validarNombre(input.namespace, input.key);
+  const filas = await transactionSql<{ namespace: string; key: string; value: unknown }>(
+    client,
+    `INSERT INTO app_user_setting (user_id, namespace, key, value, updated_at)
+     VALUES ($1, $2, $3, $4::jsonb, now())
+     ON CONFLICT (user_id, namespace, key)
+     DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+     RETURNING namespace, key, value`,
+    [input.userId, input.namespace, input.key, serializar(input.value)],
+  );
+  return filas[0];
+}
+
+export async function deleteUserSetting(client: PoolClient, userId: string, namespace: string, key: string) {
+  validarNombre(namespace, key);
+  const filas = await transactionSql<{ namespace: string; key: string }>(
+    client,
+    `DELETE FROM app_user_setting WHERE user_id = $1 AND namespace = $2 AND key = $3
+     RETURNING namespace, key`,
+    [userId, namespace, key],
+  );
+  return filas[0] ?? null;
+}

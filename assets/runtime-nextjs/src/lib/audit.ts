@@ -2,6 +2,8 @@ import type { PoolClient } from "pg";
 import { sql, transactionSql } from "@/lib/db";
 
 export type AuditAction =
+  | "setting_save"
+  | "setting_delete"
   | "create"
   | "update"
   | "delete"
@@ -40,7 +42,7 @@ export async function recordAuditEvent(
     agentId?: string;
     agentEventId?: string;
     entityKey: string;
-    recordId: string;
+    recordId: string | null;
     action: AuditAction;
     changes: unknown;
   },
