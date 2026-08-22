@@ -89,11 +89,11 @@ export function BulkRecordTable({
                   <tr key={id}>
                     <td className="selection-cell"><input aria-label={`Seleccionar ${formatValue(record[entity.title_field], locale)}`} checked={selected.includes(id)} onChange={() => setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])} type="checkbox" /></td>
                     {fields.map((field) => (
-                      <td key={field.key}>
+                      <td data-label={field.label} key={field.key}>
                         {field.key === entity.title_field && canRead ? <Link className="record-link" href={`/records/${entity.key}/${id}`}>{formatFieldValue(field, record[field.key], locale)}</Link> : formatFieldValue(field, record[field.key], locale)}
                       </td>
                     ))}
-                    <td>{formatDateTimeValue(record.updated_at, locale)}</td>
+                    <td data-label="Actualizado">{formatDateTimeValue(record.updated_at, locale)}</td>
                   </tr>
                 );
               })}

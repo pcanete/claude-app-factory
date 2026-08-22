@@ -1,10 +1,23 @@
 :root {
-  --background: #0b0d12;
-  --surface: #0B1220;
-  --surface-raised: #1a1d25;
-  --border: #2a2e39;
+  /*
+   * Tres planos que se distinguen a simple vista.
+   *
+   * La navegación es el más oscuro, el lienzo queda en el medio y lo que contiene
+   * datos --tarjetas, tablas, formularios-- es el más claro, que es como un tema
+   * oscuro indica que algo está por encima. Antes los tres eran prácticamente el
+   * mismo tono: entre la navegación y una tarjeta había 1.00:1, o sea nada.
+   *
+   * Los campos editables vuelven al tono del lienzo para verse hundidos dentro de
+   * la tarjeta que los contiene.
+   */
+  --sidebar: #06080c;
+  --background: #141822;
+  --surface: #232a38;
+  --surface-raised: #303849;
+  --field: #141822;
+  --border: #414b5c;
   --text: #f4f5f7;
-  --muted: #989eaa;
+  --muted: #a2a9b6;
   --primary: #0EA5E9;
   --primary-soft: color-mix(in srgb, var(--primary) 18%, transparent);
   --danger: #f06a6a;
@@ -43,7 +56,7 @@ button, input, select, textarea { font: inherit; }
   top: 0;
   height: 100vh;
   padding: 24px 18px;
-  background: #101217;
+  background: var(--sidebar);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -86,7 +99,7 @@ h2 { font-size: 18px; margin: 0; }
 .control {
   width: 100%;
   border: 1px solid var(--border);
-  background: #0e1015;
+  background: var(--field);
   color: var(--text);
   padding: 10px 12px;
   border-radius: 9px;
@@ -321,7 +334,7 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
      812 píxeles de pantalla y el contenido empezaba fuera de la vista. */
   .nav-shell { display: block; }
   .sidebar {
-    background: #101217;
+    background: var(--sidebar);
     border-bottom: 1px solid var(--border);
     border-right: 0;
     height: auto;
@@ -359,6 +372,45 @@ details summary { color: var(--primary); cursor: pointer; white-space: nowrap; }
   .nav-link { min-height: 44px; display: flex; align-items: center; }
   .nav-section { grid-column: 1 / -1; }
   .session-panel { padding: 0 16px 16px; }
+
+  /* La tabla se vuelve una ficha por registro.
+     Con siete columnas en 338 píxeles había que arrastrar de costado para leer un
+     solo registro; acá cada dato queda debajo del nombre de su columna. */
+  .table-wrap { overflow: visible; border: 0; border-radius: 0; }
+  .table-wrap table,
+  .audit-table,
+  .users-table { min-width: 0; background: transparent; }
+  .table-wrap table thead { display: none; }
+  .table-wrap table, .table-wrap table tbody, .table-wrap table tr, .table-wrap table td { display: block; width: auto; }
+  .table-wrap table tr {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    padding: 4px 14px 10px;
+  }
+  .table-wrap table td {
+    border: 0;
+    display: flex;
+    gap: 14px;
+    justify-content: space-between;
+    padding: 8px 0;
+    text-align: right;
+  }
+  .table-wrap table td + td { border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+  .table-wrap table td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  /* La celda de selección no lleva etiqueta ni comparte la fila con un valor. */
+  .table-wrap table td.selection-cell { justify-content: flex-start; }
+  .table-wrap table td.selection-cell::before { content: none; }
+
 
   .main { padding: 28px 18px 48px; }
   .page-header { flex-direction: column; }
