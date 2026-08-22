@@ -151,6 +151,15 @@ tbody tr:hover { background: #1a1d25; }
 .audit-badge.user_link { color: #5bd6a2; }
 .audit-badge.agent_create { color: #5bd6a2; }
 .audit-badge.agent_status { color: #f5ae6b; }
+.audit-badge.setting_save { color: #7cb8ff; }
+.audit-badge.setting_delete { color: #f5ae6b; }
+
+/* Dos acciones en una celda: la principal como botón, la destructiva como texto. */
+.row-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Las secciones de una página de sistema venían pegadas: el formulario de alta, la
+   lista y la actividad se leían como un bloque continuo. */
+.main > section + section { margin-top: 38px; }
 .record-id { color: var(--muted); font-size: 11px; }
 /* Sólo los desplegables de contenido ("ver JSON", filtros). Sin acotar a `.main`
    esta regla también alcanzaba al encabezado del menú y le impedía cortar línea:

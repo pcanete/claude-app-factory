@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   createManagedAgent,
+  deleteManagedAgent,
   getManagedAgentForUpdate,
   isManagedAgentId,
   setManagedAgentActive,
@@ -118,4 +119,30 @@ export async function setAgentStatusAction(formData: FormData) {
   if (!changed) redirect("/agents?error=not_found");
   refreshAgents();
   redirect(`/agents?saved=${active ? "reactivated" : "revoked"}`);
+}
+
+export async function deleteAgentAction(formData: FormData) {
+  const actor = await requireUserManagementAccess();
+  const id = String(formData.get("id") ?? "");
+  if (!isManagedAgentId(id)) redirect("/agents?error=not_found");
+  const resultado = await withTransaction(async (client) => {
+    const before = await getManagedAgentForUpdate(client, id);
+    if (!before) return { estado: "not_found" as const };
+    const borrado = await deleteManagedAgent(client, id);
+    if (!borrado.eliminado) return { estado: "con_historial" as const };
+    // La eliminación queda registrada aunque la conexión ya no exista: el `record_id`
+    // apunta a algo que se fue, y eso es exactamente lo que hay que poder ver.
+    await recordAuditEvent(client, {
+      actorId: actor.id,
+      entityKey: "app_agent",
+      recordId: id,
+      action: "agent_status",
+      changes: { name: before.name, eliminada: true },
+    });
+    return { estado: "ok" as const };
+  });
+  if (resultado.estado === "not_found") redirect("/agents?error=not_found");
+  if (resultado.estado === "con_historial") redirect("/agents?error=con_historial");
+  refreshAgents();
+  redirect("/agents?saved=deleted");
 }

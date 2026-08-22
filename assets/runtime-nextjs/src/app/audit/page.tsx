@@ -1,4 +1,11 @@
-import { listAuditEvents, type AuditAction } from "@/lib/audit";
+import {
+  countAuditEvents,
+  listAuditEvents,
+  RETENCION_POR_DEFECTO_DIAS,
+  type AuditAction,
+} from "@/lib/audit";
+import { Pagination } from "@/components/pagination";
+import { getSetting } from "@/platform/settings/store";
 import { requireAuditAccess } from "@/lib/auth";
 import { formatValue } from "@/lib/presentation";
 import { runtimeSpec } from "@/lib/spec";
@@ -16,25 +23,24 @@ const actions: Array<{ key: AuditAction; label: string }> = [
   { key: "user_status", label: "Estado de usuario" },
   { key: "user_invite", label: "Invitación enviada" },
   { key: "user_link", label: "Identidad vinculada" },
-  { key: "ai_credential_save", label: "Credencial de IA guardada" },
-  { key: "ai_credential_remove", label: "Credencial de IA eliminada" },
-  { key: "ai_preference_update", label: "Preferencia de IA" },
-  { key: "application_settings_update", label: "Configuración actualizada" },
+  { key: "setting_save", label: "Opción guardada" },
+  { key: "setting_delete", label: "Opción eliminada" },
   { key: "agent_create", label: "Conexión de agente creada" },
   { key: "agent_status", label: "Acceso de agente modificado" },
 ];
 
+const POR_PAGINA = 50;
+
 export default async function AuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ entity?: string; action?: string }>;
+  searchParams: Promise<{ entity?: string; action?: string; page?: string }>;
 }) {
   await requireAuditAccess();
   const requested = await searchParams;
   const auditEntities = [
     ...runtimeSpec.entities.map((entity) => ({ key: entity.key, label: entity.label, labelPlural: entity.label_plural })),
     { key: "app_user", label: "Usuario", labelPlural: "Usuarios" },
-    { key: "app_user_secret", label: "Credencial de IA", labelPlural: "Credenciales de IA" },
     { key: "app_user_setting", label: "Preferencia", labelPlural: "Preferencias" },
     { key: "app_setting", label: "Configuración", labelPlural: "Configuración" },
     { key: "app_agent", label: "Agente", labelPlural: "Agentes" },
@@ -45,7 +51,20 @@ export default async function AuditPage({
   const action = actions.some((candidate) => candidate.key === requested.action)
     ? requested.action as AuditAction
     : undefined;
-  const events = await listAuditEvents({ entityKey, action });
+  const total = await countAuditEvents({ entityKey, action });
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+  const solicitada = Number(requested.page ?? "1");
+  const page = Number.isInteger(solicitada) && solicitada > 0 ? Math.min(solicitada, paginas) : 1;
+  const events = await listAuditEvents({
+    entityKey,
+    action,
+    limit: POR_PAGINA,
+    offset: (page - 1) * POR_PAGINA,
+  });
+  const retencionGuardada = await getSetting("auditoria", "retencion_dias");
+  const retencion = typeof retencionGuardada?.value === "number"
+    ? retencionGuardada.value
+    : RETENCION_POR_DEFECTO_DIAS;
   const entityLabels = Object.fromEntries(auditEntities.map((entity) => [entity.key, entity.label]));
   const actionLabels = Object.fromEntries(actions.map((candidate) => [candidate.key, candidate.label]));
 
@@ -55,7 +74,11 @@ export default async function AuditPage({
         <div>
           <p className="eyebrow">Control interno</p>
           <h1>Auditoría</h1>
-          <p className="subtitle">Últimos 200 cambios registrados por el runtime.</p>
+          <p className="subtitle">
+            {total.toLocaleString("es-AR")} cambios registrados por el runtime. Se conservan{" "}
+            {retencion} días; lo anterior se vence solo. La auditoría no se edita ni se
+            borra a mano: si se pudiera elegir qué sacar, dejaría de ser evidencia.
+          </p>
         </div>
       </div>
       <form className="toolbar">
@@ -109,6 +132,15 @@ export default async function AuditPage({
           </table>
         ) : <div className="empty">Todavía no hay eventos de auditoría para estos filtros.</div>}
       </div>
+      {total > POR_PAGINA && (
+        <Pagination
+          baseHref="/audit"
+          page={page}
+          pageSize={POR_PAGINA}
+          query={requested}
+          total={total}
+        />
+      )}
     </>
   );
 }

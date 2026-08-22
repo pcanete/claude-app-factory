@@ -79,6 +79,39 @@ export async function setManagedAgentActive(client: PoolClient, id: string, acti
   );
 }
 
+/**
+ * Elimina una conexión que nunca se usó.
+ *
+ * Revocar y eliminar no son lo mismo, y la diferencia la marca el historial. Una
+ * credencial que ya operó tiene actividad y auditoría colgando: borrarla dejaría
+ * huérfano el registro de lo que hizo, que es justo lo que la auditoría existe para
+ * conservar -- por eso `app_agent_event` la retiene con `ON DELETE RESTRICT`. Esa
+ * credencial se revoca, y queda inactiva con su historia a la vista.
+ *
+ * Una credencial que nunca se usó no tiene nada que conservar: es un nombre y un
+ * hash. Ésa sí se puede sacar de la lista, y tenerla ahí para siempre sólo hace más
+ * difícil leer las que importan.
+ */
+export async function deleteManagedAgent(client: PoolClient, id: string) {
+  const usos = await transactionSql<{ eventos: number; auditoria: number; mutaciones: number }>(
+    client,
+    `SELECT
+       (SELECT count(*)::int FROM app_agent_event WHERE agent_id = $1) AS eventos,
+       (SELECT count(*)::int FROM app_audit_log WHERE agent_id = $1) AS auditoria,
+       (SELECT count(*)::int FROM app_agent_mutation WHERE agent_id = $1) AS mutaciones`,
+    [id],
+  );
+  const historial = (usos[0]?.eventos ?? 0) + (usos[0]?.auditoria ?? 0) + (usos[0]?.mutaciones ?? 0);
+  if (historial > 0) return { eliminado: false as const, historial };
+
+  const filas = await transactionSql<{ id: string; name: string }>(
+    client,
+    "DELETE FROM app_agent WHERE id = $1 RETURNING id, name",
+    [id],
+  );
+  return { eliminado: Boolean(filas[0]), historial: 0, nombre: filas[0]?.name };
+}
+
 export async function listManagedAgents() {
   return sql<ManagedAgent>(
     `SELECT agent.id,

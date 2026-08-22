@@ -126,3 +126,35 @@ export async function updateManagedUser(client: PoolClient, id: string, input: M
     [id, input.email, input.displayName, input.roleKey, input.active],
   );
 }
+
+/**
+ * Elimina una persona que nunca operó.
+ *
+ * Igual que con las conexiones de agente, desactivar y eliminar responden a casos
+ * distintos. Quien ya trabajó en el sistema tiene auditoría a su nombre: borrarlo la
+ * dejaría sin autor -- `app_audit_log.actor_id` es `ON DELETE SET NULL`, así que la
+ * base lo permitiría sin quejarse y la evidencia quedaría muda. Esa persona se
+ * desactiva y pierde el acceso conservando lo que hizo.
+ *
+ * Una invitación cargada con el correo equivocado, en cambio, no tiene nada detrás.
+ * Obligar a convivir con ella para siempre es la clase de rigidez que hace que la
+ * gente deje de confiar en la lista.
+ */
+export async function deleteManagedUser(client: PoolClient, id: string) {
+  const usos = await transactionSql<{ auditoria: number; configuracion: number }>(
+    client,
+    `SELECT
+       (SELECT count(*)::int FROM app_audit_log WHERE actor_id = $1) AS auditoria,
+       (SELECT count(*)::int FROM app_setting WHERE updated_by = $1) AS configuracion`,
+    [id],
+  );
+  const historial = (usos[0]?.auditoria ?? 0) + (usos[0]?.configuracion ?? 0);
+  if (historial > 0) return { eliminado: false as const, historial };
+
+  const filas = await transactionSql<{ id: string }>(
+    client,
+    "DELETE FROM app_user WHERE id = $1 RETURNING id",
+    [id],
+  );
+  return { eliminado: Boolean(filas[0]), historial: 0 };
+}

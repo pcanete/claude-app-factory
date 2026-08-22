@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { sendApplicationInvitation } from "@/platform/auth/invitations";
 import {
   createManagedUser,
+  deleteManagedUser,
   getManagedUser,
   getManagedUserForUpdate,
   isLocalPreviewIdentity,
@@ -134,4 +135,30 @@ export async function updateUserAction(id: string, formData: FormData) {
   }
   refreshUsers(id);
   redirect(`/users/${id}?saved=updated`);
+}
+
+export async function deleteUserAction(formData: FormData) {
+  const actor = await requireUserManagementAccess();
+  const id = String(formData.get("id") ?? "");
+  if (!isManagedUserId(id)) redirect("/users?error=not_found");
+  // Nadie se borra a sí mismo: la misma protección que ya impide quitarse el rol.
+  if (actor.id === id) redirect(`/users/${id}?error=self_protection`);
+  const resultado = await withTransaction(async (client) => {
+    const before = await getManagedUserForUpdate(client, id);
+    if (!before) return { estado: "not_found" as const };
+    const borrado = await deleteManagedUser(client, id);
+    if (!borrado.eliminado) return { estado: "con_historial" as const };
+    await recordAuditEvent(client, {
+      actorId: actor.id,
+      entityKey: "app_user",
+      recordId: id,
+      action: "user_status",
+      changes: { email: before.email, display_name: before.displayName, eliminado: true },
+    });
+    return { estado: "ok" as const };
+  });
+  if (resultado.estado === "not_found") redirect("/users?error=not_found");
+  if (resultado.estado === "con_historial") redirect(`/users/${id}?error=con_historial`);
+  refreshUsers(id);
+  redirect("/users?saved=deleted");
 }

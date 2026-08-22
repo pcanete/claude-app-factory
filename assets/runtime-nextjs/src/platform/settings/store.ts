@@ -35,12 +35,35 @@ export type Setting = {
  */
 export type ActorDeConfiguracion = { kind: "user" | "agent"; id: string };
 
+/**
+ * Convierte lo que la persona escribió en un nombre válido.
+ *
+ * Decir "usá minúsculas, dígitos, punto, guion o guion bajo" y devolver el texto
+ * rechazado obliga a traducir la regla a mano. Mostrar la versión que sí sirve
+ * convierte el rechazo en una respuesta.
+ */
+function sugerirNombre(valor: string) {
+  const sugerencia = valor
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_.-]+/g, "_")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 64)
+    .replace(/_+$/, "");
+  return NOMBRE.test(sugerencia) ? sugerencia : null;
+}
+
 function validarNombre(namespace: string, key: string) {
-  if (!NOMBRE.test(namespace)) {
-    throw new Error(`Espacio de nombres inválido: ${namespace}. Usá minúsculas, dígitos, punto, guion o guion bajo.`);
-  }
-  if (!NOMBRE.test(key)) {
-    throw new Error(`Clave inválida: ${key}. Usá minúsculas, dígitos, punto, guion o guion bajo.`);
+  for (const [etiqueta, valor] of [["El espacio", namespace], ["La clave", key]] as const) {
+    if (NOMBRE.test(valor)) continue;
+    const sugerencia = sugerirNombre(valor);
+    throw new Error(
+      sugerencia
+        ? `${etiqueta} "${valor}" no es un nombre válido. Probá con: ${sugerencia}`
+        : `${etiqueta} debe empezar con una letra y usar sólo minúsculas, dígitos, punto, guion o guion bajo.`,
+    );
   }
 }
 

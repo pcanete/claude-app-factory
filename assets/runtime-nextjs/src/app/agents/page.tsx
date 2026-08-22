@@ -1,4 +1,4 @@
-import { setAgentStatusAction } from "@/app/agents/actions";
+import { deleteAgentAction, setAgentStatusAction } from "@/app/agents/actions";
 import { AgentCreateForm } from "@/components/agent-create-form";
 import { listAgentEvents, listManagedAgents } from "@/platform/mcp/admin";
 import { requireUserManagementAccess } from "@/lib/auth";
@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 const successMessages: Record<string, string> = {
   revoked: "El acceso fue revocado inmediatamente.",
   reactivated: "La conexión volvió a estar activa.",
+  deleted: "La conexión se eliminó. No tenía actividad registrada.",
 };
 
 // Un agente es una identidad con un rol: crearlo equivale a delegar ese rol,
@@ -32,6 +33,12 @@ export default async function AgentsPage({
         </div>
       </div>
       {requested.error === "not_found" && <div className="notice import-error">La conexión solicitada no existe.</div>}
+      {requested.error === "con_historial" && (
+        <div className="notice import-error">
+          Esa conexión ya operó, así que no se elimina: su actividad quedaría sin dueño en la
+          auditoría. Revocala — deja de funcionar en el acto y conserva el historial.
+        </div>
+      )}
       {requested.saved && successMessages[requested.saved] && <div className="notice success">{successMessages[requested.saved]}</div>}
 
       <section>
@@ -40,7 +47,10 @@ export default async function AgentsPage({
       </section>
 
       <section>
-        <div className="section-heading"><div><h2>Conexiones existentes</h2><p className="subtitle">Revocar corta el acceso inmediatamente sin borrar el historial.</p></div></div>
+        <div className="section-heading"><div><h2>Conexiones existentes</h2><p className="subtitle">
+            Revocar corta el acceso en el acto y conserva el historial. Eliminar sólo está
+            disponible para conexiones que nunca se usaron.
+          </p></div></div>
         <div className="table-wrap">
           {agents.length ? (
             <table className="audit-table">
@@ -55,11 +65,19 @@ export default async function AgentsPage({
                     <td>{agent.last_used_at ? formatDateTimeValue(agent.last_used_at, runtimeSpec.app.locale) : "Nunca"}</td>
                     <td>{agent.event_count}</td>
                     <td>
-                      <form action={setAgentStatusAction}>
-                        <input name="id" type="hidden" value={agent.id} />
-                        <input name="active" type="hidden" value={agent.active ? "false" : "true"} />
-                        <button className={`button ${agent.active ? "danger" : "secondary"}`} type="submit">{agent.active ? "Revocar" : "Reactivar"}</button>
-                      </form>
+                      <div className="row-actions">
+                        <form action={setAgentStatusAction}>
+                          <input name="id" type="hidden" value={agent.id} />
+                          <input name="active" type="hidden" value={agent.active ? "false" : "true"} />
+                          <button className={`button ${agent.active ? "danger" : "secondary"}`} type="submit">{agent.active ? "Revocar" : "Reactivar"}</button>
+                        </form>
+                        {Number(agent.event_count) === 0 && (
+                          <form action={deleteAgentAction}>
+                            <input name="id" type="hidden" value={agent.id} />
+                            <button className="text-button danger-text" type="submit">Eliminar</button>
+                          </form>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

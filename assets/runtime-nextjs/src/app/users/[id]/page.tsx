@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { sendUserInvitationAction, updateUserAction } from "@/app/users/actions";
+import { deleteUserAction, sendUserInvitationAction, updateUserAction } from "@/app/users/actions";
 import { clerkAuthConfigured } from "@/platform/auth/config";
 import { getManagedUser, isLocalPreviewIdentity, isManagedUserId, isPendingIdentity } from "@/platform/users/store";
 import { requireUserManagementAccess } from "@/lib/auth";
@@ -15,6 +15,7 @@ const messages: Record<string, string> = {
   self_protection: "No podés desactivar tu propia cuenta ni quitarte el rol actual.",
   inactive_invitation: "Activá el usuario antes de enviarle una invitación.",
   already_linked: "La identidad de este usuario ya está vinculada.",
+  con_historial: "Esta persona ya operó en el sistema. Eliminarla dejaría su actividad sin autor en la auditoría: desactivala y conserva el historial.",
 };
 
 const invitationMessages: Record<string, string> = {
@@ -86,6 +87,20 @@ export default async function UserDetailPage({
               </label>
             </div>
             <div className="form-actions"><button className="button" disabled={local} type="submit">Guardar cambios</button></div>
+          </form>
+
+          {/* Eliminar es para un alta equivocada, no para dar de baja a alguien: quien ya
+              trabajó se desactiva arriba y conserva su rastro. La acción se ofrece siempre
+              y la respuesta explica cuándo no corresponde, en vez de esconder el botón y
+              dejar a la persona adivinando por qué no está. */}
+          <form action={deleteUserAction} className="form-actions compact">
+            <input name="id" type="hidden" value={user.id} />
+            <button className="text-button danger-text" disabled={local || self} type="submit">
+              Eliminar del sistema
+            </button>
+            <span className="field-help">
+              Sólo se puede eliminar a quien todavía no registró actividad.
+            </span>
           </form>
         </section>
         <aside className="detail-list user-detail-meta">

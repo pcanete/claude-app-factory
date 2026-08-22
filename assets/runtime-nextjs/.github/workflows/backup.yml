@@ -51,6 +51,17 @@ jobs:
           fi
           zcat backup/dump.sql.gz | grep -c "CREATE TABLE" | xargs echo "Tablas en el respaldo:"
 
+      # Recién ahora, con el volcado ya guardado, se vence la auditoría vieja. El orden
+      # importa: si la purga corriera antes, un respaldo fallido dejaría los eventos
+      # borrados y sin copia.
+      - name: Age out old audit events
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+        run: |
+          node --version
+          npm install pg@8 --no-save --silent
+          DATABASE_URL="$DATABASE_URL_DIRECT" node scripts/prune-audit.mjs
+
       - name: Store the backup
         uses: actions/upload-artifact@v4
         with:

@@ -105,6 +105,7 @@ EXPECTED_FILES = {
     "scripts/db-connection.mjs",
     "scripts/apply-migrations.mjs",
     "scripts/destructive-guard.mjs",
+    "scripts/prune-audit.mjs",
     "scripts/test-destructive-guard.mjs",
     "scripts/bootstrap-admin.mjs",
     "scripts/smoke-crud.mjs",

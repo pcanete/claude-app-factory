@@ -66,9 +66,10 @@ export async function recordAuditEvent(
   );
 }
 
-export async function listAuditEvents(filters: { entityKey?: string; action?: AuditAction }) {
+export type AuditFilters = { entityKey?: string; action?: AuditAction };
+
+function auditWhere(filters: AuditFilters, values: unknown[]) {
   const conditions: string[] = [];
-  const values: unknown[] = [];
   if (filters.entityKey) {
     values.push(filters.entityKey);
     conditions.push(`log.entity_key = $${values.length}`);
@@ -77,7 +78,28 @@ export async function listAuditEvents(filters: { entityKey?: string; action?: Au
     values.push(filters.action);
     conditions.push(`log.action = $${values.length}`);
   }
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  return conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+}
+
+export async function countAuditEvents(filters: AuditFilters) {
+  const values: unknown[] = [];
+  const where = auditWhere(filters, values);
+  const filas = await sql<{ total: number }>(
+    `SELECT count(*)::int AS total FROM app_audit_log AS log ${where}`,
+    values,
+  );
+  return filas[0]?.total ?? 0;
+}
+
+export async function listAuditEvents(
+  filters: AuditFilters & { limit?: number; offset?: number } = {},
+) {
+  const values: unknown[] = [];
+  const where = auditWhere(filters, values);
+  values.push(filters.limit ?? 50);
+  const limitPlaceholder = `$${values.length}`;
+  values.push(filters.offset ?? 0);
+  const offsetPlaceholder = `$${values.length}`;
   return sql<AuditEvent>(
     `SELECT log.id,
             log.actor_id,
@@ -95,7 +117,36 @@ export async function listAuditEvents(filters: { entityKey?: string; action?: Au
        LEFT JOIN app_agent AS agent ON agent.id = log.agent_id
        ${where}
       ORDER BY log.created_at DESC
-      LIMIT 200`,
+      LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
     values,
   );
+}
+
+/**
+ * Retención: la auditoría no se borra a mano, se vence.
+ *
+ * Un registro que un administrador puede recortar registro por registro deja de ser
+ * evidencia -- justo lo que un administrador querría borrar es lo que más importa que
+ * quede. Pero crecer sin techo tampoco es una opción, así que la salida es una regla
+ * pareja y declarada: todo lo más viejo que la ventana de retención se va, sin
+ * elegir qué. La ventana vive en la configuración del sistema, así que cambiarla es
+ * ella misma un cambio auditado.
+ */
+export const RETENCION_POR_DEFECTO_DIAS = 365;
+
+export async function pruneAuditEvents(client: PoolClient, dias: number) {
+  if (!Number.isInteger(dias) || dias < 30) {
+    throw new Error("La retención de auditoría debe ser un número entero de al menos 30 días.");
+  }
+  const filas = await transactionSql<{ eliminados: number }>(
+    client,
+    `WITH borrados AS (
+       DELETE FROM app_audit_log
+        WHERE created_at < now() - ($1 || ' days')::interval
+        RETURNING 1
+     )
+     SELECT count(*)::int AS eliminados FROM borrados`,
+    [String(dias)],
+  );
+  return filas[0]?.eliminados ?? 0;
 }
