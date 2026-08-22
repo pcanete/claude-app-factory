@@ -249,8 +249,6 @@ def main() -> int:
     # ni desde la interfaz ni desde el MCP.
     if "relationColumns" not in repository_filters:
         failures.append("Records cannot be filtered by the record they belong to.")
-    if "filterableFields" not in mcp_server:
-        failures.append("MCP query_records discards relationship filters, so agents cannot scope by owner record.")
 
     repository_path = project / "src/lib/repository.ts"
     repository_source = repository_path.read_text(encoding="utf-8") if repository_path.is_file() else ""
@@ -361,6 +359,8 @@ def main() -> int:
     # Descubrir el esquema y escribir tienen que hablar el mismo idioma: si
     # describe_entity dice `client` y create_record exige `client_id`, un agente que
     # lee la estructura y despues escribe segun lo que leyo falla.
+    if "filterableFields" not in mcp_server:
+        failures.append("MCP query_records discards relationship filters, so agents cannot scope by owner record.")
     if "writeAs" not in mcp_server:
         failures.append(
             "MCP describe_entity does not declare how a relationship is written, so discovery and writing disagree."
