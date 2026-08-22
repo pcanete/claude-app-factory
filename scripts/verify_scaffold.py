@@ -445,6 +445,28 @@ def main() -> int:
             failures.append(f"MCP does not expose system configuration: {invariant}.")
     if "manage_users" not in mcp_server:
         failures.append("MCP settings writes are not gated by an administrative capability.")
+    # La navegacion no puede depender de la hoja de estilos para EXISTIR. Con un
+    # `details` cerrado el navegador esconde los enlaces por su cuenta y solo el CSS
+    # los devuelve; si esa hoja tarda o llega vieja -- un despliegue a mitad de camino
+    # alcanza -- el menu entero desaparece. Paso en produccion. Con una casilla, lo que
+    # esconde vive en el CSS: si el CSS falta, no esconde nada.
+    sidebar_path = project / "src/components/sidebar.tsx"
+    sidebar = sidebar_path.read_text(encoding="utf-8") if sidebar_path.is_file() else ""
+    if "<details" in sidebar:
+        failures.append("Sidebar navigation must not rely on <details>: without CSS the menu disappears.")
+    if 'className="nav-switch"' not in sidebar:
+        failures.append("Sidebar navigation is missing the nav-switch collapse control.")
+
+    # Los desplegables de contenido llevan `white-space: nowrap`. Sin acotar a `.main`
+    # esa regla tambien alcanzaba al encabezado del menu y le impedia cortar linea: la
+    # descripcion se salia de la barra y pisaba la pagina.
+    estilos_path = project / "src/app/globals.css"
+    estilos = estilos_path.read_text(encoding="utf-8") if estilos_path.is_file() else ""
+    for linea in estilos.splitlines():
+        despojada = linea.strip()
+        if despojada.startswith("details summary") or despojada.startswith("details > summary"):
+            failures.append("The `details summary` rule must be scoped to `.main` so it cannot reach the sidebar.")
+
     # El asistente interno se retiro: el sistema no ejecuta modelos ni custodia
     # credenciales de proveedores ajenos.
     for retirado in ("src/platform/ai", "src/app/assistant", "src/app/api/assistant"):

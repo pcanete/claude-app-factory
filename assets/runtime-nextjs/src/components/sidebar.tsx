@@ -40,54 +40,63 @@ export async function Sidebar() {
       {/*
         En pantalla chica la navegación se pliega: con dieciocho enlaces desplegados
         ocupaba casi toda la pantalla y había que desplazarse para ver un solo dato.
-        Se usa `details` en vez de un menú con JavaScript porque el navegador ya sabe
-        abrirlo, cerrarlo y anunciarlo; en escritorio el CSS lo deja siempre abierto.
+
+        El plegado es una casilla, no un `details`, por cómo falla cada uno. Un `details`
+        cerrado esconde su contenido por decisión del navegador, y sólo el CSS lo vuelve
+        a mostrar en escritorio: si esa hoja tarda o no llega —un despliegue a mitad de
+        camino alcanza—, el menú entero desaparece. Una casilla sin CSS es una casilla
+        sin marcar al lado de una lista de enlaces visible: lo que la esconde vive en
+        la hoja de estilos, así que si la hoja falta, no esconde nada. Feo, pero navegable.
       */}
-      <details className="nav-shell">
-        <summary className="nav-toggle">
-          <div className="brand">
-            <div className="brand-name">{runtimeSpec.app.name}</div>
-            <div className="brand-description">{runtimeSpec.app.description}</div>
-          </div>
-          <span aria-hidden="true" className="nav-toggle-icon" />
-        </summary>
-
-        <nav className="nav" aria-label="Navegación principal">
-          <Link className="nav-link home" href="/">Resumen</Link>
-
-          {entityLinks.length > 0 && <div className="nav-section">Datos</div>}
-          {entityLinks.map((link) => (
-            <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
-          ))}
-
-          {viewLinks.length > 0 && <div className="nav-section">Vistas</div>}
-          {viewLinks.map((link) => (
-            <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
-          ))}
-
-          {systemLinks.length > 0 && <div className="nav-section">Sistema</div>}
-          {systemLinks.map((link) => (
-            <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
-          ))}
-        </nav>
-
-        <div className="session-panel">
-          {user ? (
-            <>
-              <div className="session-name">{user.displayName}</div>
-              <div className="session-email">{user.email}</div>
-              {localPreviewAuthEnabled() && (
-                <form action={clearDevelopmentRoleAction}>
-                  <button className="session-action" type="submit">Cambiar rol</button>
-                </form>
-              )}
-              {!localPreviewAuthEnabled() && clerkAuthConfigured() && <SessionSignOut />}
-            </>
-          ) : (
-            <Link className="session-action" href={localPreviewAuthEnabled() ? "/dev-access" : "/sign-in"}>Acceder</Link>
-          )}
+      <input
+        aria-label="Mostrar u ocultar la navegación"
+        className="nav-switch"
+        id="nav-switch"
+        type="checkbox"
+      />
+      <label className="nav-toggle" htmlFor="nav-switch">
+        <div className="brand">
+          <div className="brand-name">{runtimeSpec.app.name}</div>
+          <div className="brand-description">{runtimeSpec.app.description}</div>
         </div>
-      </details>
+        <span aria-hidden="true" className="nav-toggle-icon" />
+      </label>
+
+      <nav className="nav" aria-label="Navegación principal">
+        <Link className="nav-link home" href="/">Resumen</Link>
+
+        {entityLinks.length > 0 && <div className="nav-section">Datos</div>}
+        {entityLinks.map((link) => (
+          <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
+        ))}
+
+        {viewLinks.length > 0 && <div className="nav-section">Vistas</div>}
+        {viewLinks.map((link) => (
+          <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
+        ))}
+
+        {systemLinks.length > 0 && <div className="nav-section">Sistema</div>}
+        {systemLinks.map((link) => (
+          <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
+        ))}
+      </nav>
+
+      <div className="session-panel">
+        {user ? (
+          <>
+            <div className="session-name">{user.displayName}</div>
+            <div className="session-email">{user.email}</div>
+            {localPreviewAuthEnabled() && (
+              <form action={clearDevelopmentRoleAction}>
+                <button className="session-action" type="submit">Cambiar rol</button>
+              </form>
+            )}
+            {!localPreviewAuthEnabled() && clerkAuthConfigured() && <SessionSignOut />}
+          </>
+        ) : (
+          <Link className="session-action" href={localPreviewAuthEnabled() ? "/dev-access" : "/sign-in"}>Acceder</Link>
+        )}
+      </div>
     </aside>
   );
 }
