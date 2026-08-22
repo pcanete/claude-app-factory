@@ -287,8 +287,16 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       async () => {
         const entity = requireAgentPermission(agent, entityKey, "list");
         const allowedFields = new Set(entity.fields.map((field) => field.key));
+        // Las relaciones se pueden filtrar --es lo que permite pedir los registros que
+        // cuelgan de otro-- pero no ordenar: ordenar por un identificador no significa
+        // nada para quien consulta.
+        const filterableFields = new Set(allowedFields);
+        for (const relationship of relationFields(entity)) {
+          filterableFields.add(relationship.key);
+          filterableFields.add(`${relationship.key}_id`);
+        }
         const safeFilters = Object.fromEntries(
-          Object.entries(filters ?? {}).filter(([field]) => allowedFields.has(field)),
+          Object.entries(filters ?? {}).filter(([field]) => filterableFields.has(field)),
         );
         const safeSort = sort && (allowedFields.has(sort) || ["id", "created_at", "updated_at"].includes(sort))
           ? sort

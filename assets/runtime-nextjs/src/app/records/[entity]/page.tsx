@@ -4,9 +4,9 @@ import { BulkRecordTable } from "@/components/bulk-record-table";
 import { Pagination } from "@/components/pagination";
 import { RecordFilters } from "@/components/record-filters";
 import { RecordTable } from "@/components/record-table";
-import { hasPermission, requirePermission } from "@/lib/auth";
+import { canAccessRelationshipOptions, hasPermission, requirePermission } from "@/lib/auth";
 import { recordsForClient } from "@/lib/presentation";
-import { countFilteredRecords, listRecords } from "@/lib/repository";
+import { countFilteredRecords, listRecords, relationshipOptions } from "@/lib/repository";
 import { getEntity, runtimeSpec } from "@/lib/spec";
 import { firstParam, parseListQuery, type RawSearchParams } from "@/lib/view-query";
 
@@ -40,6 +40,11 @@ export default async function EntityListPage({ params, searchParams }: Props) {
   ]);
   const page = Math.min(query.page, Math.max(1, Math.ceil(total / query.pageSize)));
   if (page !== query.page) records = await listRecords(entity.key, { ...query, offset: (page - 1) * query.pageSize });
+  // Las opciones para filtrar por relación sólo se ofrecen si el usuario puede
+  // listar la entidad del otro lado; si no, el filtro no aparece.
+  const filterOptions = canAccessRelationshipOptions(user, entity)
+    ? await relationshipOptions(entity)
+    : undefined;
   const bulkFields = (configuredView?.bulk_edit_fields ?? [])
     .map((key) => entity.fields.find((field) => field.key === key))
     .filter((field) => field !== undefined);
@@ -60,7 +65,7 @@ export default async function EntityListPage({ params, searchParams }: Props) {
         </div>
       </div>
       {imported && /^\d+$/.test(imported) && <div className="notice success">Se importaron {imported} registros correctamente.</div>}
-      <RecordFilters entity={entity} fields={visibleFields} query={query} resetHref={`/records/${entity.key}`} />
+      <RecordFilters entity={entity} fields={visibleFields} query={query} relationshipOptions={filterOptions} resetHref={`/records/${entity.key}`} />
       {configuredView && canUpdate && bulkFields.length ? (
         <BulkRecordTable bulkFields={bulkFields} canRead={canRead} entity={entity} fields={visibleFields} locale={runtimeSpec.app.locale} records={recordsForClient(records)} viewKey={configuredView.key} />
       ) : <RecordTable canRead={canRead} entity={entity} fields={visibleFields} locale={runtimeSpec.app.locale} records={records} />}

@@ -3,6 +3,7 @@ import { sql, transactionSql } from "@/lib/db";
 import { type EntitySpec, type FieldSpec, relationFields, requireEntity } from "@/lib/spec";
 
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,47}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function queryRows<T extends QueryResultRow = QueryResultRow>(
   client: PoolClient | undefined,
@@ -58,9 +59,30 @@ function listWhere(entity: EntitySpec, options: ListRecordOptions) {
     values.push(`%${options.search.trim()}%`);
     conditions.push(`(${searchable.map((field) => `CAST(${identifier(field.key)} AS text) ILIKE $${values.length}`).join(" OR ")})`);
   }
+  // Filtrar por la relación es lo que permite pedir "lo de este cliente". Se acepta
+  // tanto `client` como `client_id`, igual que al escribir, y sólo por identificador
+  // exacto: filtrar por texto sobre una relación seria adivinar a qué registro apunta.
+  const relationColumns = new Map(
+    relationFields(entity).flatMap((relationship) => {
+      const column = `${relationship.key}_id`;
+      return [
+        [relationship.key, column] as const,
+        [column, column] as const,
+      ];
+    }),
+  );
+
   for (const [fieldKey, rawValue] of Object.entries(options.filters ?? {})) {
+    const filterValue = rawValue.trim();
+    const relationColumn = relationColumns.get(fieldKey);
+    if (relationColumn) {
+      if (!UUID.test(filterValue)) continue;
+      values.push(filterValue);
+      conditions.push(`${identifier(relationColumn)} = $${values.length}::uuid`);
+      continue;
+    }
     const field = fieldMap.get(fieldKey);
-    const filter = rawValue.trim();
+    const filter = filterValue;
     if (!field || !filter) continue;
     if (field.type === "boolean") {
       if (!new Set(["true", "false"]).has(filter)) continue;

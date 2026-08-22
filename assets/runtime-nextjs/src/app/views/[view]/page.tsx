@@ -6,9 +6,17 @@ import { OperationalKanban } from "@/components/operational-kanban";
 import { Pagination } from "@/components/pagination";
 import { RecordFilters } from "@/components/record-filters";
 import { RecordTable } from "@/components/record-table";
-import { hasPermission, requireViewAccess } from "@/lib/auth";
+import { canAccessRelationshipOptions, hasPermission, requireViewAccess } from "@/lib/auth";
+import type { RuntimeUser } from "@/lib/auth-types";
 import { recordsForClient } from "@/lib/presentation";
-import { aggregateRecords, breakdownRecords, calendarRecords, countFilteredRecords, listRecords } from "@/lib/repository";
+import {
+  aggregateRecords,
+  breakdownRecords,
+  calendarRecords,
+  countFilteredRecords,
+  listRecords,
+  relationshipOptions,
+} from "@/lib/repository";
 import { getEntity, getView, type DashboardWidgetSpec, type EntitySpec, type ViewSpec, runtimeSpec } from "@/lib/spec";
 import { firstParam, parseListQuery, type RawSearchParams } from "@/lib/view-query";
 
@@ -20,7 +28,7 @@ function visibleFields(entity: EntitySpec, view: ViewSpec, maximum = 6) {
   return keys.map((key) => entity.fields.find((field) => field.key === key)).filter((field) => field !== undefined);
 }
 
-async function TableView({ view, query, canRead, canUpdate }: { view: ViewSpec; query: RawSearchParams; canRead: boolean; canUpdate: boolean }) {
+async function TableView({ view, query, canRead, canUpdate, user }: { view: ViewSpec; query: RawSearchParams; canRead: boolean; canUpdate: boolean; user: RuntimeUser }) {
   const entity = getEntity(view.entity ?? "");
   if (!entity) notFound();
   const fields = visibleFields(entity, view);
@@ -31,12 +39,15 @@ async function TableView({ view, query, canRead, canUpdate }: { view: ViewSpec; 
   ]);
   const page = Math.min(parsed.page, Math.max(1, Math.ceil(total / parsed.pageSize)));
   if (page !== parsed.page) records = await listRecords(entity.key, { ...parsed, offset: (page - 1) * parsed.pageSize });
+  const filterOptions = canAccessRelationshipOptions(user, entity)
+    ? await relationshipOptions(entity)
+    : undefined;
   const bulkFields = (view.bulk_edit_fields ?? [])
     .map((key) => entity.fields.find((field) => field.key === key))
     .filter((field) => field !== undefined);
   return (
     <>
-      <RecordFilters entity={entity} fields={fields} query={parsed} resetHref={`/views/${view.key}`} />
+      <RecordFilters entity={entity} fields={fields} query={parsed} relationshipOptions={filterOptions} resetHref={`/views/${view.key}`} />
       {canUpdate && bulkFields.length ? (
         <BulkRecordTable bulkFields={bulkFields} canRead={canRead} entity={entity} fields={fields} locale={runtimeSpec.app.locale} records={recordsForClient(records)} viewKey={view.key} />
       ) : <RecordTable canRead={canRead} entity={entity} fields={fields} locale={runtimeSpec.app.locale} records={records} />}
@@ -243,7 +254,7 @@ export default async function NamedViewPage({
         </div>
         {entity && <Link className="button secondary" href={`/records/${entity.key}`}>Abrir listado base</Link>}
       </div>
-      {view.type === "table" && <TableView canRead={canRead} canUpdate={canUpdate} query={query} view={view} />}
+      {view.type === "table" && <TableView canRead={canRead} canUpdate={canUpdate} query={query} user={user} view={view} />}
       {view.type === "kanban" && <KanbanView canRead={canRead} canUpdate={canUpdate} view={view} />}
       {view.type === "calendar" && <CalendarView canRead={canRead} canUpdate={canUpdate} month={firstParam(query.month)} view={view} />}
       {view.type === "dashboard" && <DashboardView userRole={user.roleKey} view={view} />}

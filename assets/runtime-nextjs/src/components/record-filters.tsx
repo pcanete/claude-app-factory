@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ListRecordOptions } from "@/lib/repository";
-import type { EntitySpec, FieldSpec } from "@/lib/spec";
+import { relationFields, type EntitySpec, type FieldSpec } from "@/lib/spec";
 
 function FilterControl({ field, value }: { field: FieldSpec; value: string }) {
   if (field.type === "enum") {
@@ -31,11 +31,13 @@ export function RecordFilters({
   fields,
   query,
   resetHref,
+  relationshipOptions,
 }: {
   entity: EntitySpec;
   fields: FieldSpec[];
   query: ListRecordOptions & { filters: Record<string, string> };
   resetHref: string;
+  relationshipOptions?: Record<string, Array<{ id: string; label: string }>>;
 }) {
   const searchable = entity.fields.some((field) => field.searchable);
   const sortable = [...fields, ...entity.fields.filter((field) => !fields.some((visible) => visible.key === field.key))];
@@ -58,6 +60,22 @@ export function RecordFilters({
       <details className="filter-details" open={Object.keys(query.filters).length > 0}>
         <summary>Filtros por campo{Object.keys(query.filters).length ? ` · ${Object.keys(query.filters).length} activos` : ""}</summary>
         <div className="filter-grid">
+          {relationFields(entity).map((relationship) => {
+            const opciones = relationshipOptions?.[relationship.key] ?? [];
+            if (!opciones.length) return null;
+            const key = `${relationship.key}_id`;
+            return (
+              <label className="field" key={key}>
+                <span className="field-label">{relationship.label}</span>
+                <select className="control" defaultValue={query.filters[key] ?? ""} name={`f_${key}`}>
+                  <option value="">Todos</option>
+                  {opciones.map((opcion) => (
+                    <option key={opcion.id} value={opcion.id}>{opcion.label}</option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
           {fields.map((field) => (
             <label className="field" key={field.key}>
               <span className="field-label">{field.label}</span>
