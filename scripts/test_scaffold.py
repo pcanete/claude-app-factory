@@ -269,6 +269,32 @@ class ScaffoldTests(unittest.TestCase):
     def test_trigger_function_pins_search_path(self) -> None:
         self.assertIn("SET search_path = pg_catalog, public", compile_sql(self.spec))
 
+    def test_tags_field_is_an_indexed_array(self) -> None:
+        # Un texto con comas no se puede consultar por contenido: el punto del tipo es
+        # poder preguntar que registros llevan una etiqueta.
+        spec = copy.deepcopy(self.spec)
+        spec["entities"][0]["fields"].append({"key": "etiquetas", "label": "Etiquetas", "type": "tags"})
+        self.assertEqual(validate_spec(spec), [])
+        sql = compile_sql(spec)
+        self.assertIn('"etiquetas" text[]', sql)
+        self.assertIn("DEFAULT '{}'::text[]", sql)
+        self.assertIn("USING GIN", sql)
+        self.assertIn("cardinality(\"etiquetas\") <= 50", sql)
+
+    def test_tags_with_options_are_restricted_to_them(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["entities"][0]["fields"].append({
+            "key": "temas", "label": "Temas", "type": "tags",
+            "options": [{"key": "electrico", "label": "Eléctrico"}, {"key": "mecanico", "label": "Mecánico"}],
+        })
+        self.assertEqual(validate_spec(spec), [])
+        self.assertIn("<@ ARRAY['electrico', 'mecanico']::text[]", compile_sql(spec))
+
+    def test_tags_options_when_declared_cannot_be_empty(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["entities"][0]["fields"].append({"key": "temas", "label": "Temas", "type": "tags", "options": []})
+        self.assertTrue(any("options" in error for error in validate_spec(spec)))
+
 
 if __name__ == "__main__":
     unittest.main()

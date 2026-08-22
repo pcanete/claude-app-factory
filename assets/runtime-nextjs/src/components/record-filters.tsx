@@ -3,6 +3,17 @@ import type { ListRecordOptions } from "@/lib/repository";
 import { relationFields, type EntitySpec, type FieldSpec } from "@/lib/spec";
 
 function FilterControl({ field, value }: { field: FieldSpec; value: string }) {
+  if (field.type === "tags") {
+    if (field.options?.length) {
+      return (
+        <select className="control" defaultValue={value} name={`f_${field.key}`}>
+          <option value="">Todas</option>
+          {field.options.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+        </select>
+      );
+    }
+    return <input className="control" defaultValue={value} name={`f_${field.key}`} placeholder="Etiqueta" type="text" />;
+  }
   if (field.type === "enum") {
     return (
       <select className="control" defaultValue={value} name={`f_${field.key}`}>

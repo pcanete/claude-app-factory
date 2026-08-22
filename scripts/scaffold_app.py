@@ -27,6 +27,7 @@ FIELD_TYPES = {
     "enum",
     "file",
     "json",
+    "tags",
 }
 VIEW_TYPES = {"table", "form", "detail", "dashboard", "calendar", "kanban"}
 ACTIONS = {"list", "read", "create", "update", "delete"}
@@ -311,6 +312,10 @@ def validate_spec(spec: Any) -> list[str]:
             field_type = field.get("type")
             if field_type not in FIELD_TYPES:
                 errors.append(f"{field_path}.type is not supported in AppSpec v0.")
+            if field_type == "tags" and "options" in field:
+                options = field.get("options")
+                if not isinstance(options, list) or not options:
+                    errors.append(f"{field_path}.options must be a non-empty array when declared.")
             if field_type == "enum":
                 options = field.get("options")
                 if not isinstance(options, list) or not options:
@@ -730,6 +735,9 @@ def sql_type(field: dict[str, Any]) -> str:
         "enum": "text",
         "file": "jsonb",
         "json": "jsonb",
+        # Un arreglo nativo: se puede indexar y consultar por contenido, cosa que un
+        # texto con comas no permite.
+        "tags": "text[]",
     }[field["type"]]
 
 
@@ -850,9 +858,23 @@ def compile_sql(spec: dict[str, Any]) -> str:
             default_value = sql_default(field)
             if default_value is not None:
                 parts.append(f"DEFAULT {default_value}")
+            elif field["type"] == "tags":
+                parts.append("DEFAULT '{}'::text[]")
             if field.get("unique"):
                 parts.append("UNIQUE")
             columns.append(" ".join(parts))
+            if field["type"] == "tags":
+                nombre = sql_identifier(field["key"])
+                if field.get("options"):
+                    valores = ", ".join(sql_string(option["key"]) for option in field["options"])
+                    constraints.append(
+                        f"  CONSTRAINT {sql_identifier(database_object_name('ck', entity['key'], field['key']))} "
+                        f"CHECK ({nombre} <@ ARRAY[{valores}]::text[])"
+                    )
+                constraints.append(
+                    f"  CONSTRAINT {sql_identifier(database_object_name('ckmax', entity['key'], field['key']))} "
+                    f"CHECK (cardinality({nombre}) <= 50)"
+                )
             if field["type"] == "enum":
                 values = ", ".join(sql_string(option["key"]) for option in field["options"])
                 constraints.append(
@@ -902,6 +924,16 @@ def compile_sql(spec: dict[str, Any]) -> str:
                 ]
             )
         for field in entity["fields"]:
+            if field["type"] == "tags":
+                index_name = database_object_name("ix", entity["key"], field["key"])
+                lines.extend(
+                    [
+                        f"CREATE INDEX {sql_identifier(index_name)}",
+                        f"  ON {sql_identifier(entity['key'])} USING GIN ({sql_identifier(field['key'])});",
+                        "",
+                    ]
+                )
+                continue
             if field.get("searchable"):
                 index_name = database_object_name("ix", entity["key"], field["key"])
                 lines.extend(

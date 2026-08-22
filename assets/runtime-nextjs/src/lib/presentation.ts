@@ -17,6 +17,13 @@ export function formatDateTimeValue(value: unknown, locale = "es-AR") {
 
 export function formatFieldValue(field: FieldSpec, value: unknown, locale = "es-AR") {
   if (value === null || value === undefined || value === "") return "—";
+  if (field.type === "tags") {
+    const etiquetas = Array.isArray(value) ? (value as string[]) : [];
+    if (!etiquetas.length) return "—";
+    // Con opciones declaradas se muestra la etiqueta legible, no la clave interna.
+    const legible = new Map((field.options ?? []).map((option) => [option.key, option.label]));
+    return etiquetas.map((etiqueta) => legible.get(etiqueta) ?? etiqueta).join(", ");
+  }
   if (field.type === "enum") {
     return field.options?.find((option) => option.key === String(value))?.label ?? String(value);
   }

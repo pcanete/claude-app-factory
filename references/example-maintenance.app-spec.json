@@ -81,6 +81,32 @@
               "label": "Fuera de servicio"
             }
           ]
+        },
+        {
+          "key": "etiquetas",
+          "label": "Etiquetas",
+          "type": "tags",
+          "searchable": true,
+          "help": "Libres, separadas por coma"
+        },
+        {
+          "key": "temas",
+          "label": "Temas",
+          "type": "tags",
+          "options": [
+            {
+              "key": "electrico",
+              "label": "Eléctrico"
+            },
+            {
+              "key": "mecanico",
+              "label": "Mecánico"
+            },
+            {
+              "key": "seguridad",
+              "label": "Seguridad"
+            }
+          ]
         }
       ],
       "relationships": [

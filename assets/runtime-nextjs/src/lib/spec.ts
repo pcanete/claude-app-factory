@@ -12,7 +12,8 @@ export type FieldType =
   | "url"
   | "enum"
   | "file"
-  | "json";
+  | "json"
+  | "tags";
 
 export type FieldSpec = {
   key: string;

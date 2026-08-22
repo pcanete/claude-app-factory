@@ -39,6 +39,39 @@ function FieldControl({ field, value }: { field: FieldSpec; value: unknown }) {
       </select>
     );
   }
+  if (field.type === "tags") {
+    const seleccionadas = Array.isArray(value) ? (value as string[]) : [];
+    // Con opciones declaradas se elige de una lista: no hay forma de escribir mal una
+    // etiqueta. Sin opciones se escriben libremente, separadas por coma.
+    if (field.options?.length) {
+      return (
+        <div className="tag-options">
+          {field.options.map((option) => (
+            <label className="checkbox" key={option.key}>
+              <input
+                defaultChecked={seleccionadas.includes(option.key)}
+                name={field.key}
+                type="checkbox"
+                value={option.key}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <input
+        className="control"
+        defaultValue={seleccionadas.join(", ")}
+        id={field.key}
+        name={field.key}
+        placeholder="Separadas por coma"
+        required={field.required}
+        type="text"
+      />
+    );
+  }
   if (field.type === "long_text" || field.type === "json" || field.type === "file") {
     return <textarea className="control" defaultValue={inputValue(field, value)} id={field.key} name={field.key} required={field.required} />;
   }

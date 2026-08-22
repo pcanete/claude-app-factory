@@ -57,7 +57,15 @@ function listWhere(entity: EntitySpec, options: ListRecordOptions) {
   const conditions: string[] = [];
   if (options.search?.trim() && searchable.length) {
     values.push(`%${options.search.trim()}%`);
-    conditions.push(`(${searchable.map((field) => `CAST(${identifier(field.key)} AS text) ILIKE $${values.length}`).join(" OR ")})`);
+    conditions.push(
+      `(${searchable
+        .map((field) =>
+          field.type === "tags"
+            ? `array_to_string(${identifier(field.key)}, ' ') ILIKE $${values.length}`
+            : `CAST(${identifier(field.key)} AS text) ILIKE $${values.length}`,
+        )
+        .join(" OR ")})`,
+    );
   }
   // Filtrar por la relación es lo que permite pedir "lo de este cliente". Se acepta
   // tanto `client` como `client_id`, igual que al escribir, y sólo por identificador
@@ -84,7 +92,14 @@ function listWhere(entity: EntitySpec, options: ListRecordOptions) {
     const field = fieldMap.get(fieldKey);
     const filter = filterValue;
     if (!field || !filter) continue;
-    if (field.type === "boolean") {
+    if (field.type === "tags") {
+      // Varias etiquetas separadas por coma se piden juntas: el registro debe tenerlas
+      // todas. Es lo que se espera al acumular filtros.
+      const pedidas = filter.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+      if (!pedidas.length) continue;
+      values.push(pedidas);
+      conditions.push(`${identifier(field.key)} @> $${values.length}::text[]`);
+    } else if (field.type === "boolean") {
       if (!new Set(["true", "false"]).has(filter)) continue;
       values.push(filter === "true");
       conditions.push(`${identifier(field.key)} = $${values.length}`);
@@ -212,8 +227,42 @@ export async function relationshipOptions(entity: EntitySpec) {
   return Object.fromEntries(entries) as Record<string, Array<{ id: string; label: string }>>;
 }
 
+/**
+ * Etiquetas normalizadas.
+ *
+ * Sin esto, "Urgente", "urgente" y " urgente " conviven como tres etiquetas y
+ * cualquier consulta por una de ellas devuelve una parte de lo que debería. Se
+ * normaliza a minúsculas, se recorta y se quitan repetidas conservando el orden.
+ */
+function parseTags(field: FieldSpec, raw: unknown): string[] {
+  const bruto = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(",")
+      : [];
+  const vistas = new Set<string>();
+  const salida: string[] = [];
+  for (const item of bruto) {
+    if (typeof item !== "string") throw new Error(`${field.label}: cada etiqueta debe ser texto.`);
+    const valor = item.trim().toLowerCase();
+    if (!valor) continue;
+    if (valor.length > 48) throw new Error(`${field.label}: "${valor.slice(0, 20)}…" supera 48 caracteres.`);
+    if (vistas.has(valor)) continue;
+    vistas.add(valor);
+    salida.push(valor);
+  }
+  if (salida.length > 50) throw new Error(`${field.label}: no más de 50 etiquetas por registro.`);
+  const permitidas = field.options?.map((option) => option.key);
+  if (permitidas) {
+    const invalida = salida.find((valor) => !permitidas.includes(valor));
+    if (invalida) throw new Error(`${field.label}: "${invalida}" no es una opción válida.`);
+  }
+  return salida;
+}
+
 function parseScalar(field: FieldSpec, raw: FormDataEntryValue | null, mode: "create" | "update") {
   if (field.type === "boolean") return raw !== null;
+  if (field.type === "tags") return parseTags(field, typeof raw === "string" ? raw : "");
   const value = typeof raw === "string" ? raw.trim() : "";
   if (!value) {
     if (field.required && !(mode === "create" && "default" in field)) {
@@ -249,6 +298,7 @@ function parseObjectScalar(field: FieldSpec, raw: unknown, mode: "create" | "upd
     if (field.required) throw new Error(`El campo ${field.label} es obligatorio.`);
     return null;
   }
+  if (field.type === "tags") return parseTags(field, raw);
   if (field.type === "boolean") {
     if (typeof raw !== "boolean") throw new Error(`${field.label} debe ser verdadero o falso.`);
     return raw;

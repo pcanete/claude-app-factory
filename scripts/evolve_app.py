@@ -76,9 +76,33 @@ def compile_column(field_spec: dict[str, Any]) -> str:
     default_value = sql_default(field_spec)
     if default_value is not None:
         parts.append(f"DEFAULT {default_value}")
+    elif field_spec["type"] == "tags":
+        parts.append("DEFAULT '{}'::text[]")
     if field_spec.get("unique"):
         parts.append("UNIQUE")
     return " ".join(parts)
+
+
+def compile_tags_statements(entity_key: str, field_spec: dict[str, Any]) -> list[str]:
+    """Restricciones e índice de un campo de etiquetas que llega por evolución."""
+    nombre = sql_identifier(field_spec["key"])
+    tabla = sql_identifier(entity_key)
+    sentencias: list[str] = []
+    if field_spec.get("options"):
+        valores = ", ".join(sql_string(option["key"]) for option in field_spec["options"])
+        restriccion = database_object_name("ck", entity_key, field_spec["key"])
+        sentencias.append(
+            f"ALTER TABLE {tabla} ADD CONSTRAINT {sql_identifier(restriccion)} "
+            f"CHECK ({nombre} <@ ARRAY[{valores}]::text[]);"
+        )
+    tope = database_object_name("ckmax", entity_key, field_spec["key"])
+    sentencias.append(
+        f"ALTER TABLE {tabla} ADD CONSTRAINT {sql_identifier(tope)} "
+        f"CHECK (cardinality({nombre}) <= 50);"
+    )
+    indice = database_object_name("ix", entity_key, field_spec["key"])
+    sentencias.append(f"CREATE INDEX {sql_identifier(indice)} ON {tabla} USING GIN ({nombre});")
+    return sentencias
 
 
 def compile_enum_constraint(entity_key: str, field_spec: dict[str, Any]) -> str:
@@ -105,6 +129,19 @@ def compile_new_entity_table(entity: dict[str, Any]) -> list[str]:
             constraints.append(
                 f"  CONSTRAINT {sql_identifier(constraint)} "
                 f"CHECK ({sql_identifier(field_spec['key'])} IN ({values}))"
+            )
+        if field_spec["type"] == "tags":
+            nombre = sql_identifier(field_spec["key"])
+            if field_spec.get("options"):
+                valores = ", ".join(sql_string(option["key"]) for option in field_spec["options"])
+                restriccion = database_object_name("ck", entity["key"], field_spec["key"])
+                constraints.append(
+                    f"  CONSTRAINT {sql_identifier(restriccion)} "
+                    f"CHECK ({nombre} <@ ARRAY[{valores}]::text[])"
+                )
+            tope = database_object_name("ckmax", entity["key"], field_spec["key"])
+            constraints.append(
+                f"  CONSTRAINT {sql_identifier(tope)} CHECK (cardinality({nombre}) <= 50)"
             )
     for relationship in entity.get("relationships", []):
         if relationship["type"] != "belongs_to":
@@ -317,7 +354,9 @@ def plan_existing_entity(
         )
         if field_spec["type"] == "enum":
             plan.sql.append(compile_enum_constraint(entity_key, field_spec))
-        if field_spec.get("searchable"):
+        if field_spec["type"] == "tags":
+            plan.sql.extend(compile_tags_statements(entity_key, field_spec))
+        elif field_spec.get("searchable"):
             plan.sql.append(compile_search_index(entity_key, field_key))
         plan.changes.append(f"Field added: {path}")
     for field_key in sorted(old_fields.keys() & new_fields.keys()):
