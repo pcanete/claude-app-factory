@@ -92,4 +92,13 @@ export async function finishAgentToolEvent(input: {
 
 
 /** Alcances de una persona operando por MCP: el techo lo pone su rol, no la credencial. */
-export const USER_SCOPES = ["schema:read", "records:read", "records:write", "records:delete"];
+// Una persona que entra por OAuth no elige alcances: los trae todos, y lo que
+// efectivamente puede hacer lo decide su rol, igual que sentada frente al panel.
+export const USER_SCOPES = [
+  "schema:read",
+  "records:read",
+  "records:write",
+  "records:delete",
+  "settings:read",
+  "settings:write",
+];

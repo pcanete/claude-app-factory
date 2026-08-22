@@ -23,6 +23,11 @@ jobs:
         run: |
           python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/reference-app
           python scripts/verify_scaffold.py /tmp/reference-app
+      # La guarda decide si un despliegue puede borrar datos. Si se rompe en silencio,
+      # se rompe hacia el lado peligroso: deja pasar.
+      - name: The destructive-migration guard holds
+        working-directory: /tmp/reference-app
+        run: node scripts/test-destructive-guard.mjs
 
   runtime:
     # The compiler tests never execute the generated TypeScript. Without this job a
@@ -99,6 +104,35 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:smoke
+      # La prueba que importa de la guarda no es que analice SQL: es que frene un
+      # despliegue real contra datos reales, y que no frene cuando no hay nada que
+      # perder. Las dos mitades, contra PostgreSQL.
+      - name: A migration that drops an EMPTY table still deploys
+        working-directory: /tmp/reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: |
+          node -e "const pg=require('pg');(async()=>{const c=new pg.Client(process.env.DATABASE_URL);await c.connect();await c.query('CREATE TABLE descartable (id int)');await c.end();})()"
+          echo 'DROP TABLE IF EXISTS descartable;' > database/custom/500_descartar_vacia.sql
+          pnpm db:apply
+      - name: A migration that drops a table WITH DATA is refused
+        working-directory: /tmp/reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: |
+          node -e "const pg=require('pg');(async()=>{const c=new pg.Client(process.env.DATABASE_URL);await c.connect();await c.query('CREATE TABLE valiosa (id int)');await c.query('INSERT INTO valiosa VALUES (1)');await c.end();})()"
+          echo 'DROP TABLE IF EXISTS valiosa;' > database/custom/501_descartar_con_datos.sql
+          if pnpm db:apply; then
+            echo "La guarda dejo pasar una migracion que borra datos."
+            exit 1
+          fi
+          node -e "const pg=require('pg');(async()=>{const c=new pg.Client(process.env.DATABASE_URL);await c.connect();const r=await c.query('SELECT count(*)::int AS n FROM valiosa');if(r.rows[0].n!==1)throw new Error('Los datos no sobrevivieron al intento.');await c.end();console.log('Los datos siguen ahi.')})()"
+      - name: The same migration applies once a person authorizes it by name
+        working-directory: /tmp/reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+          ALLOW_DESTRUCTIVE_MIGRATIONS: custom/501_descartar_con_datos.sql
+        run: pnpm db:apply
 
   evolution:
     # Una evolución que rompe los datos existentes es peor que no tener evolución.

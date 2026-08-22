@@ -3,6 +3,12 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import pg from "pg";
 import { databaseConfig } from "./db-connection.mjs";
+import {
+  mensajeDeBloqueo,
+  migracionesAutorizadas,
+  operacionesConDatos,
+  operacionesDestructivas,
+} from "./destructive-guard.mjs";
 
 const { Client } = pg;
 
@@ -50,6 +56,8 @@ try {
     )
   `);
 
+  const autorizadas = migracionesAutorizadas();
+
   for (const migration of migrations) {
     const { file, name, directory } = migration;
     const source = await readFile(resolve(directory, file), "utf8");
@@ -62,6 +70,15 @@ try {
       console.log(`skip ${name}`);
       continue;
     }
+    // Una migracion que borra datos no se aplica sola durante un despliegue. La
+    // guarda mira la base, no el texto: si el objeto no existe o esta vacio, no hay
+    // nada que perder y sigue de largo.
+    const destructivas = operacionesDestructivas(source);
+    if (destructivas.length && !autorizadas.has(name)) {
+      const graves = await operacionesConDatos(client, destructivas);
+      if (graves.length) throw new Error(mensajeDeBloqueo(name, graves));
+    }
+
     // El archivo no abre su propia transaccion: la abre el runner para que el
     // efecto de la migracion y su registro se confirmen o se descarten juntos.
     try {

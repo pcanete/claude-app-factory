@@ -28,7 +28,7 @@ export async function saveSettingAction(_estado: SettingsState, formData: FormDa
   try {
     const value = leerValor(String(formData.get("value") ?? ""));
     await withTransaction(async (client) => {
-      const guardada = await setSetting(client, { namespace, key, value, actorId: actor.id });
+      const guardada = await setSetting(client, { namespace, key, value, actor: { kind: "user", id: actor.id } });
       await recordAuditEvent(client, {
         actorId: actor.id,
         entityKey: "app_setting",

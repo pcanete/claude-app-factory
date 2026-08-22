@@ -60,6 +60,17 @@ To change platform behavior, import it from a feature and wrap it. To change gen
   platform behaviour goes in the next numbered platform migration, never in an existing one.
 - Changes to AppSpec create a new migration; they do not rewrite an applied migration.
 - Custom migrations start at `500` so they always apply after generated and platform migrations, and must declare their dependencies.
+- **A migration that destroys data does not apply on its own during a deployment.** The migration
+  runner executes inside the build, which is safe while migrations only add. `scripts/destructive-guard.mjs`
+  inspects each pending migration for `DROP TABLE`, `TRUNCATE`, `DROP COLUMN`, `DELETE` without `WHERE`,
+  and `DROP SCHEMA`/`DROP DATABASE` — then asks the database whether there is anything to lose. Dropping a
+  table that does not exist, or one that exists and is empty, deploys normally; dropping a table that holds
+  rows stops the deployment. Anything it cannot resolve — an unparseable name, a failed query — counts as
+  risk, not as permission.
+- To authorize destruction, name the migration explicitly: `ALLOW_DESTRUCTIVE_MIGRATIONS="custom/501_x.sql"`.
+  Authorization is per migration, never a blanket switch, so it cannot stay on by accident. Retiring a
+  feature is two deployments, not one: decouple the code and ship, then remove the data as a separate,
+  backed-up step.
 - Migration files must not open their own transaction. `scripts/apply-migrations.mjs` wraps each file together with its ledger entry in a single transaction, so a migration and the record that it ran commit or roll back together.
 - Applied migrations are checksummed; editing one after it ran is refused, not silently reapplied.
 - Destructive schema changes require explicit review and a rollback or data-migration plan.

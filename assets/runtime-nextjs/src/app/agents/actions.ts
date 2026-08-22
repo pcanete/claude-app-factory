@@ -21,10 +21,22 @@ export type AgentCreateState = {
   agentName?: string;
 };
 
+// La configuración del sistema no es "un poco más de datos": es la superficie que
+// cambia cómo se comporta la aplicación. Por eso no viene incluida en el nivel más
+// alto de acceso a registros -- se elige aparte y a propósito. Aun elegida, sólo
+// sirve si además el rol tiene la capacidad administrativa.
 const accessScopes = {
   read: ["schema:read", "records:read"],
   write: ["schema:read", "records:read", "records:write"],
   full: ["schema:read", "records:read", "records:write", "records:delete"],
+  admin: [
+    "schema:read",
+    "records:read",
+    "records:write",
+    "records:delete",
+    "settings:read",
+    "settings:write",
+  ],
 } as const;
 
 function isUniqueViolation(error: unknown) {

@@ -23,14 +23,17 @@ const expiresDays = expiresDaysRaw === undefined ? null : Number(expiresDaysRaw)
 if (expiresDays !== null && (!Number.isInteger(expiresDays) || expiresDays < 1 || expiresDays > 3650)) {
   throw new Error("--expires-days debe estar entre 1 y 3650.");
 }
-if (!new Set(["read", "write", "full"]).has(access)) {
-  throw new Error("--access debe ser read, write o full.");
+if (!new Set(["read", "write", "full", "admin"]).has(access)) {
+  throw new Error("--access debe ser read, write, full o admin.");
 }
+// `admin` suma la configuracion del sistema, que no viene con `full`: cambiar como se
+// comporta la aplicacion es otra superficie que leer y escribir sus datos.
 const scopes = [
   "schema:read",
   "records:read",
-  ...(access === "write" || access === "full" ? ["records:write"] : []),
-  ...(access === "full" ? ["records:delete"] : []),
+  ...(access === "write" || access === "full" || access === "admin" ? ["records:write"] : []),
+  ...(access === "full" || access === "admin" ? ["records:delete"] : []),
+  ...(access === "admin" ? ["settings:read", "settings:write"] : []),
 ];
 
 

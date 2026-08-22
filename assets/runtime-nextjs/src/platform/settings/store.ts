@@ -24,8 +24,16 @@ export type Setting = {
   value: unknown;
   updated_at: string;
   updated_by: string | null;
+  updated_by_agent: string | null;
   updated_by_name: string | null;
 };
+
+/**
+ * Quién dejó un valor. Una persona y un agente son actores distintos y viven en
+ * tablas distintas, así que no comparten columna: mezclarlos obligaba a guardar
+ * `NULL` cada vez que escribía un agente, y con eso se perdía el autor.
+ */
+export type ActorDeConfiguracion = { kind: "user" | "agent"; id: string };
 
 function validarNombre(namespace: string, key: string) {
   if (!NOMBRE.test(namespace)) {
@@ -57,9 +65,11 @@ export async function listSettings(namespace?: string) {
             s.value,
             s.updated_at,
             s.updated_by,
-            actor.display_name AS updated_by_name
+            s.updated_by_agent,
+            COALESCE(actor.display_name, agente.name) AS updated_by_name
        FROM app_setting AS s
        LEFT JOIN app_user AS actor ON actor.id = s.updated_by
+       LEFT JOIN app_agent AS agente ON agente.id = s.updated_by_agent
       ${filtrado ? "WHERE s.namespace = $1" : ""}
       ORDER BY s.namespace ASC, s.key ASC`,
     filtrado ? [namespace] : [],
@@ -69,10 +79,11 @@ export async function listSettings(namespace?: string) {
 export async function getSetting(namespace: string, key: string) {
   validarNombre(namespace, key);
   const filas = await sql<Setting>(
-    `SELECT s.namespace, s.key, s.value, s.updated_at, s.updated_by,
-            actor.display_name AS updated_by_name
+    `SELECT s.namespace, s.key, s.value, s.updated_at, s.updated_by, s.updated_by_agent,
+            COALESCE(actor.display_name, agente.name) AS updated_by_name
        FROM app_setting AS s
        LEFT JOIN app_user AS actor ON actor.id = s.updated_by
+       LEFT JOIN app_agent AS agente ON agente.id = s.updated_by_agent
       WHERE s.namespace = $1 AND s.key = $2
       LIMIT 1`,
     [namespace, key],
@@ -82,17 +93,28 @@ export async function getSetting(namespace: string, key: string) {
 
 export async function setSetting(
   client: PoolClient,
-  input: { namespace: string; key: string; value: unknown; actorId?: string | null },
+  input: { namespace: string; key: string; value: unknown; actor?: ActorDeConfiguracion | null },
 ) {
   validarNombre(input.namespace, input.key);
+  const actor = input.actor ?? null;
   const filas = await transactionSql<Setting>(
     client,
-    `INSERT INTO app_setting (namespace, key, value, updated_by, updated_at)
-     VALUES ($1, $2, $3::jsonb, $4, now())
+    `INSERT INTO app_setting (namespace, key, value, updated_by, updated_by_agent, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, $5, now())
      ON CONFLICT (namespace, key)
-     DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()
-     RETURNING namespace, key, value, updated_at, updated_by, NULL::text AS updated_by_name`,
-    [input.namespace, input.key, serializar(input.value), input.actorId ?? null],
+     DO UPDATE SET value = EXCLUDED.value,
+                   updated_by = EXCLUDED.updated_by,
+                   updated_by_agent = EXCLUDED.updated_by_agent,
+                   updated_at = now()
+     RETURNING namespace, key, value, updated_at, updated_by, updated_by_agent,
+               NULL::text AS updated_by_name`,
+    [
+      input.namespace,
+      input.key,
+      serializar(input.value),
+      actor?.kind === "user" ? actor.id : null,
+      actor?.kind === "agent" ? actor.id : null,
+    ],
   );
   return filas[0];
 }

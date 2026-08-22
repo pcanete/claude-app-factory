@@ -17,7 +17,7 @@ import {
   recordInputFromObject,
   updateRecord,
 } from "@/lib/repository";
-import { recordAuditEvent } from "@/lib/audit";
+import { recordAuditEvent, type AuditAction } from "@/lib/audit";
 import {
   deleteAttachmentsForRecord,
   getAttachmentContent,
@@ -26,7 +26,13 @@ import {
 } from "@/lib/attachments";
 import { applyRules } from "@/lib/rules";
 import { relationFields, requireEntity, runtimeSpec } from "@/lib/spec";
-import { deleteSetting, getSetting, listSettings, setSetting } from "@/platform/settings/store";
+import {
+  deleteSetting,
+  getSetting,
+  listSettings,
+  setSetting,
+  type ActorDeConfiguracion,
+} from "@/platform/settings/store";
 import { withTransaction } from "@/lib/db";
 import { generatedCapabilities } from "@/generated/permissions";
 
@@ -175,12 +181,56 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
   );
 
   // La configuración del sistema es una primitiva propia: pares clave/valor con
-  // alcance global. Está fuera de la AppSpec a propósito --no es dominio-- así que su
-  // permiso no sale de la matriz de entidades sino de la capacidad administrativa del
-  // rol del agente.
-  const puedeAdministrar = generatedCapabilities
+  // alcance global. Está fuera de la AppSpec a propósito --no es dominio-- así que la
+  // capacidad no sale de la matriz de entidades sino del rol de quien opera.
+  //
+  // Pero la capacidad sola no alcanza. Sobre entidades siempre hicieron falta las dos
+  // cosas -- el alcance de la credencial Y el permiso del rol -- y la configuración
+  // quedó afuera: con sólo mirar el rol, un token de lectura emitido para un
+  // administrador podía reescribir la configuración del sistema. Acá van juntas.
+  const capacidadAdministrativa = generatedCapabilities
     ? (generatedCapabilities[agent.roleKey] ?? []).includes("manage_users")
     : false;
+  const puedeLeerConfiguracion = agent.scopes.includes("settings:read");
+  const puedeAdministrar = capacidadAdministrativa && agent.scopes.includes("settings:write");
+
+  /** El autor que corresponde a esta credencial, en la columna que le toca. */
+  const actorDeConfiguracion: ActorDeConfiguracion = { kind: agent.kind, id: agent.id };
+
+  /**
+   * Deja el cambio de configuración en la misma auditoría que usa el panel, con la
+   * identidad que corresponda: una persona en `actor_id`, un agente en `agent_id`.
+   * La auditoría exige exactamente una de las dos, y acá se cumple por construcción.
+   */
+  async function registrarConfiguracion(
+    client: Parameters<typeof recordAuditEvent>[0],
+    evento: { eventId: string; action: AuditAction; changes: unknown },
+  ) {
+    await recordAuditEvent(client, {
+      ...(agent.kind === "agent"
+        ? { agentId: agent.id, agentEventId: evento.eventId || undefined }
+        : { actorId: agent.id }),
+      entityKey: "app_setting",
+      recordId: null,
+      action: evento.action,
+      changes: evento.changes,
+    });
+  }
+
+  function exigirLectura() {
+    if (!puedeLeerConfiguracion) {
+      throw new Error("La credencial no tiene alcance para leer la configuración del sistema (settings:read).");
+    }
+  }
+
+  function exigirEscritura() {
+    if (!capacidadAdministrativa) {
+      throw new Error("El rol no tiene permiso para cambiar la configuración del sistema.");
+    }
+    if (!agent.scopes.includes("settings:write")) {
+      throw new Error("La credencial no tiene alcance para cambiar la configuración del sistema (settings:write).");
+    }
+  }
 
   server.registerTool(
     "list_settings",
@@ -190,6 +240,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       inputSchema: z.object({ namespace: settingNameSchema.optional() }),
     },
     async ({ namespace }) => traced(agent, "list_settings", { namespace }, async () => {
+      exigirLectura();
       const settings = await listSettings(namespace);
       return { value: { namespace: namespace ?? null, settings }, resultCount: settings.length };
     }),
@@ -202,6 +253,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       inputSchema: z.object({ namespace: settingNameSchema, key: settingNameSchema }),
     },
     async ({ namespace, key }) => traced(agent, "get_setting", { namespace, key }, async () => {
+      exigirLectura();
       const setting = await getSetting(namespace, key);
       return { value: { namespace, key, found: Boolean(setting), setting }, resultCount: setting ? 1 : 0 };
     }),
@@ -218,13 +270,20 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
         value: z.unknown(),
       }),
     },
-    async ({ namespace, key, value }) => traced(agent, "set_setting", { namespace, key }, async () => {
-      if (!puedeAdministrar) {
-        throw new Error("El agente no tiene permiso para cambiar la configuración del sistema.");
-      }
-      const setting = await withTransaction((client) =>
-        setSetting(client, { namespace, key, value, actorId: null }),
-      );
+    async ({ namespace, key, value }) => traced(agent, "set_setting", { namespace, key }, async (eventId) => {
+      exigirEscritura();
+      // La misma operación desde el panel deja un registro de auditoría con su autor.
+      // Por MCP no dejaba ninguno: la garantía no puede depender de por qué puerta se
+      // entró.
+      const setting = await withTransaction(async (client) => {
+        const guardada = await setSetting(client, { namespace, key, value, actor: actorDeConfiguracion });
+        await registrarConfiguracion(client, {
+          eventId,
+          action: "setting_save",
+          changes: { namespace: guardada.namespace, key: guardada.key },
+        });
+        return guardada;
+      });
       return { value: { namespace, key, setting }, resultCount: 1 };
     }),
   );
@@ -239,11 +298,18 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
         confirm: z.literal(true).describe("Confirmación explícita de que la opción debe eliminarse"),
       }),
     },
-    async ({ namespace, key }) => traced(agent, "delete_setting", { namespace, key }, async () => {
-      if (!puedeAdministrar) {
-        throw new Error("El agente no tiene permiso para cambiar la configuración del sistema.");
-      }
-      const eliminada = await withTransaction((client) => deleteSetting(client, namespace, key));
+    async ({ namespace, key }) => traced(agent, "delete_setting", { namespace, key }, async (eventId) => {
+      exigirEscritura();
+      const eliminada = await withTransaction(async (client) => {
+        const previa = await deleteSetting(client, namespace, key);
+        if (!previa) return null;
+        await registrarConfiguracion(client, {
+          eventId,
+          action: "setting_delete",
+          changes: { namespace, key, previous: previa.value },
+        });
+        return previa;
+      });
       if (!eliminada) throw new Error(`La opción ${namespace}.${key} no existe.`);
       return { value: { namespace, key, deleted: true, previous: eliminada.value }, resultCount: 1 };
     }),

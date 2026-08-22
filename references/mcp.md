@@ -48,9 +48,17 @@ Los niveles disponibles son:
 
 - `read`: `schema:read` y `records:read`;
 - `write`: agrega `records:write` para crear y actualizar;
-- `full`: agrega también `records:delete`.
+- `full`: agrega también `records:delete`;
+- `admin`: agrega `settings:read` y `settings:write`.
 
-El token se imprime una sola vez. Guardalo como secreto del agente consumidor; PostgreSQL conserva sólo su hash SHA-256. El rol debe existir en AppSpec. Una operación se autoriza únicamente cuando coinciden el alcance de la credencial y el permiso `list`, `read`, `create`, `update` o `delete` de ese rol sobre la entidad.
+La configuración del sistema no viene incluida en `full` a propósito: cambiar cómo se
+comporta la aplicación es una superficie distinta de leer y escribir sus datos, y se
+otorga eligiéndola. Aun otorgada, sólo sirve si además el rol de la credencial tiene la
+capacidad `manage_users`: el alcance habilita, el rol autoriza, y hacen falta los dos.
+
+El token se imprime una sola vez. Guardalo como secreto del agente consumidor; PostgreSQL conserva sólo su hash SHA-256. El rol debe existir en AppSpec. Una operación se autoriza únicamente cuando coinciden el alcance de la credencial y el permiso `list`, `read`, `create`, `update` o `delete` de ese rol sobre la entidad. Lo mismo vale para la configuración del sistema: un token de sólo lectura emitido para un rol administrador no puede escribirla.
+
+Todo cambio de configuración por MCP queda en `app_audit_log` con la identidad de quien lo hizo —`agent_id` para una credencial de agente, `actor_id` para una persona por OAuth—, igual que si se hubiera hecho desde el panel.
 
 Conectá `https://<host>/api/mcp` con `Authorization: Bearer <token>`. En Vercel se admiten automáticamente la URL del deployment, la rama y el dominio estable indicado por `VERCEL_PROJECT_PRODUCTION_URL`. Configurá correctamente `NEXT_PUBLIC_APP_URL` y usá `MCP_ALLOWED_HOSTS` sólo para hosts adicionales explícitos.
 

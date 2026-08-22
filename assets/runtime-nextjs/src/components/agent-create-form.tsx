@@ -43,8 +43,12 @@ export function AgentCreateForm({ roles }: { roles: RoleOption[] }) {
               <option value="read">Sólo consultar</option>
               <option value="write">Consultar y modificar</option>
               <option value="full">Control total, incluso eliminar</option>
+              <option value="admin">Control total y configuración del sistema</option>
             </select>
-            <span className="field-help">Recomendado: consultar y modificar.</span>
+            <span className="field-help">
+              Recomendado: consultar y modificar. La configuración del sistema se otorga
+              aparte y sólo funciona si el rol elegido ya puede administrar.
+            </span>
           </label>
           <label className="field">
             <span className="field-label">Vencimiento</span>
