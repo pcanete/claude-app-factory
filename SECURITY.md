@@ -1,9 +1,9 @@
-# Security policy
+# Política de seguridad
 
-Do not report suspected vulnerabilities in a public issue and do not include real credentials, customer records, or production logs in a report.
+No reportes una vulnerabilidad sospechada en un issue público, y no incluyas en el reporte credenciales reales, registros de clientes ni logs de producción.
 
-Use GitHub's private vulnerability reporting for this repository when available. Include the affected version or commit, impact, minimal reproduction, and a proposed mitigation if known.
+Usá el reporte privado de vulnerabilidades de GitHub para este repositorio cuando esté disponible. Incluí la versión o el commit afectado, el impacto, la reproducción mínima y, si la conocés, una mitigación propuesta.
 
-Generated applications have independent owners and deployments. A vulnerability in a client extension should be reported to that application's owner; a vulnerability in the shared compiler or runtime template belongs here.
+Las aplicaciones generadas tienen dueños y despliegues independientes. Una vulnerabilidad en la extensión de un cliente se reporta a quien sea dueño de esa aplicación; una vulnerabilidad en el compilador compartido o en la plantilla del runtime va acá.
 
-Claude App Factory is an early-stage project. A generated application is not production-ready until its authentication, authorization, database, migration, backup, secret-management, and observability gates have been reviewed for its actual use case.
+Claude App Factory es un proyecto en etapa temprana. Una aplicación generada no está lista para producción hasta que se hayan revisado, para su caso de uso real, sus controles de autenticación, autorización, base de datos, migraciones, respaldos, manejo de secretos y observabilidad.

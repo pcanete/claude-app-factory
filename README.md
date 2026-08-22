@@ -1,33 +1,33 @@
 # Claude App Factory
 
-Claude App Factory turns a business request into an independent, single-tenant application foundation. It models the request as an **AppSpec** and generates ordinary Next.js and PostgreSQL source code that can be extended, deployed, and maintained without depending on the factory at runtime.
+Claude App Factory convierte un pedido de negocio en la base de una aplicación independiente, de un solo cliente. Modela el pedido como un **AppSpec** y genera código Next.js y PostgreSQL corriente, que se puede extender, desplegar y mantener sin depender de la fábrica en tiempo de ejecución.
 
-> En español: convierte un pedido de negocio en una base web neutral e independiente por cliente. No presupone que la aplicación sea un CRM, ERP ni otro vertical.
+No presupone que la aplicación sea un CRM, un ERP ni ningún otro vertical.
 
-## Origin
+## Origen
 
-This project began as [riel-app-factory](https://github.com/pcanete/riel-app-factory), authored with
-OpenAI Codex, and continues here as the Claude line: same MIT license and same author, developed and
-maintained independently. Both are engines for the same idea, and neither reads or writes the other.
-The history before the ownership-zones commit belongs to the original repository.
+Este proyecto empezó como [riel-app-factory](https://github.com/pcanete/riel-app-factory), escrito con
+OpenAI Codex, y sigue acá como la línea Claude: misma licencia MIT y mismo autor, desarrollado y
+mantenido de forma independiente. Los dos son motores de la misma idea, y ninguno lee ni escribe sobre
+el otro. La historia anterior al commit de zonas de propiedad pertenece al repositorio original.
 
-## What it generates
+## Qué genera
 
-- neutral entities, fields, relationships, roles, and server-side permissions;
-- PostgreSQL migrations, audited CRUD, imports/exports, and attachments;
-- table, kanban, calendar, and dashboard views;
-- deterministic validation and mutation rules;
-- Clerk authentication and application-level user management;
-- a key/value configuration primitive with JSON values, bounded and audited;
-- explicit extension zones for client-specific behavior;
-- an MCP endpoint where agents authenticate with their own hashed, expiring, scoped tokens, read and write under the AppSpec permissions of a role, and leave a per-tool trail;
-- incremental schema evolution that writes the next migration instead of rewriting an applied one.
+- entidades, campos, relaciones, roles y permisos verificados en el servidor;
+- migraciones de PostgreSQL, ABM auditado, importación y exportación, y archivos adjuntos;
+- vistas de tabla, kanban, calendario y tablero;
+- reglas de validación y de mutación deterministas;
+- autenticación con Clerk y administración de usuarios en la aplicación;
+- una primitiva de configuración clave/valor con valores JSON, acotada y auditada;
+- zonas de extensión explícitas para el comportamiento propio de cada cliente;
+- un endpoint MCP donde los agentes se autentican con credenciales propias —hasheadas, con vencimiento y con alcance—, leen y escriben bajo los permisos que el AppSpec le da a su rol, y dejan rastro por herramienta;
+- evolución incremental del esquema, que escribe la migración siguiente en vez de reescribir una ya aplicada.
 
-Every client application gets its own repository, database, deployment, credentials, and lifecycle. The generated application does not call Claude App Factory in production.
+Cada aplicación de cliente tiene su propio repositorio, su base de datos, su despliegue, sus credenciales y su ciclo de vida. La aplicación generada no llama a Claude App Factory en producción.
 
-## Quick start
+## Para empezar
 
-Requirements: Python 3.11+ for the factory, and Node.js 20+ plus PostgreSQL for the generated application.
+Hace falta Python 3.11 o superior para la fábrica, y Node.js 20 o superior más PostgreSQL para la aplicación generada.
 
 ```bash
 python scripts/test_scaffold.py
@@ -37,7 +37,7 @@ python scripts/scaffold_app.py \
 python scripts/verify_scaffold.py ../maintenance-demo
 ```
 
-Then enter the generated directory:
+Después, dentro del directorio generado:
 
 ```bash
 cp .env.example .env.local
@@ -47,73 +47,77 @@ pnpm db:smoke
 pnpm dev
 ```
 
-Set `ALLOW_UNSAFE_LOCAL_PREVIEW=true` only for local development. It enables the role selector at `/dev-access`; production always ignores it.
+`ALLOW_UNSAFE_LOCAL_PREVIEW=true` es sólo para desarrollo local: habilita el selector de roles en `/dev-access`, y producción siempre lo ignora.
 
-## From local validation to production
+## De la validación local a producción
 
-The supported production path uses Vercel, Neon PostgreSQL, and Clerk, but the generated code remains portable. A deployment is not complete until migrations, the first administrator, invitation-only authentication, permissions, health, and an authenticated browser flow have all been verified.
+El camino de producción soportado usa Vercel, PostgreSQL y Clerk, pero el código generado sigue siendo portable. Un despliegue no está terminado hasta haber verificado las migraciones, el primer administrador, el acceso sólo por invitación, los permisos, el estado de salud y un recorrido autenticado por el navegador.
 
-Read the complete [Vercel production runbook](references/deployment-vercel.md) before deploying. The generated app also includes its own `RUNTIME.md` and `.env.example` so it remains operable after leaving this repository.
+Leé el [manual de despliegue en Vercel](references/deployment-vercel.md) completo antes de desplegar. La aplicación generada incluye además su propio `RUNTIME.md` y su `.env.example`, así que sigue siendo operable después de salir de este repositorio.
 
-## Architecture boundary
+## La frontera de la arquitectura
 
-Three ownership zones:
+Tres zonas de propiedad:
 
-| Zone | Directories | Owner |
+| Zona | Directorios | Dueño |
 |---|---|---|
-| Generated | `src/generated/`, `database/generated/` | Compiled from `app-spec.json`; replaced on every build |
-| Platform | `src/platform/`, `database/platform/` | Ships and updates with the factory; never edited per client |
-| Client | `src/features/`, `src/components/custom/`, `database/custom/` | The application; never written by the factory |
+| Generada | `src/generated/`, `database/generated/` | Se compila desde `app-spec.json`; se reemplaza en cada build |
+| Plataforma | `src/platform/`, `database/platform/` | Viaja y se actualiza con la fábrica; nunca se edita por cliente |
+| Cliente | `src/features/`, `src/components/custom/`, `database/custom/` | La aplicación; la fábrica nunca escribe acá |
 
-- `app-spec.json` is the source of truth for generated structure.
-- Regeneration must never overwrite client-specific behavior.
-- To change platform behavior for one client, wrap it from a feature — do not edit it.
-- Integrations, approvals, external writes, and domain calculations require reviewed feature adapters.
+- `app-spec.json` es la fuente de verdad de todo lo generado.
+- Regenerar nunca puede pisar el comportamiento propio del cliente.
+- Para cambiar el comportamiento de la plataforma en un cliente, se lo envuelve desde una feature; no se lo edita.
+- Las integraciones, las aprobaciones, las escrituras a sistemas externos y los cálculos de dominio necesitan adaptadores revisados en la zona de cliente.
 
-Regeneration is implemented: `scripts/evolve_app.py` plans a change, reports what is blocked, and on
-`--apply` writes the next migration and refreshes only factory-owned artifacts. See
-[AppSpec evolution](references/evolution.md).
+La evolución del esquema está implementada: `scripts/evolve_app.py` planifica un cambio, informa qué queda bloqueado y, con `--apply`, escribe la migración siguiente y refresca sólo los artefactos que son de la fábrica. Ver [evolución del AppSpec](references/evolution.md).
 
-See [AppSpec v0](references/app-spec-v0.md) and the [extension contract](references/extension-contract.md).
+Ver también [AppSpec v0](references/app-spec-v0.md) y el [contrato de extensión](references/extension-contract.md).
 
-## Repository structure
+## Estructura del repositorio
 
 ```text
-SKILL.md                     Agent skill instructions
-references/                  AppSpec, extension, and deployment contracts
-scripts/                     Deterministic compiler and verification
-assets/runtime-nextjs/       Portable generated-application runtime
+SKILL.md                     Instrucciones de la skill del agente
+references/                  Contratos de AppSpec, extensión y despliegue
+scripts/                     Compilador determinista y verificación
+assets/runtime-nextjs/       Runtime portable de la aplicación generada
 ```
 
-CI validates three things on every push: the compiler tests, a typecheck and production build of the
-generated application, and the generated migrations applied to a real PostgreSQL with a CRUD smoke test
-over every entity.
+En cada push, CI valida cuatro cosas: las pruebas del compilador; el chequeo de tipos y el build de
+producción de la aplicación generada; las migraciones aplicadas contra un PostgreSQL real con una
+prueba de ABM sobre cada entidad; y una evolución completa que carga datos, cambia el esquema y
+comprueba que esos datos siguen ahí.
 
-## Security and data ownership
+## Seguridad y propiedad de los datos
 
-Never commit `.env.local`, provider credentials, database URLs, Clerk secrets, or `SETTINGS_ENCRYPTION_KEY`. Use a unique encryption key per deployed application and keep a recoverable copy in an approved secret manager: losing it makes stored user credentials unreadable.
+Nunca subas al repositorio `.env.local`, credenciales de proveedores, URLs de base de datos ni secretos de Clerk.
 
-Code backup does not replace database backup. Source lives in GitHub, application data in PostgreSQL, deployment configuration in the hosting provider, and identity configuration in Clerk. Each layer needs its own recovery plan.
+Una migración que borra datos no se aplica sola durante un despliegue: la guarda le pregunta a la base
+si hay algo que perder y, si lo hay, frena hasta que una persona autorice esa migración por nombre.
 
-See [SECURITY.md](SECURITY.md) before reporting a vulnerability.
+El respaldo del código no reemplaza al respaldo de la base. El código vive en GitHub, los datos de la aplicación en PostgreSQL, la configuración del despliegue en el proveedor de hosting y la configuración de identidad en Clerk. Cada capa necesita su propio plan de recuperación.
 
-## Project status
+Leé [SECURITY.md](SECURITY.md) antes de reportar una vulnerabilidad.
 
-Claude App Factory is an early foundation, not a hosted no-code product and not a blanket
-production-readiness guarantee.
+## Estado del proyecto
 
-What is proven today: the compiler is deterministic and tested, the generated application typechecks
-and builds, the generated migrations apply to a real PostgreSQL, and every generated entity survives
-a CRUD smoke test — all of it enforced on every push by CI.
+Claude App Factory es una base temprana. No es un producto no-code alojado ni una garantía general de
+que lo generado esté listo para producción.
 
-What is not built yet: regeneration over an existing project, row-level permissions, and
-`many_to_many` relationships. Each is documented where it matters rather than implied to work.
+Lo que está probado hoy: el compilador es determinista y tiene pruebas; la aplicación generada
+chequea tipos y compila; las migraciones generadas se aplican contra un PostgreSQL real; cada entidad
+generada sobrevive a una prueba de ABM; y una evolución del esquema conserva los datos que ya
+existían. Todo eso lo verifica CI en cada push.
 
-The safest contributions improve neutrality, determinism, portability, security, or verification
-without introducing shared multi-tenancy.
+Lo que todavía no está construido: actualizar la zona de plataforma de una aplicación ya generada sin
+copiar archivos a mano, los permisos a nivel de registro y las relaciones `many_to_many`. Cada
+limitación está documentada donde importa, en vez de dejar creer que funciona.
 
-Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md).
+Las contribuciones más seguras son las que mejoran la neutralidad, el determinismo, la portabilidad,
+la seguridad o la verificación sin introducir multi-tenencia compartida.
 
-## License
+Las contribuciones son bienvenidas; empezá por [CONTRIBUTING.md](CONTRIBUTING.md).
 
-[MIT](LICENSE) — use, modify, and distribute the project with attribution and without warranty.
+## Licencia
+
+[MIT](LICENSE) — usá, modificá y distribuí el proyecto con atribución y sin garantía.

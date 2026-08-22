@@ -1,21 +1,21 @@
 # AppSpec v0
 
-AppSpec is the stable boundary between a natural-language request and generated software. It describes business structure without prescribing a CRM, ERP, case-management, or other vertical.
+El AppSpec es la frontera estable entre un pedido en lenguaje natural y el software generado. Describe la estructura del negocio sin imponer un CRM, un ERP, una gestión de casos ni ningún otro vertical.
 
-## Root
+## Raíz
 
-Required keys:
+Claves obligatorias:
 
-- `version`: currently `0.1`.
-- `app`: identity and presentation defaults.
-- `roles`: application roles.
-- `entities`: domain entities.
-- `views`: navigation and standard presentations.
+- `version`: por ahora `0.1`.
+- `app`: identidad y valores de presentación por defecto.
+- `roles`: los roles de la aplicación.
+- `entities`: las entidades del dominio.
+- `views`: navegación y presentaciones estándar.
 
-Optional keys:
+Claves opcionales:
 
-- `rules`: declarative business rules executed by the runtime.
-- `decisions`: assumptions, confirmed decisions, and unresolved questions.
+- `rules`: reglas de negocio declarativas que ejecuta el runtime.
+- `decisions`: supuestos, decisiones confirmadas y preguntas sin resolver.
 
 ## App
 
@@ -35,11 +35,11 @@ Optional keys:
 }
 ```
 
-Keys use `snake_case`, must match `^[a-z][a-z0-9_]*$`, and have at most 48 characters. Labels are human-facing and may contain spaces or accents.
+Las claves usan `snake_case`, tienen que coincidir con `^[a-z][a-z0-9_]*$` y llegan hasta 48 caracteres. Las etiquetas son para las personas y pueden llevar espacios y acentos.
 
-## Roles and permissions
+## Roles y permisos
 
-Each role has a stable key and label. Entity permissions list one or more of `list`, `read`, `create`, `update`, and `delete`.
+Cada rol tiene una clave estable y una etiqueta. Los permisos sobre una entidad enumeran uno o más de `list`, `read`, `create`, `update` y `delete`.
 
 ```json
 {
@@ -50,19 +50,19 @@ Each role has a stable key and label. Entity permissions list one or more of `li
 }
 ```
 
-Every entity must define permissions explicitly. The compiler rejects unknown roles or actions.
+Toda entidad tiene que definir sus permisos de forma explícita. El compilador rechaza roles o acciones que no conoce.
 
-`capabilities` declares administrative access that is not expressible as an entity permission:
+`capabilities` declara el acceso administrativo que no se puede expresar como permiso sobre una entidad:
 
-| Capability | Grants |
+| Capacidad | Concede |
 |---|---|
-| `manage_users` | Invite, deactivate, and reassign application users |
-| `view_audit` | Read the audit log |
-| `view_rules` | Review the compiled rule set |
+| `manage_users` | Invitar, desactivar y reasignar usuarios de la aplicación |
+| `view_audit` | Leer la auditoría |
+| `view_rules` | Revisar el conjunto de reglas compilado |
 
-Capabilities are optional but recommended. When at least one role declares them, the declaration is authoritative and at least one role must hold `manage_users`. When no role declares them, the runtime falls back to a legacy heuristic — any role holding `list`, `read`, and `delete` on *every* entity inherits all three capabilities — and the build report records that as a production gate. That fallback grants administration to roles nobody declared as administrators; declare capabilities instead.
+Las capacidades son opcionales pero recomendadas. Cuando al menos un rol las declara, esa declaración manda y algún rol tiene que tener `manage_users`. Cuando ningún rol las declara, el runtime cae en una heurística heredada —cualquier rol que tenga `list`, `read` y `delete` sobre *todas* las entidades hereda las tres capacidades— y el reporte del build lo registra como un control pendiente antes de producción. Esa heurística le concede la administración a roles que nadie declaró como administradores: mejor declarar las capacidades.
 
-## Entities
+## Entidades
 
 ```json
 {
@@ -80,33 +80,36 @@ Capabilities are optional but recommended. When at least one role declares them,
 }
 ```
 
-The compiler adds `id`, `created_at`, and `updated_at`; do not declare them as fields.
+El compilador agrega `id`, `created_at` y `updated_at`; no los declares como campos.
 
-Supported v0 field types:
+Tipos de campo soportados en v0:
 
-| Type | PostgreSQL representation | Notes |
+| Tipo | Representación en PostgreSQL | Notas |
 |---|---|---|
-| `text` | `text` | Short or searchable text |
-| `long_text` | `text` | Long content |
-| `integer` | `bigint` | Whole numbers |
-| `decimal` | `numeric(18,4)` | Money or measurements; currency semantics belong in the domain |
-| `boolean` | `boolean` | True/false |
-| `date` | `date` | Calendar date |
-| `datetime` | `timestamptz` | Absolute instant |
-| `email` | `text` | UI semantics and validation |
-| `url` | `text` | UI semantics and validation |
-| `enum` | `text` + check | Requires non-empty `options` |
-| `file` | `jsonb` | Storage metadata, not file bytes |
-| `json` | `jsonb` | Escape hatch; prefer explicit fields |
+| `text` | `text` | Texto corto o buscable |
+| `long_text` | `text` | Contenido largo |
+| `integer` | `bigint` | Números enteros |
+| `decimal` | `numeric(18,4)` | Dinero o medidas; la semántica de moneda es del dominio |
+| `boolean` | `boolean` | Verdadero o falso |
+| `date` | `date` | Fecha de calendario |
+| `datetime` | `timestamptz` | Instante absoluto |
+| `email` | `text` | Semántica y validación en la interfaz |
+| `url` | `text` | Semántica y validación en la interfaz |
+| `enum` | `text` + check | Requiere `options` no vacío |
+| `tags` | `text[]` + índice GIN | Varios valores por registro; hasta 50 etiquetas de 48 caracteres |
+| `file` | `jsonb` | Metadatos de almacenamiento, no los bytes del archivo |
+| `json` | `jsonb` | Válvula de escape; preferí campos explícitos |
 
-Field options:
+Opciones de un campo:
 
-- `required`, `unique`, `searchable`: booleans.
-- `default`: scalar compatible with the type.
-- `options`: array of `{key,label}` for enum fields.
-- `help`: user-facing explanation.
+- `required`, `unique`, `searchable`: booleanos.
+- `default`: escalar compatible con el tipo.
+- `options`: arreglo de `{key,label}` para campos `enum`, y opcional para `tags`.
+- `help`: explicación para quien lo usa.
 
-Entities may opt into universal record attachments:
+Un campo `tags` con `options` queda restringido a esos valores; sin `options` acepta etiquetas libres, siempre normalizadas a minúsculas y sin repetidos. Se filtra por contención, así que un registro coincide cuando tiene todas las etiquetas pedidas.
+
+Las entidades pueden habilitar adjuntos universales por registro:
 
 ```json
 {
@@ -119,19 +122,19 @@ Entities may opt into universal record attachments:
 }
 ```
 
-Attachments are stored outside the entity row, inherit the entity's `read` and `update` permissions, and are audited. The built-in PostgreSQL adapter is intentionally limited to 4 MB per file; large-file or direct-upload requirements belong behind the client-owned storage adapter.
+Los adjuntos se guardan fuera de la fila de la entidad, heredan sus permisos de `read` y `update`, y quedan auditados. El adaptador de PostgreSQL incorporado está limitado a propósito a 4 MB por archivo; los requerimientos de archivos grandes o subida directa van detrás del adaptador de almacenamiento que es del cliente.
 
-Relationships support:
+Las relaciones soportan:
 
-- `belongs_to`: adds a foreign-key column on the current entity.
-- `has_many`: inverse navigation metadata; it does not add a column.
-- `many_to_many`: reserved in v0 and rejected by the compiler until junction-table semantics are implemented.
+- `belongs_to`: agrega una columna de clave foránea en la entidad actual.
+- `has_many`: metadato de navegación inversa; no agrega ninguna columna.
+- `many_to_many`: reservado en v0 y rechazado por el compilador hasta que se implemente la semántica de tabla intermedia.
 
-For `belongs_to`, provide `key`, `label`, `target`, `required`, and `on_delete` (`restrict`, `cascade`, `set_null`).
+Para `belongs_to` hay que indicar `key`, `label`, `target`, `required` y `on_delete` (`restrict`, `cascade`, `set_null`).
 
-## Views
+## Vistas
 
-Accepted v0 types are `table`, `form`, `detail`, `dashboard`, `calendar`, and `kanban`. Named `table`, `dashboard`, `calendar`, and `kanban` views have independent runtime routes. Form and detail metadata continue to configure the standard entity routes.
+Los tipos aceptados en v0 son `table`, `form`, `detail`, `dashboard`, `calendar` y `kanban`. Las vistas con nombre de tipo `table`, `dashboard`, `calendar` y `kanban` tienen su propia ruta en el runtime. Los metadatos de `form` y `detail` siguen configurando las rutas estándar de cada entidad.
 
 ```json
 {
@@ -144,7 +147,7 @@ Accepted v0 types are `table`, `form`, `detail`, `dashboard`, `calendar`, and `k
 }
 ```
 
-Table views support dynamic field filters, free-text search across searchable fields, and validated ordering. Optional configuration:
+Las vistas de tabla soportan filtros dinámicos por campo, búsqueda de texto libre sobre los campos buscables y ordenamiento validado. Configuración opcional:
 
 ```json
 {
@@ -154,9 +157,9 @@ Table views support dynamic field filters, free-text search across searchable fi
 }
 ```
 
-Lists are paginated. `bulk_edit_fields` is opt-in and may reference only enum or boolean fields; a bulk mutation is capped at 100 records, executes atomically, and applies the same permissions, rules, and audit trail as an individual edit.
+Los listados se paginan. `bulk_edit_fields` es opcional y sólo puede referenciar campos `enum` o `boolean`; una mutación masiva tiene un tope de 100 registros, se ejecuta de forma atómica y aplica los mismos permisos, reglas y rastro de auditoría que una edición individual.
 
-Kanban views require `entity` and `group_by`; `group_by` must reference an enum field. Set `allow_move: true` to opt into audited card moves. Calendar views require `entity` and `date_field`, which must reference a date or datetime field; `end_date_field` is optional. Set `allow_reschedule: true` to opt into audited date changes. Both operations require `update` permission and pass through deterministic rules. Dashboard views contain one or more deterministic widgets:
+Las vistas kanban requieren `entity` y `group_by`, y `group_by` tiene que referenciar un campo `enum`. Poné `allow_move: true` para habilitar el movimiento auditado de tarjetas. Las vistas de calendario requieren `entity` y `date_field`, que tiene que referenciar un campo de fecha o fecha y hora; `end_date_field` es opcional. Poné `allow_reschedule: true` para habilitar cambios de fecha auditados. Las dos operaciones requieren permiso de `update` y pasan por las reglas deterministas. Las vistas de tablero contienen uno o más widgets deterministas:
 
 ```json
 {
@@ -172,16 +175,16 @@ Kanban views require `entity` and `group_by`; `group_by` must reference an enum 
 }
 ```
 
-Metric widgets accept `count`, `sum`, or `avg`; `sum` and `avg` require a numeric `field`. Dashboard widgets never execute arbitrary SQL.
+Los widgets de métrica aceptan `count`, `sum` o `avg`; `sum` y `avg` requieren un `field` numérico. Los widgets de tablero nunca ejecutan SQL arbitrario.
 
-## Rules
+## Reglas
 
-Rules are deliberately small and deterministic. The runtime executes them on the server before a mutation; no arbitrary code, network call, email, integration, or AI action is accepted.
+Las reglas son deliberadamente chicas y deterministas. El runtime las ejecuta en el servidor antes de una mutación; no se acepta código arbitrario, llamadas de red, correo, integraciones ni acciones de IA.
 
 ```json
 {
   "key": "prevent_invalid_schedule",
-  "label": "Prevent invalid schedules",
+  "label": "Impedir agendas inválidas",
   "priority": 20,
   "enabled": true,
   "when": {"entity": "work_order", "event": "before_save"},
@@ -191,27 +194,27 @@ Rules are deliberately small and deterministic. The runtime executes them on the
       {"field": "scheduled_for", "operator": "lt", "value": {"source": "now"}}
     ]
   },
-  "then": [{"action": "block", "message": "Scheduled time cannot be in the past."}]
+  "then": [{"action": "block", "message": "La fecha agendada no puede estar en el pasado."}]
 }
 ```
 
-Accepted events are `before_create`, `before_update`, `before_delete`, and `before_save`; `before_save` applies to create and update. Rules run by ascending priority and then declaration order.
+Los eventos aceptados son `before_create`, `before_update`, `before_delete` y `before_save`; `before_save` aplica a la creación y a la modificación. Las reglas corren por prioridad ascendente y, a igual prioridad, por orden de declaración.
 
-Conditions are structured trees:
+Las condiciones son árboles estructurados:
 
-- logical nodes: `all`, `any`, and `not`;
-- comparisons: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, and `contains`;
-- state checks: `is_empty`, `is_not_empty`, `changed`, and `not_changed`;
-- comparison values may be literals, `{ "source": "now" }`, or `{ "source": "field", "field": "other_field" }`.
+- nodos lógicos: `all`, `any` y `not`;
+- comparaciones: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in` y `contains`;
+- chequeos de estado: `is_empty`, `is_not_empty`, `changed` y `not_changed`;
+- los valores de comparación pueden ser literales, `{ "source": "now" }` o `{ "source": "field", "field": "otro_campo" }`.
 
-Actions are limited to:
+Las acciones se limitan a:
 
 - `{ "action": "set", "field": "priority", "value": "high" }`;
-- `{ "action": "block", "message": "Explanation shown to the user." }`.
+- `{ "action": "block", "message": "Explicación que ve la persona." }`.
 
-`set` can also use a field or current-time source. A `before_delete` rule may only block. Every execution is recorded inside the mutation's audit event. Multi-step approvals and side effects remain client features.
+`set` también puede tomar el valor de otro campo o de la hora actual. Una regla `before_delete` sólo puede bloquear. Cada ejecución queda registrada dentro del evento de auditoría de la mutación. Las aprobaciones de varios pasos y los efectos hacia afuera siguen siendo features del cliente.
 
-## Decisions
+## Decisiones
 
 ```json
 {
@@ -225,17 +228,17 @@ Actions are limited to:
 }
 ```
 
-Allowed statuses are `confirmed`, `assumption`, and `unresolved`.
+Los estados permitidos son `confirmed`, `assumption` y `unresolved`.
 
-## Compilation invariants
+## Invariantes de compilación
 
-- Entity and field keys are unique.
-- Relationships target existing entities.
-- `title_field` references a declared field.
-- Permission roles exist.
-- View fields exist on the referenced entity.
-- Attachment policies are bounded and contain valid MIME patterns.
-- Kanban, calendar, bulk-edit, sorting, and dashboard widget fields are type-compatible.
-- Generated SQL uses only validated identifiers and opens no transaction of its own.
-- Declared capabilities are known values, and at least one role holds `manage_users`.
-- Output never overwrites a non-empty project directory.
+- Las claves de entidad y de campo son únicas.
+- Las relaciones apuntan a entidades que existen.
+- `title_field` referencia un campo declarado.
+- Los roles de los permisos existen.
+- Los campos de una vista existen en la entidad referenciada.
+- Las políticas de adjuntos están acotadas y tienen patrones MIME válidos.
+- Los campos de kanban, calendario, edición masiva, ordenamiento y widgets de tablero son compatibles con su tipo.
+- El SQL generado usa únicamente identificadores validados y no abre ninguna transacción propia.
+- Las capacidades declaradas son valores conocidos, y al menos un rol tiene `manage_users`.
+- La salida nunca sobrescribe un directorio de proyecto que no esté vacío.

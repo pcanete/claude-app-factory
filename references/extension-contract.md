@@ -1,80 +1,82 @@
-# Extension contract
+# Contrato de extensión
 
-The factory owns structure; client code owns behavior that is not safely expressible as neutral metadata.
+La fábrica es dueña de la estructura; el código del cliente es dueño del comportamiento que no se puede expresar con seguridad como metadato neutral.
 
-## Ownership zones
+## Zonas de propiedad
 
-Three zones, not two. Collapsing platform code into the client zone is what makes an application impossible to update later.
+Son tres zonas, no dos. Meter el código de plataforma dentro de la zona del cliente es exactamente lo que vuelve imposible actualizar una aplicación más adelante.
 
-**Generated** — compiled from `app-spec.json`, replaceable on every build:
+**Generada** — se compila desde `app-spec.json` y se reemplaza en cada build:
 
 - `src/generated/`
 - `database/generated/`
 - `BUILD_REPORT.md`
 
-**Platform** — ships with the factory, updated by the factory, never edited per client:
+**Plataforma** — viaja con la fábrica, la actualiza la fábrica, nunca se edita por cliente:
 
-- `src/platform/` (identity adapter, application settings, user administration, read-only assistant, MCP server for agents)
-- `database/platform/` (migrations `100`–`499` supporting those features, including agent identities and their activity log)
+- `src/platform/` (adaptador de identidad, configuración de la aplicación, administración de usuarios, servidor MCP para agentes)
+- `database/platform/` (migraciones `100`–`499` que sostienen esas funciones, incluidas las identidades de agente y su registro de actividad)
 
-**Client** — owned by humans and agents working for this client, never written by the factory:
+**Cliente** — es de las personas y los agentes que trabajan para ese cliente, y la fábrica nunca escribe acá:
 
 - `src/features/`
 - `src/components/custom/`
-- `database/custom/` (migrations from `500` up)
-- deployment configuration containing client decisions
+- `database/custom/` (migraciones desde la `500` en adelante)
+- la configuración de despliegue que contiene decisiones del cliente
 
-Never edit generated or platform files to add client behavior. Add a feature module and register it through an explicit extension point. A later compiler may replace generated and platform output without reading or rewriting feature implementations.
+Nunca edites archivos generados o de plataforma para agregar comportamiento del cliente. Agregá un módulo de feature y registralo por un punto de extensión explícito. Un compilador posterior puede reemplazar todo lo generado y lo de plataforma sin leer ni reescribir las features.
 
-To change platform behavior, import it from a feature and wrap it. To change generated structure, change the AppSpec and recompile.
+Para cambiar el comportamiento de la plataforma, importalo desde una feature y envolvelo. Para cambiar la estructura generada, cambiá el AppSpec y recompilá.
 
-## What belongs in AppSpec
+## Qué va en el AppSpec
 
-- entities, fields, relationships;
-- standard validation and permissions;
-- standard views and navigation;
-- stable, declarative business intent.
-- deterministic before-mutation conditions using the reviewed `set` and `block` actions.
-- bounded record-attachment policies using the built-in PostgreSQL adapter.
-- deterministic table, kanban, calendar, and dashboard view definitions.
-- which roles hold administrative capabilities (`manage_users`, `view_audit`, `view_rules`).
-- bounded, opt-in table bulk edits and kanban/calendar moves that reuse permissions, rules, transactions, and audit.
+- entidades, campos, relaciones;
+- validaciones y permisos estándar;
+- vistas y navegación estándar;
+- la intención de negocio estable y declarativa;
+- condiciones deterministas previas a una mutación, con las acciones revisadas `set` y `block`;
+- políticas acotadas de adjuntos por registro, con el adaptador de PostgreSQL incorporado;
+- definiciones deterministas de vistas de tabla, kanban, calendario y tablero;
+- qué roles tienen capacidades administrativas (`manage_users`, `view_audit`, `view_rules`);
+- ediciones masivas en tablas y movimientos en kanban y calendario: acotados, opcionales, y reutilizando permisos, reglas, transacciones y auditoría.
 
-## What belongs in a feature
+## Qué va en una feature
 
-- domain calculations and scoring;
-- third-party integrations;
-- multi-step workflows and approvals;
-- specialized reports;
-- AI tools and prompts;
-- bespoke interfaces;
-- large-file, direct-upload, antivirus, OCR, or provider-specific storage adapters;
-- side effects such as email, payments, or external writes.
-- client-specific invitation policy that wraps the platform identity adapter.
+- cálculos de dominio y puntajes;
+- integraciones con terceros;
+- flujos de varios pasos y aprobaciones;
+- reportes especializados;
+- herramientas y prompts de IA;
+- interfaces a medida;
+- adaptadores de almacenamiento para archivos grandes, subida directa, antivirus, OCR o proveedores específicos;
+- efectos hacia afuera, como correo, pagos o escrituras en sistemas externos;
+- la política de invitaciones propia del cliente, envolviendo el adaptador de identidad de la plataforma.
 
-## Database evolution
+## Evolución de la base de datos
 
-- Generated and platform migrations are immutable after deployment. **This includes the factory's own
-  platform migrations**: once a version ships, editing `database/platform/1xx_*.sql` breaks every
-  application that already applied it, because its checksum no longer matches the ledger. A change to
-  platform behaviour goes in the next numbered platform migration, never in an existing one.
-- Changes to AppSpec create a new migration; they do not rewrite an applied migration.
-- Custom migrations start at `500` so they always apply after generated and platform migrations, and must declare their dependencies.
-- **A migration that destroys data does not apply on its own during a deployment.** The migration
-  runner executes inside the build, which is safe while migrations only add. `scripts/destructive-guard.mjs`
-  inspects each pending migration for `DROP TABLE`, `TRUNCATE`, `DROP COLUMN`, `DELETE` without `WHERE`,
-  and `DROP SCHEMA`/`DROP DATABASE` — then asks the database whether there is anything to lose. Dropping a
-  table that does not exist, or one that exists and is empty, deploys normally; dropping a table that holds
-  rows stops the deployment. Anything it cannot resolve — an unparseable name, a failed query — counts as
-  risk, not as permission.
-- To authorize destruction, name the migration explicitly: `ALLOW_DESTRUCTIVE_MIGRATIONS="custom/501_x.sql"`.
-  Authorization is per migration, never a blanket switch, so it cannot stay on by accident. Retiring a
-  feature is two deployments, not one: decouple the code and ship, then remove the data as a separate,
-  backed-up step.
-- Migration files must not open their own transaction. `scripts/apply-migrations.mjs` wraps each file together with its ledger entry in a single transaction, so a migration and the record that it ran commit or roll back together.
-- Applied migrations are checksummed; editing one after it ran is refused, not silently reapplied.
-- Destructive schema changes require explicit review and a rollback or data-migration plan.
+- Las migraciones generadas y de plataforma son inmutables una vez desplegadas. **Esto incluye a las
+  migraciones de plataforma de la propia fábrica**: cuando una versión sale, editar
+  `database/platform/1xx_*.sql` rompe toda aplicación que ya la aplicó, porque su suma de control deja
+  de coincidir con el registro. Un cambio en el comportamiento de la plataforma va en la migración de
+  plataforma numerada siguiente, nunca en una que ya existe.
+- Los cambios en el AppSpec crean una migración nueva; no reescriben una migración aplicada.
+- Las migraciones propias empiezan en `500`, así siempre se aplican después de las generadas y las de plataforma, y tienen que declarar sus dependencias.
+- **Una migración que destruye datos no se aplica sola durante un despliegue.** El runner de migraciones
+  corre dentro del build, lo cual es seguro mientras las migraciones sólo agreguen.
+  `scripts/destructive-guard.mjs` revisa cada migración pendiente en busca de `DROP TABLE`, `TRUNCATE`,
+  `DROP COLUMN`, `DELETE` sin `WHERE` y `DROP SCHEMA`/`DROP DATABASE`, y después le pregunta a la base si
+  hay algo que perder. Soltar una tabla que no existe, o una que existe y está vacía, despliega normal;
+  soltar una tabla que tiene filas detiene el despliegue. Todo lo que no pueda resolver —un nombre que no
+  se puede interpretar, una consulta que falla— cuenta como riesgo, no como permiso.
+- Para autorizar la destrucción, nombrá la migración explícitamente:
+  `ALLOW_DESTRUCTIVE_MIGRATIONS="custom/501_x.sql"`. La autorización es por migración, nunca un
+  interruptor general, así que no puede quedar prendida por descuido. Retirar una función son dos
+  despliegues, no uno: primero desacoplar el código y desplegar, después borrar los datos como paso
+  separado y con respaldo.
+- Los archivos de migración no deben abrir su propia transacción. `scripts/apply-migrations.mjs` envuelve cada archivo junto con su entrada en el registro dentro de una sola transacción, así la migración y la constancia de que corrió se confirman o se descartan juntas.
+- Las migraciones aplicadas tienen suma de control: editar una después de que corrió se rechaza, no se reaplica en silencio.
+- Los cambios de esquema destructivos requieren revisión explícita y un plan de reversión o de migración de datos.
 
-## Independence
+## Independencia
 
-Each generated project must be runnable from its own repository and documented environment variables. It may use ordinary open-source packages or chosen infrastructure, but it must not call Claude App Factory at runtime.
+Cada proyecto generado tiene que poder correr desde su propio repositorio y con sus variables de entorno documentadas. Puede usar paquetes de código abierto corrientes o la infraestructura que elija, pero no puede llamar a Claude App Factory en tiempo de ejecución.

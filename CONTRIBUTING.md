@@ -1,16 +1,16 @@
-# Contributing
+# Cómo contribuir
 
-Thank you for helping improve Claude App Factory.
+Gracias por ayudar a mejorar Claude App Factory.
 
-## Before changing code
+## Antes de tocar el código
 
-1. Open or reference an issue that describes the business capability and why it belongs in the neutral foundation.
-2. Confirm that the change does not hard-code a CRM, ERP, or previous client domain.
-3. Decide whether it belongs in generated structure or in a client extension boundary.
+1. Abrí o referenciá un issue que describa la capacidad de negocio y por qué corresponde a la base neutral.
+2. Confirmá que el cambio no deja fijo en el código un CRM, un ERP ni el dominio de un cliente anterior.
+3. Decidí si va en la estructura generada o del lado de la extensión del cliente.
 
-## Development checks
+## Verificaciones de desarrollo
 
-Run from the repository root:
+Desde la raíz del repositorio:
 
 ```bash
 python scripts/test_scaffold.py
@@ -20,14 +20,14 @@ python scripts/scaffold_app.py \
 python scripts/verify_scaffold.py ../maintenance-demo
 ```
 
-For runtime changes, also install the generated application's dependencies, run `pnpm typecheck` or `pnpm build`, apply migrations to a disposable PostgreSQL database, run `pnpm db:smoke`, and verify one complete CRUD path in a real browser.
+Si el cambio toca el runtime, además instalá las dependencias de la aplicación generada, corré `pnpm typecheck` o `pnpm build`, aplicá las migraciones contra una base PostgreSQL descartable, corré `pnpm db:smoke` y recorré un camino de ABM completo en un navegador real.
 
 ## Pull requests
 
-- Keep generated and client-owned code boundaries intact.
-- Add or update tests for compiler behavior.
-- Document new environment variables and production gates.
-- Never include credentials, customer data, deployment secrets, or local `.env` files.
-- Call out migrations, security effects, and backward-compatibility risks explicitly.
+- Mantené intactas las fronteras entre el código generado y el que es del cliente.
+- Agregá o actualizá pruebas del comportamiento del compilador.
+- Documentá las variables de entorno nuevas y los controles previos a producción.
+- Nunca incluyas credenciales, datos de clientes, secretos de despliegue ni archivos `.env` locales.
+- Señalá de forma explícita las migraciones, los efectos de seguridad y los riesgos de compatibilidad hacia atrás.
 
-Small, focused pull requests are easier to review and reuse.
+Los pull requests chicos y enfocados son más fáciles de revisar y de reutilizar.

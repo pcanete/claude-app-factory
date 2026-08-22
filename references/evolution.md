@@ -1,76 +1,76 @@
-# Safe AppSpec evolution
+# Evolución segura del AppSpec
 
-Use this procedure when changing an application that has already been generated. The current `app-spec.json` is the database contract baseline; never replace it before producing the evolution plan.
+Usá este procedimiento para cambiar una aplicación que ya fue generada. El `app-spec.json` actual es la línea base del contrato con la base de datos: nunca lo reemplaces antes de producir el plan de evolución.
 
-## Workflow
+## Flujo de trabajo
 
-1. Commit or otherwise snapshot the application source.
-2. Create a separate proposed AppSpec and validate it.
-3. Generate a read-only plan:
+1. Hacé un commit del código de la aplicación, o guardá una copia de su estado.
+2. Creá un AppSpec propuesto aparte y validalo.
+3. Generá un plan de sólo lectura:
 
    ```bash
-   python /path/to/riel-app-factory/scripts/evolve_app.py \
-     --project /path/to/application \
-     --spec /path/to/proposed.app-spec.json
+   python /ruta/a/claude-app-factory/scripts/evolve_app.py \
+     --project /ruta/a/la-aplicacion \
+     --spec /ruta/a/propuesta.app-spec.json
    ```
 
-4. Review every change, warning, blocked operation, and proposed SQL statement.
-5. Apply only a safe plan:
+4. Revisá cada cambio, cada advertencia, cada operación bloqueada y cada sentencia SQL propuesta.
+5. Aplicá solamente un plan seguro:
 
    ```bash
-   python /path/to/riel-app-factory/scripts/evolve_app.py \
-     --project /path/to/application \
-     --spec /path/to/proposed.app-spec.json \
-     --migration-name add_priorities \
+   python /ruta/a/claude-app-factory/scripts/evolve_app.py \
+     --project /ruta/a/la-aplicacion \
+     --spec /ruta/a/propuesta.app-spec.json \
+     --migration-name agregar_prioridades \
      --apply
    ```
 
-6. Review the Git diff and the new `database/generated/NNN_*.sql` migration before connecting a database.
-7. Back up or confirm recovery for the target database, then run `pnpm db:apply`, `pnpm db:smoke`, and `pnpm typecheck` or `pnpm build`.
-8. Verify affected permissions, rules, views, and a complete browser flow. Use preview before production where available.
+6. Revisá el diff de Git y la nueva migración `database/generated/NNN_*.sql` antes de conectar una base de datos.
+7. Respaldá la base de destino, o confirmá que se puede recuperar, y recién entonces corré `pnpm db:apply`, `pnpm db:smoke` y `pnpm typecheck` o `pnpm build`.
+8. Verificá los permisos, reglas y vistas afectados, y un recorrido completo por el navegador. Usá el entorno de vista previa antes que producción donde esté disponible.
 
-The apply step updates only factory-owned artifacts:
+El paso de aplicación actualiza únicamente los artefactos que son de la fábrica:
 
 - `app-spec.json`;
 - `src/generated/app-spec.ts`;
 - `src/generated/navigation.ts`;
 - `src/generated/permissions.ts`;
-- `database/generated/NNN_*.sql` when the schema changes;
-- `BUILD_REPORT.md` and `EVOLUTION_REPORT.md`.
+- `database/generated/NNN_*.sql` cuando cambia el esquema;
+- `BUILD_REPORT.md` y `EVOLUTION_REPORT.md`.
 
-It does not overwrite `src/features/`, `src/components/custom/`, `database/custom/`, deployment configuration, or other client-owned files.
+No pisa `src/features/`, `src/components/custom/`, `database/custom/`, la configuración de despliegue ni ningún otro archivo que sea del cliente.
 
-## Automatically supported changes
+## Cambios soportados automáticamente
 
-- add an entity, including its fields, enum constraints, indexes, and `belongs_to` foreign keys;
-- add an optional field;
-- add a required field when it has a safe default;
-- add an optional `belongs_to` relationship;
-- add or relabel roles;
-- add enum values without removing existing values;
-- add a search index or relax `NOT NULL`;
-- change field defaults;
-- change labels, help, permissions, attachments, views, rules, and decisions as runtime metadata.
+- agregar una entidad, con sus campos, restricciones de enum, índices y claves foráneas `belongs_to`;
+- agregar un campo opcional;
+- agregar un campo obligatorio cuando tiene un valor por defecto seguro;
+- agregar una relación `belongs_to` opcional;
+- agregar roles o cambiarles la etiqueta;
+- agregar valores a un enum sin quitar los que ya existen;
+- agregar un índice de búsqueda o relajar un `NOT NULL`;
+- cambiar los valores por defecto de un campo;
+- cambiar etiquetas, ayudas, permisos, adjuntos, vistas, reglas y decisiones, que son metadatos del runtime.
 
-`has_many` relationships are inverse metadata and do not create database columns.
+Las relaciones `has_many` son metadatos inversos y no crean columnas en la base.
 
-## Changes that stop automatically
+## Cambios que se frenan solos
 
-- remove or rename an entity, field, or stored relationship;
-- change a field type;
-- remove an enum value;
-- make an existing field or relationship required without an explicit backfill;
-- add uniqueness where existing duplicates may exist or remove a unique constraint;
-- change a foreign-key target, type, or delete behavior;
-- remove a role that may still own users;
-- change the application key or AppSpec version.
+- eliminar o renombrar una entidad, un campo o una relación almacenada;
+- cambiar el tipo de un campo;
+- quitar un valor de un enum;
+- volver obligatorio un campo o una relación existente sin un relleno explícito;
+- agregar unicidad donde puede haber duplicados, o quitar una restricción de unicidad;
+- cambiar el destino, el tipo o el comportamiento de borrado de una clave foránea;
+- eliminar un rol que todavía puede tener usuarios;
+- cambiar la clave de la aplicación o la versión del AppSpec.
 
-These operations are not forbidden. They require a custom reviewed migration, data analysis, backup, and rollback plan. After the database and AppSpec have been reconciled deliberately, the normal generated metadata can continue from the new baseline.
+Estas operaciones no están prohibidas. Requieren una migración propia y revisada, análisis de los datos, respaldo y plan de reversión. Una vez que la base y el AppSpec fueron reconciliados de forma deliberada, los metadatos generados normales pueden continuar desde la nueva línea base.
 
-## Migration invariants
+## Invariantes de las migraciones
 
-- Applied migrations are immutable; evolution always creates the next numbered migration.
-- Migration checksums are enforced by the generated runtime.
-- A source rollback does not roll back PostgreSQL.
-- An evolution plan is not evidence that the migration succeeded against real data.
-- Never use a production database as the first migration test.
+- Las migraciones aplicadas son inmutables; la evolución siempre crea la migración numerada siguiente.
+- El runtime generado verifica las sumas de control de las migraciones.
+- Revertir el código no revierte PostgreSQL.
+- Un plan de evolución no es evidencia de que la migración funcionó contra datos reales.
+- Nunca uses una base de producción como primera prueba de una migración.

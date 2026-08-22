@@ -1,99 +1,108 @@
-# Generated runtime
+# Runtime generado
 
-This project is a local application foundation generated from `app-spec.json`.
+Este proyecto es la base de una aplicación, generada a partir de `app-spec.json`.
 
-## Local preview
+## Vista previa local
 
-1. Start PostgreSQL with `docker compose up -d db`, or provide any PostgreSQL connection.
-2. Copy `.env.example` to `.env.local` and set `DATABASE_URL`.
-3. Install dependencies with `pnpm install` or `npm install`.
-4. Apply the generated migration with `pnpm db:apply`.
-5. Verify real CRUD with `pnpm db:smoke`.
-6. Run `pnpm dev` and choose a role at `/dev-access`.
+1. Levantá PostgreSQL con `docker compose up -d db`, o usá cualquier conexión de PostgreSQL.
+2. Copiá `.env.example` a `.env.local` y definí `DATABASE_URL`.
+3. Instalá las dependencias con `pnpm install` o `npm install`.
+4. Aplicá la migración generada con `pnpm db:apply`.
+5. Verificá un ABM real con `pnpm db:smoke`.
+6. Corré `pnpm dev` y elegí un rol en `/dev-access`.
 
-`ALLOW_UNSAFE_LOCAL_PREVIEW=true` enables a passwordless role selector only outside production. Every page and mutation still enforces the generated permission matrix on the server. Production ignores this local path. Clerk proves identity; PostgreSQL remains authoritative for account status, role, and permissions. Without both Clerk keys the production login stays closed.
+`ALLOW_UNSAFE_LOCAL_PREVIEW=true` habilita un selector de roles sin contraseña, sólo fuera de producción. Cada página y cada mutación siguen verificando en el servidor la matriz de permisos generada. Producción ignora este camino local. Clerk prueba la identidad; PostgreSQL sigue siendo la autoridad sobre el estado de la cuenta, el rol y los permisos. Sin las dos claves de Clerk, el acceso de producción queda cerrado.
 
-Every create, update, and delete operation writes `app_audit_log` in the same database transaction. Roles that declare the `view_audit` capability in `app-spec.json` can review and filter the history at `/audit`; when the AppSpec declares no capabilities at all, access falls back to roles holding list/read/delete on every entity.
+Cada alta, modificación y baja escribe en `app_audit_log` dentro de la misma transacción de base de datos. Los roles que declaran la capacidad `view_audit` en `app-spec.json` pueden revisar y filtrar el historial en `/audit`; si el AppSpec no declara ninguna capacidad, el acceso cae en los roles que tengan list, read y delete sobre todas las entidades.
 
-## User management
+La auditoría no se edita ni se borra a mano: se vence. Todo lo anterior a la ventana de retención se elimina parejo, sin elegir qué, y la ventana vive en la configuración del sistema (`auditoria.retencion_dias`, 365 días por defecto). La actividad de agentes se vence con la misma ventana.
 
-Users with full administrative access can manage application users at `/users`: create pending identities, send Clerk invitations, assign one AppSpec role, and activate or deactivate access. User mutations are validated on the server and written to the audit log. Accounts are deactivated instead of deleted so their history remains attributable.
+## Administración de usuarios
 
-Local-preview identities are read-only and the current administrator cannot deactivate their own account or remove their own role. The module intentionally does not edit role permissions at runtime: roles and their permission matrices remain versioned in AppSpec. On first production login, a verified Clerk email is atomically matched to an active `pending:` user, replaced with the stable Clerk subject, and audited.
+Quienes tienen acceso administrativo completo pueden administrar los usuarios de la aplicación en `/users`: crear identidades pendientes, enviar invitaciones de Clerk, asignar un rol del AppSpec y activar o desactivar el acceso. Las mutaciones de usuario se validan en el servidor y se escriben en la auditoría.
 
-For a new deployment, connect Neon and Clerk to the Vercel project. Production deployments run the idempotent database migrations before `next build`; preview deployments never mutate the production database. Define `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME` in the Production environment before the first deployment to create the pending PostgreSQL administrator automatically. Configure Clerk for invitation-only access and invite that same email from Clerk or create the first identity there. Its first verified login links the Clerk identity to the pending PostgreSQL user. Subsequent invitations can be sent from `/users`.
+Una cuenta que ya operó se desactiva en vez de eliminarse, así su historial sigue teniendo autor. Sólo se puede eliminar a quien todavía no registró actividad —una invitación cargada con el correo equivocado, por ejemplo—, porque ahí no hay nada que conservar.
 
-Outside Vercel, set `DATABASE_URL_DIRECT`, run `pnpm db:apply`, define `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`, then run `pnpm auth:bootstrap`.
+Las identidades de vista previa local son de sólo lectura, y quien administra no puede desactivar su propia cuenta ni quitarse su propio rol. El módulo, a propósito, no edita los permisos de los roles en tiempo de ejecución: los roles y sus matrices de permisos siguen versionados en el AppSpec. En el primer inicio de sesión de producción, un correo verificado de Clerk se vincula de forma atómica con un usuario `pending:` activo, se reemplaza por el sujeto estable de Clerk y queda auditado.
 
-## Production verification and recovery
+Para un despliegue nuevo, conectá la base de datos y Clerk al proyecto de Vercel. Los despliegues de producción corren las migraciones idempotentes antes de `next build`; los de vista previa nunca modifican la base de producción. Definí `BOOTSTRAP_ADMIN_EMAIL` y, si querés, `BOOTSTRAP_ADMIN_NAME` en el entorno de producción antes del primer despliegue, para crear automáticamente el administrador pendiente en PostgreSQL. Configurá Clerk para acceso sólo por invitación e invitá ese mismo correo desde Clerk, o creá ahí la primera identidad. Su primer inicio de sesión verificado vincula la identidad de Clerk con el usuario pendiente. Las invitaciones siguientes se envían desde `/users`.
 
-Treat a successful Vercel build as the beginning of production verification, not its end. Confirm the deployed source commit, migration logs, `GET /api/health`, unauthenticated redirect, invited administrator login, one permission-checked CRUD path, audit events, `/users`, `/settings`, and one AI conversation when AI is enabled. Review runtime logs for the verified flow.
+Fuera de Vercel: definí `DATABASE_URL_DIRECT`, corré `pnpm db:apply`, definí `BOOTSTRAP_ADMIN_EMAIL` y, opcionalmente, `BOOTSTRAP_ADMIN_NAME`, y después corré `pnpm auth:bootstrap`.
 
-Keep one independent Vercel project, Neon database, Clerk application, and credential set for this application. Store production secrets only in the deployment environment and an approved recovery system; never commit them.
+## Verificación de producción y recuperación
 
-A code rollback does not roll back PostgreSQL. Prefer additive, backward-compatible migrations and require an explicit data backup, migration, and rollback plan for destructive changes. Configure database backup or point-in-time recovery appropriate to the application and test restoration. Record who owns recovery for source, data, identity, environment variables, and encryption keys.
+Tratá un build exitoso en Vercel como el comienzo de la verificación de producción, no como su final. Confirmá el commit desplegado, los logs de migración, `GET /api/health`, la redirección de quien no está autenticado, el inicio de sesión del administrador invitado, un camino de ABM con permisos verificados, los eventos de auditoría, `/users` y `/settings`. Revisá los logs del runtime para ese recorrido.
 
-Every entity also exposes generic CSV/XLSX transfer tools:
+Mantené un proyecto de Vercel, una base de datos, una aplicación de Clerk y un juego de credenciales independientes para esta aplicación. Guardá los secretos de producción sólo en el entorno de despliegue y en un sistema de recuperación aprobado; nunca los subas al repositorio.
 
-- export and template downloads require the entity's server-side permissions;
-- imports accept at most 5 MB and 1,000 create-only rows;
-- every file is prevalidated before a user-owned preview batch is staged for one hour;
-- confirmation inserts the complete batch and its audit events in one database transaction;
-- relationship cells accept an existing UUID or an exact title-field value.
+Revertir el código no revierte PostgreSQL. Preferí migraciones aditivas y compatibles hacia atrás, y exigí respaldo, migración de datos y plan de reversión explícitos para los cambios destructivos. Configurá el respaldo de la base o la recuperación a un punto en el tiempo que corresponda a la aplicación, y probá una restauración. Registrá quién es responsable de recuperar el código, los datos, la identidad y las variables de entorno.
 
-Production operations must schedule cleanup of expired `app_import_batch` rows and review import/export limits for the client.
+Una migración que borra datos no se aplica sola durante un despliegue: la guarda le pregunta a la base si hay algo que perder y, si lo hay, frena hasta que una persona autorice esa migración por nombre con `ALLOW_DESTRUCTIVE_MIGRATIONS`. Esa autorización es puntual y se quita después.
 
-## Attachments
+## Transferencia de datos
 
-Entities that enable `attachments` in AppSpec expose a protected attachment panel on each record. Upload and deletion require the entity's `update` permission; listing and download require `read`. File metadata, bytes, checksum, actor, and audit event are committed through PostgreSQL, with a hard limit of 4 MB per file.
+Cada entidad expone además herramientas genéricas de transferencia en CSV y XLSX:
 
-The PostgreSQL adapter keeps local and small deployments portable. Large files, direct browser uploads, antivirus scanning, OCR, or external object storage belong behind a reviewed client adapter.
+- exportar y descargar plantillas requiere los permisos de servidor de esa entidad;
+- las importaciones aceptan como máximo 5 MB y 1.000 filas, y sólo crean registros;
+- cada archivo se prevalida antes de preparar un lote de vista previa, propio del usuario, que dura una hora;
+- la confirmación inserta el lote completo y sus eventos de auditoría en una sola transacción;
+- las celdas de relación aceptan un UUID existente o el valor exacto del campo título.
 
-## Named views
+En producción hay que programar la limpieza de las filas vencidas de `app_import_batch` y revisar los límites de importación y exportación para cada cliente.
 
-Navigation-enabled table, kanban, calendar, and dashboard definitions are rendered at `/views/[view]`:
+## Adjuntos
 
-- table views support combined field filters, searchable text, and validated ordering;
-- kanban columns come from a validated enum field;
-- calendar events use a validated date/datetime field and the AppSpec timezone;
-- dashboards provide count/sum/average metrics, enum/boolean breakdowns, and recent-record tables without arbitrary SQL.
+Las entidades que habilitan `attachments` en el AppSpec exponen un panel protegido de archivos en cada registro. Subir y eliminar requieren el permiso `update` de la entidad; listar y descargar requieren `read`. Los metadatos del archivo, sus bytes, su suma de verificación, el actor y el evento de auditoría se confirman en PostgreSQL, con un límite duro de 4 MB por archivo.
 
-These views are read-oriented. Drag-and-drop mutations, scheduling side effects, and specialized charting remain client features.
+El adaptador de PostgreSQL mantiene portables los despliegues chicos y locales. Los archivos grandes, la subida directa desde el navegador, el análisis antivirus, el OCR o el almacenamiento de objetos externo van detrás de un adaptador de cliente revisado.
 
-## Deterministic rules
+## Vistas con nombre
 
-AppSpec rules execute before create, update, delete, or both create/update (`before_save`). The evaluator accepts only validated condition trees and deterministic `set` or `block` actions. Successful assignments and their rule keys are included in the same audit event as the mutation; blocked operations write nothing.
+Las definiciones de tabla, kanban, calendario y tablero que tienen navegación habilitada se renderizan en `/views/[view]`:
 
-Administrators can inspect the active definitions at `/rules`. The kernel deliberately rejects arbitrary expressions and does not provide approvals, schedules, email, webhooks, external writes, or AI actions.
+- las vistas de tabla soportan filtros combinados por campo, texto buscable y ordenamiento validado;
+- las columnas de kanban salen de un campo enum validado;
+- los eventos de calendario usan un campo de fecha o fecha y hora validado, y la zona horaria del AppSpec;
+- los tableros ofrecen métricas de conteo, suma y promedio, desgloses por enum o booleano y tablas de registros recientes, sin SQL arbitrario.
 
-## System configuration
+Estas vistas están orientadas a la lectura. Las mutaciones por arrastrar y soltar, los efectos de agendamiento y los gráficos especializados siguen siendo features del cliente.
 
-`app_setting` stores key/value pairs with JSON values, scoped globally, and `app_user_setting` does
-the same per user. It is the application's options primitive: names are bounded, values are capped at
-256 KB, and every change is audited with who made it.
+## Reglas deterministas
 
-Nothing is autoloaded — options are read when asked for. Loading every option on every request is what
-turns a table like this into the application's bottleneck.
+Las reglas del AppSpec se ejecutan antes de crear, modificar, eliminar, o antes de crear y modificar (`before_save`). El evaluador acepta únicamente árboles de condiciones validados y acciones deterministas `set` o `block`. Las asignaciones exitosas y las claves de las reglas que las produjeron van en el mismo evento de auditoría que la mutación; las operaciones bloqueadas no escriben nada.
 
-It is for configuration, not business data: what belongs to the domain goes in the AppSpec as an
-entity, where it has types, permissions, rules and per-record audit.
+Quien administra puede inspeccionar las definiciones activas en `/rules`. Las reglas se declaran en el AppSpec y no se editan desde la pantalla, para que no existan dos versiones de la misma regla. El núcleo rechaza a propósito las expresiones arbitrarias, y no ofrece aprobaciones, agendamientos, correo, webhooks, escrituras externas ni acciones de IA.
 
-Writing configuration requires the `manage_users` capability, from `/settings` or through MCP.
+## Configuración del sistema
 
-## No model runs here
+`app_setting` guarda pares clave/valor con valores JSON y alcance global, y `app_user_setting` hace lo
+mismo por usuario. Es la primitiva de opciones de la aplicación: los nombres están acotados, los
+valores tienen un tope de 256 KB, y cada cambio queda auditado con su autor —sea una persona o un
+agente, cada uno en su columna.
 
-The runtime does not execute language models and stores no third-party provider credentials. Agents
-connect over MCP and bring their own model, which is why there is no model catalog to keep current and
-no `SETTINGS_ENCRYPTION_KEY` to guard.
+No hay carga automática: las opciones se leen cuando se piden. Cargar todas en cada request es lo que
+convierte una tabla como esta en el cuello de botella de la aplicación.
 
-## Application settings
+Es para configuración, no para datos de negocio: lo que pertenece al dominio va en el AppSpec como
+entidad, donde tiene tipos, permisos, reglas y auditoría por registro.
 
-`/settings` is the extensible administration surface. Every user owns personal preferences and encrypted connections; administrators additionally manage application-wide locale and timezone. New connectors and module settings belong in the same namespaced `app_setting`, `app_user_setting`, and `app_user_secret` primitives instead of ad hoc environment variables or domain-specific tables.
+Escribir configuración desde `/settings` requiere la capacidad `manage_users`. Por MCP requiere además
+el alcance `settings:write` de la credencial: el alcance habilita y el rol autoriza, y hacen falta los
+dos.
 
-## Ownership
+## Acá no corre ningún modelo
 
-Do not add client behavior to `src/generated/` or `database/generated/` (compiled from `app-spec.json`) or to `src/platform/` or `database/platform/` (shipped and updated by the factory). Use `src/features/`, `src/components/custom/`, and `database/custom/`; number custom migrations from `500` up.
+El runtime no ejecuta modelos de lenguaje y no guarda credenciales de proveedores externos. Los agentes
+se conectan por MCP y traen el suyo, y por eso no hay un catálogo de modelos que mantener al día ni una
+clave de cifrado que custodiar.
+
+## TLS contra un PostgreSQL gestionado
 
 Un PostgreSQL gestionado (Supabase, Neon, RDS) presenta un certificado firmado por su propia autoridad, y `pg` trata `sslmode=require` como verificación completa: sin configurar TLS la conexión falla con `SELF_SIGNED_CERT_IN_CHAIN`. Pegá el certificado de la autoridad del proveedor en `DATABASE_CA_CERT` para verificar al servidor, o usá `DATABASE_SSL=relaxed` para cifrar sin autenticarlo — suficiente dentro de la red del proveedor, no frente a una red hostil.
 
-Migration files must not open their own transaction: `pnpm db:apply` wraps each file together with its `app_migration` ledger entry in a single transaction, so a migration and the record that it ran commit or roll back together. Applied migrations are checksummed and editing one afterwards is refused.
+## Propiedad del código
+
+No agregues comportamiento del cliente en `src/generated/` ni `database/generated/` (se compilan desde `app-spec.json`), ni en `src/platform/` ni `database/platform/` (viajan y se actualizan con la fábrica). Usá `src/features/`, `src/components/custom/` y `database/custom/`; numerá las migraciones propias desde la `500` en adelante.
+
+Los archivos de migración no deben abrir su propia transacción: `pnpm db:apply` envuelve cada archivo junto con su entrada en el registro `app_migration` dentro de una sola transacción, así la migración y la constancia de que corrió se confirman o se descartan juntas. Las migraciones aplicadas tienen suma de control y editar una después de que corrió se rechaza.
