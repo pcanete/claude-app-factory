@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { recordAuditEvent } from "@/lib/audit";
 import { deleteAttachmentsForRecord } from "@/lib/attachments";
@@ -9,6 +8,7 @@ import { withTransaction } from "@/lib/db";
 import { deleteRecord, getRecord, insertRecord, recordInputFromForm, updateRecord } from "@/lib/repository";
 import { applyRules, RuleBlockedError } from "@/lib/rules";
 import { requireEntity } from "@/lib/spec";
+import { revalidateAfterWrite } from "@/lib/revalidation";
 
 export async function createRecordAction(entityKey: string, formData: FormData) {
   const user = await requirePermission(entityKey, "create");
@@ -36,9 +36,7 @@ export async function createRecordAction(entityKey: string, formData: FormData) 
   }
   if (blockedMessage) redirect(`/records/${entityKey}/new?rule_error=${encodeURIComponent(blockedMessage)}`);
   if (!id) throw new Error("No se pudo crear el registro.");
-  revalidatePath("/");
-  revalidatePath(`/records/${entityKey}`);
-  revalidatePath("/audit");
+  revalidateAfterWrite(entityKey);
   redirect(hasPermission(user, entityKey, "read") ? `/records/${entityKey}/${id}` : `/records/${entityKey}`);
 }
 
@@ -67,10 +65,7 @@ export async function updateRecordAction(entityKey: string, id: string, formData
     else throw error;
   }
   if (blockedMessage) redirect(`/records/${entityKey}/${id}?rule_error=${encodeURIComponent(blockedMessage)}`);
-  revalidatePath("/");
-  revalidatePath(`/records/${entityKey}`);
-  revalidatePath(`/records/${entityKey}/${id}`);
-  revalidatePath("/audit");
+  revalidateAfterWrite(entityKey, id);
   redirect(`/records/${entityKey}/${id}`);
 }
 
@@ -98,8 +93,6 @@ export async function deleteRecordAction(entityKey: string, id: string) {
     else throw error;
   }
   if (blockedMessage) redirect(`/records/${entityKey}/${id}?rule_error=${encodeURIComponent(blockedMessage)}`);
-  revalidatePath("/");
-  revalidatePath(`/records/${entityKey}`);
-  revalidatePath("/audit");
+  revalidateAfterWrite(entityKey);
   redirect(`/records/${entityKey}`);
 }

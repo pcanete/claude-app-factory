@@ -25,6 +25,7 @@ import {
   resolveAttachmentPolicy,
 } from "@/lib/attachments";
 import { applyRules } from "@/lib/rules";
+import { revalidateAfterWrite } from "@/lib/revalidation";
 import { relationFields, requireEntity, runtimeSpec } from "@/lib/spec";
 import {
   deleteSetting,
@@ -580,6 +581,9 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
             };
           },
         });
+        // Un agente escribe fuera de la interfaz: sin esto, las vistas y los
+        // listados siguen sirviendo la copia anterior.
+        revalidateAfterWrite(entity.key);
         return { value: mutation, resultCount: 1 };
       },
     ),
@@ -632,6 +636,9 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
             };
           },
         });
+        // Un agente escribe fuera de la interfaz: sin esto, las vistas y los
+        // listados siguen sirviendo la copia anterior.
+        revalidateAfterWrite(entity.key, id);
         return { value: mutation, resultCount: 1 };
       },
     ),
@@ -680,6 +687,9 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
             };
           },
         });
+        // Un agente escribe fuera de la interfaz: sin esto, las vistas y los
+        // listados siguen sirviendo la copia anterior.
+        revalidateAfterWrite(entity.key, id);
         return { value: mutation, resultCount: 1 };
       },
     ),

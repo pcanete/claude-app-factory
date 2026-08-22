@@ -1,5 +1,12 @@
-import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import { Pool, types, type PoolClient, type QueryResultRow } from "pg";
 import { databaseConfig } from "@/lib/connection";
+
+// Una columna `date` guarda una fecha civil: no tiene hora ni zona horaria.
+// El parser por defecto de pg la convierte a Date usando la zona del proceso,
+// así que el mismo valor cae en un día distinto según dónde corra el servidor
+// (en Vercel corre en UTC). La devolvemos como texto YYYY-MM-DD para que una
+// fecha sin hora no dependa del entorno.
+types.setTypeParser(types.builtins.DATE, (value) => value);
 
 const globalForDb = globalThis as unknown as { appPool?: Pool };
 
