@@ -252,9 +252,13 @@ def main() -> int:
     for invariant in ("app_setting", "app_user_setting"):
         if invariant not in settings_migration:
             failures.append(f"System configuration migration is missing: {invariant}.")
-    # Sin asistente interno no hay credenciales de proveedores ajenas que custodiar.
-    if "app_user_secret" in settings_migration:
-        failures.append("The runtime no longer stores third-party provider credentials.")
+    # La 130 conserva su forma publicada: una migracion aplicada no se edita, ni
+    # siquiera para retirar lo que dejo de usarse. Eso lo hace la siguiente.
+    retiro_path = project / "database/platform/160_retirar_asistente.sql"
+    retiro = retiro_path.read_text(encoding="utf-8") if retiro_path.is_file() else ""
+    for invariant in ("DROP TABLE IF EXISTS app_user_secret", "DROP TABLE IF EXISTS ai_conversation"):
+        if invariant not in retiro:
+            failures.append(f"Assistant retirement migration is missing: {invariant}.")
     migration_runner_path = project / "scripts/apply-migrations.mjs"
     migration_runner = migration_runner_path.read_text(encoding="utf-8") if migration_runner_path.is_file() else ""
     if 'resolve("database/custom")' not in migration_runner:
