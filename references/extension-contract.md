@@ -54,7 +54,10 @@ To change platform behavior, import it from a feature and wrap it. To change gen
 
 ## Database evolution
 
-- Generated and platform migrations are immutable after deployment.
+- Generated and platform migrations are immutable after deployment. **This includes the factory's own
+  platform migrations**: once a version ships, editing `database/platform/1xx_*.sql` breaks every
+  application that already applied it, because its checksum no longer matches the ledger. A change to
+  platform behaviour goes in the next numbered platform migration, never in an existing one.
 - Changes to AppSpec create a new migration; they do not rewrite an applied migration.
 - Custom migrations start at `500` so they always apply after generated and platform migrations, and must declare their dependencies.
 - Migration files must not open their own transaction. `scripts/apply-migrations.mjs` wraps each file together with its ledger entry in a single transaction, so a migration and the record that it ran commit or roll back together.
