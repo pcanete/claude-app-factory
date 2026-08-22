@@ -351,8 +351,13 @@ def main() -> int:
     if '/.well-known/' not in proxy_source:
         failures.append("The proxy intercepts OAuth discovery, which must be served without credentials.")
     oauth_source = (project / "src/platform/mcp/oauth.ts").read_text(encoding="utf-8")
-    if "app_user" not in oauth_source or "active = TRUE" not in oauth_source:
-        failures.append("OAuth identity is not mapped to an active application user, so Clerk identity alone would grant access.")
+    # Probar la identidad no es autorizarla: el rol y el estado salen de la aplicacion.
+    if "app_user" not in oauth_source:
+        failures.append("OAuth identity is not mapped to an application user, so Clerk identity alone would grant access.")
+    if "inactivo" not in oauth_source and "active" not in oauth_source:
+        failures.append("OAuth identity does not check whether the application user is active.")
+    if "USER_SCOPES" not in oauth_source:
+        failures.append("OAuth identity does not declare its scopes.")
 
     if "filterableFields" not in mcp_server:
         failures.append("MCP query_records discards relationship filters, so agents cannot scope by owner record.")

@@ -2,7 +2,7 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createFactoryMcpServer } from "@/platform/mcp/server";
 import { authenticateAgentToken, type AgentPrincipal } from "@/platform/mcp/store";
-import { authenticateOAuthUser } from "@/platform/mcp/oauth";
+import { authenticateOAuthUser, oauthMessage } from "@/platform/mcp/oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,10 +81,15 @@ async function serve(request: Request) {
   // Dos procedencias, un mismo contrato. El prefijo distingue una credencial emitida
   // por la aplicación de un token de Clerk, así que no hay que probar las dos ni
   // dejar que una falle silenciosamente en la otra.
-  const agent = token.startsWith("factory_mcp_")
-    ? await authenticateAgentToken(token)
-    : await authenticateOAuthUser(token);
-  if (!agent) return unauthorized(request);
+  let agent: AgentPrincipal | null;
+  if (token.startsWith("factory_mcp_")) {
+    agent = await authenticateAgentToken(token);
+    if (!agent) return unauthorized(request);
+  } else {
+    const resultado = await authenticateOAuthUser(token);
+    if (resultado.estado !== "ok") return unauthorized(request, oauthMessage(resultado));
+    agent = resultado.principal;
+  }
   const authInfo: FactoryAuthInfo = {
     token,
     clientId: agent.id,
