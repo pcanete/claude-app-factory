@@ -1,11 +1,22 @@
 import { createHash } from "node:crypto";
 import { sql } from "@/lib/db";
 
+/**
+ * Quién está operando por MCP.
+ *
+ * `agent` es una credencial emitida para un proceso sin humano detrás. `user` es una
+ * persona que conectó un cliente remoto y se autenticó con su propia identidad: opera
+ * con su rol, no con el de una credencial compartida.
+ *
+ * Los permisos se resuelven igual en ambos casos --rol más alcances-- así que el
+ * servidor de herramientas no necesita distinguirlos; la auditoría sí.
+ */
 export type AgentPrincipal = {
   id: string;
   name: string;
   roleKey: string;
   scopes: string[];
+  kind: "agent" | "user";
 };
 
 type AgentRow = {
@@ -32,10 +43,11 @@ export async function authenticateAgentToken(token: string): Promise<AgentPrinci
   );
   const row = rows[0];
   return row
-    ? { id: row.id, name: row.name, roleKey: row.role_key, scopes: row.scopes }
+    ? { id: row.id, name: row.name, roleKey: row.role_key, scopes: row.scopes, kind: "agent" as const }
     : null;
 }
 
+/** Sólo se registra actividad de credenciales de agente; las personas se auditan por sus acciones. */
 export async function startAgentToolEvent(input: {
   agentId: string;
   toolName: string;
@@ -77,3 +89,7 @@ export async function finishAgentToolEvent(input: {
     ],
   );
 }
+
+
+/** Alcances de una persona operando por MCP: el techo lo pone su rol, no la credencial. */
+export const USER_SCOPES = ["schema:read", "records:read", "records:write", "records:delete"];

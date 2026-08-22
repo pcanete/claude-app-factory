@@ -91,6 +91,9 @@ EXPECTED_FILES = {
     "src/app/agents/page.tsx",
     "src/components/agent-create-form.tsx",
     "src/app/api/mcp/route.ts",
+    "src/app/.well-known/oauth-authorization-server/route.ts",
+    "src/app/.well-known/oauth-protected-resource/api/mcp/route.ts",
+    "src/platform/mcp/oauth.ts",
     "src/platform/mcp/access.ts",
     "src/platform/mcp/admin.ts",
     "src/platform/mcp/mutations.ts",
@@ -341,6 +344,16 @@ def main() -> int:
     # Descubrir el esquema y escribir tienen que hablar el mismo idioma: si
     # describe_entity dice `client` y create_record exige `client_id`, un agente que
     # lee la estructura y despues escribe segun lo que leyo falla.
+    # Un cliente remoto no puede recibir un token pegado a mano: necesita descubrir
+    # donde autenticarse, y el middleware no debe interceptar ese descubrimiento.
+    if "resource_metadata" not in mcp_route:
+        failures.append("MCP 401 does not point to its resource metadata, so remote clients cannot start OAuth.")
+    if '/.well-known/' not in proxy_source:
+        failures.append("The proxy intercepts OAuth discovery, which must be served without credentials.")
+    oauth_source = (project / "src/platform/mcp/oauth.ts").read_text(encoding="utf-8")
+    if "app_user" not in oauth_source or "active = TRUE" not in oauth_source:
+        failures.append("OAuth identity is not mapped to an active application user, so Clerk identity alone would grant access.")
+
     if "filterableFields" not in mcp_server:
         failures.append("MCP query_records discards relationship filters, so agents cannot scope by owner record.")
     if "writeAs" not in mcp_server:

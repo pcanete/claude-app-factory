@@ -72,6 +72,14 @@ async function traced<T extends Record<string, unknown>>(
   input: Record<string, unknown>,
   execute: (eventId: string) => Promise<{ value: T; resultCount?: number }>,
 ) {
+  // La actividad por herramienta se registra contra la credencial que la ejecutó, así
+  // que sólo aplica a agentes. Una persona que opera por MCP ya deja rastro donde
+  // corresponde: en la auditoría, junto a lo que hace desde el panel.
+  if (agent.kind === "user") {
+    const executed = await execute("");
+    return result(executed.value);
+  }
+
   const event = await startAgentToolEvent({
     agentId: agent.id,
     toolName,
@@ -490,7 +498,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
             const recordId = await insertRecord(entity.key, evaluated.values, client);
             const after = await getRecord(entity.key, recordId, client);
             await recordAuditEvent(client, {
-              agentId: agent.id,
+              ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),
               agentEventId,
               entityKey: entity.key,
               recordId,
@@ -542,7 +550,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
             await updateRecord(entity.key, id, evaluated.values, client);
             const after = await getRecord(entity.key, id, client);
             await recordAuditEvent(client, {
-              agentId: agent.id,
+              ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),
               agentEventId,
               entityKey: entity.key,
               recordId: id,
@@ -593,7 +601,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
             const deletedAttachments = await deleteAttachmentsForRecord(client, entity.key, id);
             await deleteRecord(entity.key, id, client);
             await recordAuditEvent(client, {
-              agentId: agent.id,
+              ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),
               agentEventId,
               entityKey: entity.key,
               recordId: id,

@@ -2,6 +2,7 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createFactoryMcpServer } from "@/platform/mcp/server";
 import { authenticateAgentToken, type AgentPrincipal } from "@/platform/mcp/store";
+import { authenticateOAuthUser } from "@/platform/mcp/oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,19 +54,37 @@ function requestHostAllowed(request: Request) {
   }
 }
 
-function unauthorized(message = "Credencial MCP inválida.") {
+function resourceMetadataUrl(request: Request) {
+  const url = new URL(request.url);
+  return `${url.origin}/.well-known/oauth-protected-resource${url.pathname}`;
+}
+
+function unauthorized(request: Request, message = "Credencial MCP inválida.") {
   return Response.json(
     { error: message },
-    { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="factory-mcp"' } },
+    {
+      status: 401,
+      headers: {
+        // RFC 9728: el cliente deriva de acá dónde autenticarse.
+        "WWW-Authenticate":
+          `Bearer realm="factory-mcp", resource_metadata="${resourceMetadataUrl(request)}"`,
+      },
+    },
   );
 }
 
 async function serve(request: Request) {
   if (!requestHostAllowed(request)) return Response.json({ error: "Host u origen no autorizado." }, { status: 403 });
   const token = bearerToken(request);
-  if (!token) return unauthorized();
-  const agent = await authenticateAgentToken(token);
-  if (!agent) return unauthorized();
+  if (!token) return unauthorized(request);
+
+  // Dos procedencias, un mismo contrato. El prefijo distingue una credencial emitida
+  // por la aplicación de un token de Clerk, así que no hay que probar las dos ni
+  // dejar que una falle silenciosamente en la otra.
+  const agent = token.startsWith("factory_mcp_")
+    ? await authenticateAgentToken(token)
+    : await authenticateOAuthUser(token);
+  if (!agent) return unauthorized(request);
   const authInfo: FactoryAuthInfo = {
     token,
     clientId: agent.id,
