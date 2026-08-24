@@ -7,6 +7,7 @@ import { Pagination } from "@/components/pagination";
 import { RecordFilters } from "@/components/record-filters";
 import { RecordTable } from "@/components/record-table";
 import { canAccessRelationshipOptions, hasPermission, requireViewAccess } from "@/lib/auth";
+import { recordAccessForUser, type RecordAccessContext } from "@/lib/record-access";
 import type { RuntimeUser } from "@/lib/auth-types";
 import { recordsForClient } from "@/lib/presentation";
 import {
@@ -28,17 +29,17 @@ function visibleFields(entity: EntitySpec, view: ViewSpec, maximum = 6) {
   return keys.map((key) => entity.fields.find((field) => field.key === key)).filter((field) => field !== undefined);
 }
 
-async function TableView({ view, query, canRead, canUpdate, user }: { view: ViewSpec; query: RawSearchParams; canRead: boolean; canUpdate: boolean; user: RuntimeUser }) {
+async function TableView({ view, query, canRead, canUpdate, user, access }: { view: ViewSpec; query: RawSearchParams; canRead: boolean; canUpdate: boolean; user: RuntimeUser; access: RecordAccessContext }) {
   const entity = getEntity(view.entity ?? "");
   if (!entity) notFound();
   const fields = visibleFields(entity, view);
   const parsed = parseListQuery(entity, query, view);
   let [records, total] = await Promise.all([
-    listRecords(entity.key, parsed),
-    countFilteredRecords(entity.key, parsed),
+    listRecords(entity.key, { ...parsed, access }),
+    countFilteredRecords(entity.key, { ...parsed, access }),
   ]);
   const page = Math.min(parsed.page, Math.max(1, Math.ceil(total / parsed.pageSize)));
-  if (page !== parsed.page) records = await listRecords(entity.key, { ...parsed, offset: (page - 1) * parsed.pageSize });
+  if (page !== parsed.page) records = await listRecords(entity.key, { ...parsed, access, offset: (page - 1) * parsed.pageSize });
   const filterOptions = canAccessRelationshipOptions(user, entity)
     ? await relationshipOptions(entity)
     : undefined;
@@ -56,12 +57,12 @@ async function TableView({ view, query, canRead, canUpdate, user }: { view: View
   );
 }
 
-async function KanbanView({ view, canRead, canUpdate }: { view: ViewSpec; canRead: boolean; canUpdate: boolean }) {
+async function KanbanView({ view, canRead, canUpdate, access }: { view: ViewSpec; canRead: boolean; canUpdate: boolean; access: RecordAccessContext }) {
   const entity = getEntity(view.entity ?? "");
   if (!entity) notFound();
   const groupField = entity.fields.find((field) => field.key === view.group_by && field.type === "enum");
   if (!groupField) notFound();
-  const records = await listRecords(entity.key, { sort: view.default_sort?.field, direction: view.default_sort?.direction, limit: 500 });
+  const records = await listRecords(entity.key, { sort: view.default_sort?.field, direction: view.default_sort?.direction, limit: 500, access });
   const cardFields = visibleFields(entity, view, 4).filter((field) => field.key !== entity.title_field && field.key !== groupField.key);
   const titleField = entity.fields.find((field) => field.key === entity.title_field);
   const grouped = new Map<string, Array<Record<string, unknown>>>((groupField.options ?? []).map((option) => [option.key, []]));
@@ -124,7 +125,7 @@ function monthKey(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-async function CalendarView({ view, month, canRead, canUpdate }: { view: ViewSpec; month?: string; canRead: boolean; canUpdate: boolean }) {
+async function CalendarView({ view, month, canRead, canUpdate, access }: { view: ViewSpec; month?: string; canRead: boolean; canUpdate: boolean; access: RecordAccessContext }) {
   const entity = getEntity(view.entity ?? "");
   const dateFieldKey = view.date_field;
   if (!entity || !dateFieldKey) notFound();
@@ -133,7 +134,7 @@ async function CalendarView({ view, month, canRead, canUpdate }: { view: ViewSpe
   const start = `${monthKey(selected.year, selected.month)}-01`;
   const nextDate = new Date(Date.UTC(selected.year, selected.month, 1));
   const end = `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
-  const records = await calendarRecords(entity.key, dateFieldKey, start, end, timezone);
+  const records = await calendarRecords(entity.key, dateFieldKey, start, end, timezone, access);
   const firstDate = new Date(Date.UTC(selected.year, selected.month - 1, 1));
   const days = new Date(Date.UTC(selected.year, selected.month, 0)).getUTCDate();
   const leading = (firstDate.getUTCDay() + 6) % 7;
@@ -170,18 +171,20 @@ type WidgetResult =
   | { widget: DashboardWidgetSpec; kind: "breakdown"; rows: Array<{ key: string | boolean | null; count: string }> }
   | { widget: DashboardWidgetSpec; kind: "recent"; records: Array<Record<string, unknown>> };
 
-async function resolveWidget(widget: DashboardWidgetSpec): Promise<WidgetResult> {
+async function resolveWidget(widget: DashboardWidgetSpec, access: RecordAccessContext): Promise<WidgetResult> {
+  // Los números del tablero también se recortan: una métrica que cuenta lo que la
+  // persona no puede abrir revela exactamente lo que el alcance intenta reservar.
   if (widget.type === "metric") {
-    return { widget, kind: "metric", value: await aggregateRecords(widget.entity, widget.aggregate ?? "count", widget.field) };
+    return { widget, kind: "metric", value: await aggregateRecords(widget.entity, widget.aggregate ?? "count", widget.field, access) };
   }
   if (widget.type === "breakdown") {
-    return { widget, kind: "breakdown", rows: await breakdownRecords(widget.entity, widget.group_by ?? "") };
+    return { widget, kind: "breakdown", rows: await breakdownRecords(widget.entity, widget.group_by ?? "", access) };
   }
-  return { widget, kind: "recent", records: await listRecords(widget.entity, { limit: widget.limit ?? 5 }) };
+  return { widget, kind: "recent", records: await listRecords(widget.entity, { limit: widget.limit ?? 5, access }) };
 }
 
-async function DashboardView({ view, userRole }: { view: ViewSpec; userRole: string }) {
-  const results = await Promise.all((view.widgets ?? []).map(resolveWidget));
+async function DashboardView({ view, userRole, access }: { view: ViewSpec; userRole: string; access: RecordAccessContext }) {
+  const results = await Promise.all((view.widgets ?? []).map((widget) => resolveWidget(widget, access)));
   return (
     <div className="dashboard-grid">
       {results.map((result) => {
@@ -242,6 +245,7 @@ export default async function NamedViewPage({
   const view = getView(viewKey);
   if (!view || !["table", "kanban", "calendar", "dashboard"].includes(view.type)) notFound();
   const user = await requireViewAccess(view.key);
+  const access = recordAccessForUser(user);
   const entity = view.entity ? getEntity(view.entity) : null;
   const canRead = entity ? hasPermission(user, entity.key, "read") : false;
   const canUpdate = entity ? hasPermission(user, entity.key, "update") : false;
@@ -256,10 +260,10 @@ export default async function NamedViewPage({
         </div>
         {entity && <Link className="button secondary" href={`/records/${entity.key}`}>Abrir listado base</Link>}
       </div>
-      {view.type === "table" && <TableView canRead={canRead} canUpdate={canUpdate} query={query} user={user} view={view} />}
-      {view.type === "kanban" && <KanbanView canRead={canRead} canUpdate={canUpdate} view={view} />}
-      {view.type === "calendar" && <CalendarView canRead={canRead} canUpdate={canUpdate} month={firstParam(query.month)} view={view} />}
-      {view.type === "dashboard" && <DashboardView userRole={user.roleKey} view={view} />}
+      {view.type === "table" && <TableView access={access} canRead={canRead} canUpdate={canUpdate} query={query} user={user} view={view} />}
+      {view.type === "kanban" && <KanbanView access={access} canRead={canRead} canUpdate={canUpdate} view={view} />}
+      {view.type === "calendar" && <CalendarView access={access} canRead={canRead} canUpdate={canUpdate} month={firstParam(query.month)} view={view} />}
+      {view.type === "dashboard" && <DashboardView access={access} userRole={user.roleKey} view={view} />}
     </>
   );
 }

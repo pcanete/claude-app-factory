@@ -13,7 +13,8 @@ export type FieldType =
   | "enum"
   | "file"
   | "json"
-  | "tags";
+  | "tags"
+  | "person";
 
 export type FieldSpec = {
   key: string;
@@ -52,7 +53,17 @@ export type EntitySpec = {
   fields: FieldSpec[];
   relationships?: RelationshipSpec[];
   attachments?: AttachmentPolicy;
+  record_access?: RecordAccessPolicy;
   permissions: Record<string, Array<"list" | "read" | "create" | "update" | "delete">>;
+};
+
+/**
+ * Qué registros de esta entidad alcanza cada rol. `own` limita a aquellos donde la
+ * persona figura en `owner_field`; un rol que no aparece acá no alcanza ninguno.
+ */
+export type RecordAccessPolicy = {
+  owner_field: string;
+  roles: Record<string, "all" | "own" | undefined>;
 };
 
 export type ViewType = "table" | "form" | "detail" | "dashboard" | "calendar" | "kanban";

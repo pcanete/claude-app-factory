@@ -97,6 +97,7 @@ Tipos de campo soportados en v0:
 | `url` | `text` | Semántica y validación en la interfaz |
 | `enum` | `text` + check | Requiere `options` no vacío |
 | `tags` | `text[]` + índice GIN | Varios valores por registro; hasta 50 etiquetas de 48 caracteres |
+| `person` | `uuid` + clave foránea a `app_user` | Una persona de la aplicación, no su nombre escrito |
 | `file` | `jsonb` | Metadatos de almacenamiento, no los bytes del archivo |
 | `json` | `jsonb` | Válvula de escape; preferí campos explícitos |
 
@@ -108,6 +109,37 @@ Opciones de un campo:
 - `help`: explicación para quien lo usa.
 
 Un campo `tags` con `options` queda restringido a esos valores; sin `options` acepta etiquetas libres, siempre normalizadas a minúsculas y sin repetidos. Se filtra por contención, así que un registro coincide cuando tiene todas las etiquetas pedidas.
+
+### Permisos a nivel de registro
+
+Los permisos de un rol responden "¿puede modificar clientes?". Una entidad puede además
+declarar *cuáles*:
+
+```json
+{
+  "record_access": {
+    "owner_field": "responsable",
+    "roles": { "director": "all", "socio": "own" }
+  }
+}
+```
+
+`owner_field` tiene que ser un campo de tipo `person` de la propia entidad: sin un dueño
+declarado no hay forma de decidir de quién es una fila, y adivinarlo —por el creador, por
+una convención de nombre— es como se construyen los permisos que fallan abiertos.
+
+Tres reglas que definen el comportamiento:
+
+- **Un rol que la política no menciona no alcanza ningún registro.** El silencio no concede.
+- **Si falta la identidad, la consulta falla.** Una entidad con política que recibe una
+  consulta sin identidad lanza un error en vez de devolver todo: un olvido rompe la
+  pantalla, nunca abre los datos.
+- **Un agente no puede exceder a su responsable.** Su alcance es el más restrictivo entre
+  el de su rol y el de la persona que responde por él.
+
+El filtro se aplica dentro de la consulta SQL —en listados, conteos, fichas, tableros,
+exportación, modificación y borrado—, no descartando filas después de traerlas: un conteo
+que incluye lo que no se puede ver ya es una filtración, aunque las filas no se muestren.
 
 Las entidades pueden habilitar adjuntos universales por registro:
 

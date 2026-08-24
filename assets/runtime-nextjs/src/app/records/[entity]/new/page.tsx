@@ -1,3 +1,4 @@
+import { listManagedUsers } from "@/platform/users/store";
 import { notFound } from "next/navigation";
 import { RecordForm } from "@/components/record-form";
 import { canAccessRelationshipOptions, requirePermission } from "@/lib/auth";
@@ -20,6 +21,15 @@ export default async function NewRecordPage({
   if (!canAccessRelationshipOptions(user, entity)) return notFound();
   const options = await relationshipOptions(entity);
 
+  // Sólo se cargan si la entidad tiene algún campo de tipo persona: no vale la pena
+  // consultar usuarios para un formulario que no los usa.
+  const personas = entity.fields.some((field) => field.type === "person")
+    ? (await listManagedUsers({ active: true, limit: 200 })).map((persona) => ({
+        id: persona.id,
+        name: persona.displayName,
+      }))
+    : undefined;
+
   return (
     <>
       <div className="page-header">
@@ -30,7 +40,7 @@ export default async function NewRecordPage({
         </div>
       </div>
       {query.rule_error && <div className="notice rule-blocked">{query.rule_error}</div>}
-      <RecordForm entity={entity} relationshipOptions={options} />
+      <RecordForm entity={entity} people={personas} relationshipOptions={options} />
     </>
   );
 }

@@ -28,6 +28,7 @@ FIELD_TYPES = {
     "file",
     "json",
     "tags",
+    "person",
 }
 VIEW_TYPES = {"table", "form", "detail", "dashboard", "calendar", "kanban"}
 ACTIONS = {"list", "read", "create", "update", "delete"}
@@ -345,6 +346,38 @@ def validate_spec(spec: Any) -> list[str]:
         }
         if entity.get("title_field") not in field_key_set:
             errors.append(f"{path}.title_field must reference a declared field.")
+
+        # Permisos a nivel de registro: opcionales, y sólo sobre un campo `person` de la
+        # propia entidad. Sin un dueño declarado no hay forma de decidir de quién es una
+        # fila, y adivinarlo --por el creador, por una convencion de nombre-- es como se
+        # construyen los permisos que fallan abierto.
+        record_access = entity.get("record_access")
+        if record_access is not None:
+            ra_path = f"{path}.record_access"
+            if not isinstance(record_access, dict):
+                errors.append(f"{ra_path} must be an object.")
+            else:
+                for key in sorted(set(record_access) - {"owner_field", "roles"}):
+                    errors.append(f"{ra_path} contains unknown property '{key}'.")
+                owner_field = record_access.get("owner_field")
+                owner_spec = entity_field_specs[entity_key].get(owner_field) if is_identifier(owner_field) else None
+                if owner_spec is None:
+                    errors.append(f"{ra_path}.owner_field must reference a declared field.")
+                elif owner_spec.get("type") != "person":
+                    errors.append(f"{ra_path}.owner_field must reference a field of type 'person'.")
+                roles_scope = record_access.get("roles")
+                if not isinstance(roles_scope, dict) or not roles_scope:
+                    errors.append(f"{ra_path}.roles must be a non-empty object.")
+                else:
+                    for role_key, scope in sorted(roles_scope.items()):
+                        if role_key not in role_keys:
+                            errors.append(f"{ra_path}.roles references unknown role '{role_key}'.")
+                        if scope not in {"all", "own"}:
+                            errors.append(f"{ra_path}.roles.{role_key} must be 'all' or 'own'.")
+                    # Un rol sin alcance declarado no ve nada. Si ninguno ve todo, nadie
+                    # puede administrar la entidad y eso casi siempre es un descuido.
+                    if not any(scope == "all" for scope in roles_scope.values()):
+                        errors.append(f"{ra_path}.roles must grant 'all' to at least one role.")
 
         attachments = entity.get("attachments")
         if attachments is not None:
@@ -738,6 +771,9 @@ def sql_type(field: dict[str, Any]) -> str:
         # Un arreglo nativo: se puede indexar y consultar por contenido, cosa que un
         # texto con comas no permite.
         "tags": "text[]",
+        # Una persona de la aplicacion, no un texto con su nombre: la referencia es real
+        # y permite decidir permisos sobre el registro.
+        "person": "uuid",
     }[field["type"]]
 
 
@@ -874,6 +910,11 @@ def compile_sql(spec: dict[str, Any]) -> str:
                 constraints.append(
                     f"  CONSTRAINT {sql_identifier(database_object_name('ckmax', entity['key'], field['key']))} "
                     f"CHECK (cardinality({nombre}) <= 50)"
+                )
+            if field["type"] == "person":
+                constraints.append(
+                    f"  CONSTRAINT {sql_identifier(database_object_name('fk', entity['key'], field['key']))} "
+                    f"FOREIGN KEY ({sql_identifier(field['key'])}) REFERENCES app_user(id) ON DELETE SET NULL"
                 )
             if field["type"] == "enum":
                 values = ", ".join(sql_string(option["key"]) for option in field["options"])

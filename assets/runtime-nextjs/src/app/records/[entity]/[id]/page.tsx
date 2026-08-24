@@ -1,3 +1,5 @@
+import { listManagedUsers } from "@/platform/users/store";
+import { recordAccessForUser } from "@/lib/record-access";
 import { notFound } from "next/navigation";
 import { deleteRecordAction } from "@/app/actions";
 import { RecordForm } from "@/components/record-form";
@@ -21,17 +23,27 @@ export default async function RecordDetailPage({
   const entity = getEntity(entityKey);
   if (!entity) notFound();
   const user = await requirePermission(entity.key, "read");
+  const access = recordAccessForUser(user);
   const canUpdate = hasPermission(user, entity.key, "update");
   const canDelete = hasPermission(user, entity.key, "delete");
   const canEditRelationships = canAccessRelationshipOptions(user, entity);
   const attachmentPolicy = resolveAttachmentPolicy(entity);
   const [record, options, attachments] = await Promise.all([
-    getRecord(entity.key, id),
+    getRecord(entity.key, id, undefined, false, access),
     canUpdate && canEditRelationships ? relationshipOptions(entity) : Promise.resolve({}),
     attachmentPolicy ? listAttachments(entity.key, id) : Promise.resolve([]),
   ]);
   if (!record) notFound();
   const deleteAction = deleteRecordAction.bind(null, entity.key, id);
+
+  // Sólo se cargan si la entidad tiene algún campo de tipo persona: no vale la pena
+  // consultar usuarios para un formulario que no los usa.
+  const personas = entity.fields.some((field) => field.type === "person")
+    ? (await listManagedUsers({ active: true, limit: 200 })).map((persona) => ({
+        id: persona.id,
+        name: persona.displayName,
+      }))
+    : undefined;
 
   return (
     <>
@@ -72,7 +84,7 @@ export default async function RecordDetailPage({
       {canUpdate && canEditRelationships ? (
         <>
           <div style={{ height: 24 }} />
-          <RecordForm entity={entity} record={record} relationshipOptions={options} />
+          <RecordForm entity={entity} people={personas} record={record} relationshipOptions={options} />
         </>
       ) : (
         <div className="notice readonly">Vista de sólo lectura para el rol actual.</div>

@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { agentEntities, requireAgentPermission } from "@/platform/mcp/access";
+import {
+  assertRecordOwnershipChange,
+  prepareRecordCreate,
+  recordAccessForAgent,
+} from "@/lib/record-access";
 import { executeIdempotentMutation } from "@/platform/mcp/mutations";
 import {
   finishAgentToolEvent,
@@ -194,6 +199,10 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
     : false;
   const puedeLeerConfiguracion = agent.scopes.includes("settings:read");
   const puedeAdministrar = capacidadAdministrativa && agent.scopes.includes("settings:write");
+
+  // El alcance por registro de esta credencial: para un agente sale de su responsable
+  // humano, y queda acotado por el rol de esa persona.
+  const alcanceDeRegistros = recordAccessForAgent(agent);
 
   /** El autor que corresponde a esta credencial, en la columna que le toca. */
   const actorDeConfiguracion: ActorDeConfiguracion = { kind: agent.kind, id: agent.id };
@@ -414,7 +423,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       { entityKey, search, filters },
       async () => {
         const entity = requireAgentPermission(agent, entityKey, "list");
-        const count = await countFilteredRecords(entity.key, { search, filters });
+        const count = await countFilteredRecords(entity.key, { search, filters, access: alcanceDeRegistros });
         return { value: { entityKey: entity.key, count }, resultCount: count };
       },
     ),
@@ -456,8 +465,8 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
           ? sort
           : undefined;
         const [records, total] = await Promise.all([
-          listRecords(entity.key, { search, filters: safeFilters, sort: safeSort, direction, limit, offset }),
-          countFilteredRecords(entity.key, { search, filters: safeFilters }),
+          listRecords(entity.key, { search, filters: safeFilters, sort: safeSort, direction, limit, offset, access: alcanceDeRegistros }),
+          countFilteredRecords(entity.key, { search, filters: safeFilters, access: alcanceDeRegistros }),
         ]);
         return {
           value: {
@@ -481,7 +490,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
     },
     async ({ entityKey, id }) => traced(agent, "get_record", { entityKey, id }, async () => {
       const entity = requireAgentPermission(agent, entityKey, "read");
-      const record = await getRecord(entity.key, id);
+      const record = await getRecord(entity.key, id, undefined, false, alcanceDeRegistros);
       return {
         value: record
           ? { found: true, entityKey: entity.key, record: recordForAgent(entity.key, record) }
@@ -553,7 +562,9 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       { entityKey, values, idempotencyKey },
       async (agentEventId) => {
         const entity = requireAgentPermission(agent, entityKey, "create");
-        const normalized = recordInputFromObject(entity, values, "create");
+        // El registro nace a nombre del responsable de la credencial, salvo que su
+        // alcance sea total. Un agente no crea trabajo a nombre de terceros.
+        const normalized = prepareRecordCreate(entity, recordInputFromObject(entity, values, "create"), alcanceDeRegistros);
         const mutation = await executeIdempotentMutation({
           agent,
           toolName: "create_record",
@@ -563,7 +574,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
           execute: async (client) => {
             const evaluated = applyRules({ entityKey: entity.key, event: "before_create", values: normalized });
             const recordId = await insertRecord(entity.key, evaluated.values, client);
-            const after = await getRecord(entity.key, recordId, client);
+            const after = await getRecord(entity.key, recordId, client, false, alcanceDeRegistros);
             await recordAuditEvent(client, {
               ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),
               agentEventId,
@@ -607,6 +618,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       async (agentEventId) => {
         const entity = requireAgentPermission(agent, entityKey, "update");
         const normalized = recordInputFromObject(entity, values, "update");
+        assertRecordOwnershipChange(entity, normalized, alcanceDeRegistros);
         const mutation = await executeIdempotentMutation({
           agent,
           toolName: "update_record",
@@ -614,11 +626,11 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
           idempotencyKey,
           request: { id, values: normalized },
           execute: async (client) => {
-            const before = await getRecord(entity.key, id, client, true);
+            const before = await getRecord(entity.key, id, client, true, alcanceDeRegistros);
             if (!before) throw new Error("El registro que intentás modificar no existe.");
             const evaluated = applyRules({ entityKey: entity.key, event: "before_update", values: normalized, before });
-            await updateRecord(entity.key, id, evaluated.values, client);
-            const after = await getRecord(entity.key, id, client);
+            await updateRecord(entity.key, id, evaluated.values, client, alcanceDeRegistros);
+            const after = await getRecord(entity.key, id, client, false, alcanceDeRegistros);
             await recordAuditEvent(client, {
               ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),
               agentEventId,
@@ -668,11 +680,11 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
           idempotencyKey,
           request: { id, confirm },
           execute: async (client) => {
-            const before = await getRecord(entity.key, id, client, true);
+            const before = await getRecord(entity.key, id, client, true, alcanceDeRegistros);
             if (!before) throw new Error("El registro que intentás eliminar no existe.");
             const evaluated = applyRules({ entityKey: entity.key, event: "before_delete", values: {}, before });
             const deletedAttachments = await deleteAttachmentsForRecord(client, entity.key, id);
-            await deleteRecord(entity.key, id, client);
+            await deleteRecord(entity.key, id, client, alcanceDeRegistros);
             await recordAuditEvent(client, {
               ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),
               agentEventId,

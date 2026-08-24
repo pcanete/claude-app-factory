@@ -17,6 +17,10 @@ export type AgentPrincipal = {
   roleKey: string;
   scopes: string[];
   kind: "agent" | "user";
+  /** Quién responde por esta credencial. Ausente sólo cuando `kind` es "user". */
+  ownerUserId?: string | null;
+  /** El rol de esa persona: acota el alcance del agente al de su responsable. */
+  ownerRoleKey?: string | null;
 };
 
 type AgentRow = {
@@ -24,6 +28,9 @@ type AgentRow = {
   name: string;
   role_key: string;
   scopes: string[];
+  owner_user_id: string | null;
+  owner_role_key: string | null;
+  owner_active: boolean | null;
 };
 
 function tokenHash(token: string) {
@@ -32,19 +39,35 @@ function tokenHash(token: string) {
 
 export async function authenticateAgentToken(token: string): Promise<AgentPrincipal | null> {
   if (!token.startsWith("factory_mcp_") || token.length < 48 || token.length > 160) return null;
+  // El responsable viaja con la credencial: de él sale el alcance por registro, y su
+  // estado importa tanto como el del agente. Una persona desactivada no sigue operando
+  // a través de una credencial que dejó viva.
   const rows = await sql<AgentRow>(
-    `UPDATE app_agent
+    `UPDATE app_agent AS a
         SET last_used_at = now()
-      WHERE token_hash = $1
-        AND active = TRUE
-        AND (expires_at IS NULL OR expires_at > now())
-      RETURNING id, name, role_key, scopes`,
+       FROM (SELECT id, owner_user_id FROM app_agent WHERE token_hash = $1) AS actual
+      WHERE a.id = actual.id
+        AND a.token_hash = $1
+        AND a.active = TRUE
+        AND (a.expires_at IS NULL OR a.expires_at > now())
+      RETURNING a.id, a.name, a.role_key, a.scopes,
+                a.owner_user_id,
+                (SELECT role_key FROM app_user WHERE id = a.owner_user_id) AS owner_role_key,
+                (SELECT active   FROM app_user WHERE id = a.owner_user_id) AS owner_active`,
     [tokenHash(token)],
   );
   const row = rows[0];
-  return row
-    ? { id: row.id, name: row.name, roleKey: row.role_key, scopes: row.scopes, kind: "agent" as const }
-    : null;
+  if (!row) return null;
+  if (row.owner_user_id && row.owner_active === false) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    roleKey: row.role_key,
+    scopes: row.scopes,
+    kind: "agent" as const,
+    ownerUserId: row.owner_user_id,
+    ownerRoleKey: row.owner_role_key,
+  };
 }
 
 /** Sólo se registra actividad de credenciales de agente; las personas se auditan por sus acciones. */

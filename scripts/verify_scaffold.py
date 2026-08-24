@@ -107,6 +107,8 @@ EXPECTED_FILES = {
     "scripts/apply-migrations.mjs",
     "scripts/destructive-guard.mjs",
     "scripts/prune-audit.mjs",
+    "scripts/test-record-access.mjs",
+    "src/lib/record-access.ts",
     "scripts/test-destructive-guard.mjs",
     "scripts/bootstrap-admin.mjs",
     "scripts/smoke-crud.mjs",
@@ -225,6 +227,17 @@ def main() -> int:
     agent_cli = agent_cli_path.read_text(encoding="utf-8") if agent_cli_path.is_file() else ""
     if "owner_user_id" not in agent_cli:
         failures.append("The agent CLI issues credentials without a responsible person.")
+
+    # El alcance por registro se resuelve en SQL. Filtrar despues de traer las filas deja
+    # el conteo y la paginacion contando lo que la persona no puede ver.
+    repository_path = project / "src/lib/repository.ts"
+    repository = repository_path.read_text(encoding="utf-8") if repository_path.is_file() else ""
+    if "recordAccessCondition" not in repository:
+        failures.append("Record-level access is not applied inside the SQL queries.")
+    access_path = project / "src/lib/record-access.ts"
+    access_source = access_path.read_text(encoding="utf-8") if access_path.is_file() else ""
+    if "throw new Error" not in access_source or "recordAccessForAgent" not in access_source:
+        failures.append("Record-level access does not fail closed for missing identities or agent owners.")
     user_actions_path = project / "src/app/users/actions.ts"
     user_actions = user_actions_path.read_text(encoding="utf-8") if user_actions_path.is_file() else ""
     for invariant in ("requireUserManagementAccess", "withTransaction", "recordAuditEvent", "SELF_PROTECTION", "LOCAL_IDENTITY"):

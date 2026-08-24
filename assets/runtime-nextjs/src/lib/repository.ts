@@ -1,5 +1,6 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { sql, transactionSql } from "@/lib/db";
+import { effectiveRecordScope, type RecordAccessContext } from "@/lib/record-access";
 import { type EntitySpec, type FieldSpec, relationFields, requireEntity } from "@/lib/spec";
 
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,47}$/;
@@ -35,9 +36,31 @@ function mutableColumnsFor(entity: EntitySpec) {
   ];
 }
 
-export async function countRecords(entityKey: string) {
+/**
+ * El alcance por registro se aplica en SQL, nunca filtrando en memoria: si no, el
+ * conteo y la paginación siguen contando lo que la persona no puede ver, y eso ya es
+ * una filtración aunque las filas no se muestren.
+ */
+function recordAccessCondition(
+  entity: EntitySpec,
+  access: RecordAccessContext | undefined,
+  values: unknown[],
+) {
+  const alcance = effectiveRecordScope(entity, access);
+  if (alcance === "all") return null;
+  if (alcance === "none") return "FALSE";
+  values.push(access!.userId);
+  return `${identifier(entity.record_access!.owner_field)} = $${values.length}::uuid`;
+}
+
+export async function countRecords(entityKey: string, access?: RecordAccessContext) {
   const entity = requireEntity(entityKey);
-  const rows = await sql<{ count: string }>(`SELECT COUNT(*)::text AS count FROM ${identifier(entity.key)}`);
+  const values: unknown[] = [];
+  const condition = recordAccessCondition(entity, access, values);
+  const rows = await sql<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM ${identifier(entity.key)}${condition ? ` WHERE ${condition}` : ""}`,
+    values,
+  );
   return Number(rows[0]?.count ?? 0);
 }
 
@@ -48,6 +71,7 @@ export type ListRecordOptions = {
   direction?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  access?: RecordAccessContext;
 };
 
 function listWhere(entity: EntitySpec, options: ListRecordOptions) {
@@ -114,6 +138,8 @@ function listWhere(entity: EntitySpec, options: ListRecordOptions) {
       conditions.push(`CAST(${identifier(field.key)} AS text) ILIKE $${values.length}`);
     }
   }
+  const alcance = recordAccessCondition(entity, options.access, values);
+  if (alcance) conditions.push(alcance);
   const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
   return { values, where };
 }
@@ -143,29 +169,42 @@ export async function listRecords(entityKey: string, options: ListRecordOptions 
   );
 }
 
-export async function aggregateRecords(entityKey: string, aggregate: "count" | "sum" | "avg", fieldKey?: string) {
+export async function aggregateRecords(
+  entityKey: string,
+  aggregate: "count" | "sum" | "avg",
+  fieldKey?: string,
+  access?: RecordAccessContext,
+) {
   const entity = requireEntity(entityKey);
+  const values: unknown[] = [];
+  const alcance = recordAccessCondition(entity, access, values);
+  const where = alcance ? ` WHERE ${alcance}` : "";
   if (aggregate === "count") {
-    const rows = await sql<{ value: string }>(`SELECT COUNT(*)::text AS value FROM ${identifier(entity.key)}`);
+    const rows = await sql<{ value: string }>(
+      `SELECT COUNT(*)::text AS value FROM ${identifier(entity.key)}${where}`, values);
     return Number(rows[0]?.value ?? 0);
   }
   const field = entity.fields.find((candidate) => candidate.key === fieldKey && ["integer", "decimal"].includes(candidate.type));
   if (!field) throw new Error(`Agregación inválida para ${entityKey}.${fieldKey ?? ""}`);
   const rows = await sql<{ value: string | null }>(
-    `SELECT ${aggregate.toUpperCase()}(${identifier(field.key)})::text AS value FROM ${identifier(entity.key)}`,
+    `SELECT ${aggregate.toUpperCase()}(${identifier(field.key)})::text AS value FROM ${identifier(entity.key)}${where}`,
+    values,
   );
   return Number(rows[0]?.value ?? 0);
 }
 
-export async function breakdownRecords(entityKey: string, fieldKey: string) {
+export async function breakdownRecords(entityKey: string, fieldKey: string, access?: RecordAccessContext) {
   const entity = requireEntity(entityKey);
   const field = entity.fields.find((candidate) => candidate.key === fieldKey && ["enum", "boolean"].includes(candidate.type));
   if (!field) throw new Error(`Desglose inválido para ${entityKey}.${fieldKey}`);
+  const values: unknown[] = [];
+  const alcance = recordAccessCondition(entity, access, values);
   return sql<{ key: string | boolean | null; count: string }>(
     `SELECT ${identifier(field.key)} AS key, COUNT(*)::text AS count
-       FROM ${identifier(entity.key)}
+       FROM ${identifier(entity.key)}${alcance ? ` WHERE ${alcance}` : ""}
       GROUP BY ${identifier(field.key)}
       ORDER BY COUNT(*) DESC, ${identifier(field.key)} ASC`,
+    values,
   );
 }
 
@@ -175,6 +214,7 @@ export async function calendarRecords(
   startDate: string,
   endDate: string,
   timezone: string,
+  access?: RecordAccessContext,
 ) {
   const entity = requireEntity(entityKey);
   const field = entity.fields.find((candidate) => candidate.key === dateFieldKey && ["date", "datetime"].includes(candidate.type));
@@ -184,32 +224,47 @@ export async function calendarRecords(
     ? `(${identifier(field.key)} AT TIME ZONE $3)::date`
     : `${identifier(field.key)}::date`;
   const values: unknown[] = field.type === "datetime" ? [startDate, endDate, timezone] : [startDate, endDate];
+  const alcance = recordAccessCondition(entity, access, values);
   return sql<Record<string, unknown>>(
     `SELECT ${columns}
        FROM ${identifier(entity.key)}
-      WHERE ${dateExpression} >= $1::date AND ${dateExpression} < $2::date
+      WHERE ${dateExpression} >= $1::date AND ${dateExpression} < $2::date${alcance ? ` AND ${alcance}` : ""}
       ORDER BY ${identifier(field.key)} ASC
       LIMIT 500`,
     values,
   );
 }
 
-export async function listRecordsForExport(entityKey: string, limit: number) {
+export async function listRecordsForExport(entityKey: string, limit: number, access?: RecordAccessContext) {
   const entity = requireEntity(entityKey);
   const columns = columnsFor(entity).map(identifier).join(", ");
+  const values: unknown[] = [];
+  const alcance = recordAccessCondition(entity, access, values);
+  values.push(limit);
   return sql<Record<string, unknown>>(
-    `SELECT ${columns} FROM ${identifier(entity.key)} ORDER BY "updated_at" DESC LIMIT $1`,
-    [limit],
+    `SELECT ${columns} FROM ${identifier(entity.key)}${alcance ? ` WHERE ${alcance}` : ""}
+      ORDER BY "updated_at" DESC LIMIT $${values.length}`,
+    values,
   );
 }
 
-export async function getRecord(entityKey: string, id: string, client?: PoolClient, forUpdate = false) {
+export async function getRecord(
+  entityKey: string,
+  id: string,
+  client?: PoolClient,
+  forUpdate = false,
+  access?: RecordAccessContext,
+) {
   const entity = requireEntity(entityKey);
   const columns = columnsFor(entity).map(identifier).join(", ");
+  // El alcance viaja en la consulta: conocer un identificador no puede alcanzar para
+  // leer un registro ajeno.
+  const values: unknown[] = [id];
+  const alcance = recordAccessCondition(entity, access, values);
   const rows = await queryRows<Record<string, unknown>>(
     client,
-    `SELECT ${columns} FROM ${identifier(entity.key)} WHERE "id" = $1 LIMIT 1${forUpdate ? " FOR UPDATE" : ""}`,
-    [id],
+    `SELECT ${columns} FROM ${identifier(entity.key)} WHERE "id" = $1${alcance ? ` AND ${alcance}` : ""} LIMIT 1${forUpdate ? " FOR UPDATE" : ""}`,
+    values,
   );
   return rows[0] ?? null;
 }
@@ -260,6 +315,8 @@ function parseTags(field: FieldSpec, raw: unknown): string[] {
   return salida;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function parseScalar(field: FieldSpec, raw: FormDataEntryValue | null, mode: "create" | "update") {
   if (field.type === "boolean") return raw !== null;
   if (field.type === "tags") return parseTags(field, typeof raw === "string" ? raw : "");
@@ -276,6 +333,9 @@ function parseScalar(field: FieldSpec, raw: FormDataEntryValue | null, mode: "cr
   }
   if (field.type === "decimal" && !/^-?\d+(\.\d+)?$/.test(value)) {
     throw new Error(`${field.label} debe ser un número decimal.`);
+  }
+  if (field.type === "person" && !UUID_PATTERN.test(value)) {
+    throw new Error(`${field.label} debe referenciar a una persona de la aplicación.`);
   }
   if (field.type === "json" || field.type === "file") {
     try {
@@ -309,6 +369,12 @@ function parseObjectScalar(field: FieldSpec, raw: unknown, mode: "create" | "upd
   }
   if (field.type === "decimal") {
     if (typeof raw !== "number" || !Number.isFinite(raw)) throw new Error(`${field.label} debe ser un número decimal.`);
+    return raw;
+  }
+  if (field.type === "person") {
+    if (typeof raw !== "string" || !UUID_PATTERN.test(raw)) {
+      throw new Error(`${field.label} debe referenciar a una persona de la aplicación.`);
+    }
     return raw;
   }
   if (field.type === "json" || field.type === "file") {
@@ -425,20 +491,39 @@ export async function insertRecord(entityKey: string, values: Record<string, unk
   return rows[0].id;
 }
 
-export async function updateRecord(entityKey: string, id: string, values: Record<string, unknown>, client?: PoolClient) {
+export async function updateRecord(
+  entityKey: string,
+  id: string,
+  values: Record<string, unknown>,
+  client?: PoolClient,
+  access?: RecordAccessContext,
+) {
   const entity = requireEntity(entityKey);
   const allowed = new Set(mutableColumnsFor(entity));
   const entries = Object.entries(values).filter(([key]) => allowed.has(key));
   if (!entries.length) return;
   const assignments = entries.map(([key], index) => `${identifier(key)} = $${index + 1}`).join(", ");
+  const parametros: unknown[] = [...entries.map(([, value]) => value), id];
+  const alcance = recordAccessCondition(entity, access, parametros);
   await queryRows(
     client,
-    `UPDATE ${identifier(entity.key)} SET ${assignments} WHERE "id" = $${entries.length + 1}`,
-    [...entries.map(([, value]) => value), id],
+    `UPDATE ${identifier(entity.key)} SET ${assignments} WHERE "id" = $${entries.length + 1}${alcance ? ` AND ${alcance}` : ""}`,
+    parametros,
   );
 }
 
-export async function deleteRecord(entityKey: string, id: string, client?: PoolClient) {
+export async function deleteRecord(
+  entityKey: string,
+  id: string,
+  client?: PoolClient,
+  access?: RecordAccessContext,
+) {
   const entity = requireEntity(entityKey);
-  await queryRows(client, `DELETE FROM ${identifier(entity.key)} WHERE "id" = $1`, [id]);
+  const values: unknown[] = [id];
+  const alcance = recordAccessCondition(entity, access, values);
+  await queryRows(
+    client,
+    `DELETE FROM ${identifier(entity.key)} WHERE "id" = $1${alcance ? ` AND ${alcance}` : ""}`,
+    values,
+  );
 }

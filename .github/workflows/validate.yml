@@ -28,6 +28,10 @@ jobs:
       - name: The destructive-migration guard holds
         working-directory: /tmp/reference-app
         run: node scripts/test-destructive-guard.mjs
+      # Un control de seguridad sin prueba automatizada se rompe sin que nadie se entere.
+      - name: Record-level access fails closed
+        working-directory: /tmp/reference-app
+        run: node scripts/test-record-access.mjs
 
   runtime:
     # The compiler tests never execute the generated TypeScript. Without this job a

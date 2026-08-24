@@ -1,3 +1,4 @@
+import { recordAccessForUser } from "@/lib/record-access";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BulkRecordTable } from "@/components/bulk-record-table";
@@ -22,6 +23,7 @@ export default async function EntityListPage({ params, searchParams }: Props) {
   const entity = getEntity(entityKey);
   if (!entity) notFound();
   const user = await requirePermission(entity.key, "list");
+  const access = recordAccessForUser(user);
   const canCreate = hasPermission(user, entity.key, "create");
   const canRead = hasPermission(user, entity.key, "read");
   const canUpdate = hasPermission(user, entity.key, "update");
@@ -35,11 +37,11 @@ export default async function EntityListPage({ params, searchParams }: Props) {
   const visibleFields = visibleKeys.map((key) => entity.fields.find((field) => field.key === key)).filter((field) => field !== undefined);
   const query = parseListQuery(entity, requested, configuredView);
   let [records, total] = await Promise.all([
-    listRecords(entity.key, query),
-    countFilteredRecords(entity.key, query),
+    listRecords(entity.key, { ...query, access }),
+    countFilteredRecords(entity.key, { ...query, access }),
   ]);
   const page = Math.min(query.page, Math.max(1, Math.ceil(total / query.pageSize)));
-  if (page !== query.page) records = await listRecords(entity.key, { ...query, offset: (page - 1) * query.pageSize });
+  if (page !== query.page) records = await listRecords(entity.key, { ...query, access, offset: (page - 1) * query.pageSize });
   // Las opciones para filtrar por relación sólo se ofrecen si el usuario puede
   // listar la entidad del otro lado; si no, el filtro no aparece.
   const filterOptions = canAccessRelationshipOptions(user, entity)

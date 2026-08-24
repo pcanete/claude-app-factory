@@ -2,10 +2,14 @@ import Link from "next/link";
 import { createRecordAction, updateRecordAction } from "@/app/actions";
 import type { EntitySpec, FieldSpec } from "@/lib/spec";
 
+type PersonOption = { id: string; name: string };
+
 type Props = {
   entity: EntitySpec;
   record?: Record<string, unknown>;
   relationshipOptions: Record<string, Array<{ id: string; label: string }>>;
+  /** Personas activas, para los campos de tipo `person`. */
+  people?: PersonOption[];
 };
 
 function inputValue(field: FieldSpec, value: unknown) {
@@ -22,7 +26,7 @@ function inputValue(field: FieldSpec, value: unknown) {
   return String(value);
 }
 
-function FieldControl({ field, value }: { field: FieldSpec; value: unknown }) {
+function FieldControl({ field, value, people }: { field: FieldSpec; value: unknown; people?: PersonOption[] }) {
   if (field.type === "boolean") {
     return (
       <label className="checkbox">
@@ -75,6 +79,18 @@ function FieldControl({ field, value }: { field: FieldSpec; value: unknown }) {
   if (field.type === "long_text" || field.type === "json" || field.type === "file") {
     return <textarea className="control" defaultValue={inputValue(field, value)} id={field.key} name={field.key} required={field.required} />;
   }
+  if (field.type === "person") {
+    // Se muestra como lista de personas: escribir un identificador a mano no es una
+    // interfaz, es una trampa. Si no llegó la lista, el campo queda visible pero
+    // bloqueado en vez de aceptar cualquier texto.
+    const opciones = people ?? [];
+    return (
+      <select className="control" defaultValue={typeof value === "string" ? value : ""} disabled={!opciones.length} id={field.key} name={field.key} required={field.required}>
+        <option value="">{opciones.length ? "Sin asignar" : "No hay personas disponibles"}</option>
+        {opciones.map((persona) => <option key={persona.id} value={persona.id}>{persona.name}</option>)}
+      </select>
+    );
+  }
   const type = {
     integer: "number",
     decimal: "number",
@@ -97,7 +113,7 @@ function FieldControl({ field, value }: { field: FieldSpec; value: unknown }) {
   );
 }
 
-export function RecordForm({ entity, record, relationshipOptions }: Props) {
+export function RecordForm({ entity, record, relationshipOptions, people }: Props) {
   const isEditing = Boolean(record?.id);
   const action = isEditing
     ? updateRecordAction.bind(null, entity.key, String(record?.id))
@@ -110,7 +126,7 @@ export function RecordForm({ entity, record, relationshipOptions }: Props) {
         {entity.fields.map((field) => (
           <div className={`field ${["long_text", "json", "file"].includes(field.type) ? "full" : ""}`} key={field.key}>
             <label className="field-label" htmlFor={field.key}>{field.label}{field.required ? " *" : ""}</label>
-            <FieldControl field={field} value={record?.[field.key]} />
+            <FieldControl field={field} people={people} value={record?.[field.key]} />
             {field.help && <span className="field-help">{field.help}</span>}
             {field.type === "file" && <span className="field-help">Campo legado de metadatos JSON. Para archivos reales usá el panel de adjuntos de la ficha.</span>}
           </div>

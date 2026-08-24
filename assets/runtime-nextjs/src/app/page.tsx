@@ -1,3 +1,4 @@
+import { recordAccessForUser } from "@/lib/record-access";
 import Link from "next/link";
 import { hasPermission, requireUser } from "@/lib/auth";
 import { countRecords } from "@/lib/repository";
@@ -12,7 +13,7 @@ export default async function HomePage() {
   const counts = await Promise.all(
     visibleEntities.map(async (entity) => ({
       entity,
-      count: await countRecords(entity.key),
+      count: await countRecords(entity.key, recordAccessForUser(user)),
     })),
   );
 
