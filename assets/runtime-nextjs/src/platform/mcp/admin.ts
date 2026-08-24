@@ -12,6 +12,9 @@ export type ManagedAgent = {
   last_used_at: Date | null;
   created_at: Date;
   event_count: string;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  owner_active: boolean | null;
 };
 
 export type AgentEvent = {
@@ -33,6 +36,10 @@ export type ManagedAgentInput = {
   scopes: string[];
   tokenHash: string;
   expiresAt: string;
+  /** Quién responde por lo que haga esta credencial. Obligatorio. */
+  ownerUserId: string;
+  /** Quién la emitió. Puede diferir del responsable. */
+  createdByUserId: string;
 };
 
 export type ManagedAgentForUpdate = {
@@ -45,15 +52,53 @@ export function isManagedAgentId(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+/**
+ * Un agente no se crea sin responsable.
+ *
+ * La credencial actúa con un rol, pero el rol no se hace cargo de nada: las personas sí.
+ * Sin esta columna, una credencial que borra algo de madrugada deja un rastro que dice
+ * qué agente fue y no a quién preguntarle.
+ */
 export async function createManagedAgent(client: PoolClient, input: ManagedAgentInput) {
+  const responsable = await transactionSql<{ id: string; active: boolean }>(
+    client,
+    "SELECT id, active FROM app_user WHERE id = $1",
+    [input.ownerUserId],
+  );
+  if (!responsable[0]) throw new Error("El responsable indicado no existe.");
+  if (!responsable[0].active) {
+    throw new Error("El responsable de un agente tiene que ser una persona activa.");
+  }
   const rows = await transactionSql<{ id: string }>(
     client,
-    `INSERT INTO app_agent (name, token_hash, role_key, scopes, expires_at)
-     VALUES ($1, $2, $3, $4::text[], $5)
+    `INSERT INTO app_agent (name, token_hash, role_key, scopes, expires_at, owner_user_id, created_by_user_id)
+     VALUES ($1, $2, $3, $4::text[], $5, $6, $7)
      RETURNING id`,
-    [input.name, input.tokenHash, input.roleKey, input.scopes, input.expiresAt],
+    [
+      input.name, input.tokenHash, input.roleKey, input.scopes, input.expiresAt,
+      input.ownerUserId, input.createdByUserId,
+    ],
   );
   return rows[0].id;
+}
+
+/** Cambia quién responde por un agente. Queda auditado como `agent_owner`. */
+export async function setManagedAgentOwner(client: PoolClient, id: string, ownerUserId: string) {
+  const responsable = await transactionSql<{ id: string; active: boolean; display_name: string }>(
+    client,
+    "SELECT id, active, display_name FROM app_user WHERE id = $1",
+    [ownerUserId],
+  );
+  if (!responsable[0]) throw new Error("El responsable indicado no existe.");
+  if (!responsable[0].active) {
+    throw new Error("El responsable de un agente tiene que ser una persona activa.");
+  }
+  const filas = await transactionSql<{ id: string }>(
+    client,
+    "UPDATE app_agent SET owner_user_id = $2, updated_at = now() WHERE id = $1 RETURNING id",
+    [id, ownerUserId],
+  );
+  return filas[0] ? responsable[0].display_name : null;
 }
 
 export async function getManagedAgentForUpdate(client: PoolClient, id: string) {
@@ -123,11 +168,15 @@ export async function listManagedAgents() {
             agent.expires_at,
             agent.last_used_at,
             agent.created_at,
-            COUNT(event.id)::text AS event_count
+            COUNT(event.id)::text AS event_count,
+            agent.owner_user_id,
+            responsable.display_name AS owner_name,
+            responsable.active AS owner_active
        FROM app_agent AS agent
        JOIN app_role AS role ON role.key = agent.role_key
        LEFT JOIN app_agent_event AS event ON event.agent_id = agent.id
-      GROUP BY agent.id, role.label
+       LEFT JOIN app_user AS responsable ON responsable.id = agent.owner_user_id
+      GROUP BY agent.id, role.label, responsable.display_name, responsable.active
       ORDER BY agent.active DESC, agent.name ASC`,
   );
 }

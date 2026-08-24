@@ -49,6 +49,7 @@ EXPECTED_FILES = {
     "src/components/settings-editor.tsx",
     "database/platform/160_retirar_asistente.sql",
     "database/platform/170_actor_de_configuracion.sql",
+    "database/platform/180_responsable_humano.sql",
     "src/app/views/[view]/page.tsx",
     "src/app/attachments/actions.ts",
     "src/app/attachments/[id]/route.ts",
@@ -202,8 +203,28 @@ def main() -> int:
         failures.append("Server mutations do not enforce deterministic AppSpec rules.")
     audit_page_path = project / "src/app/audit/page.tsx"
     audit_page = audit_page_path.read_text(encoding="utf-8") if audit_page_path.is_file() else ""
-    if "requireAuditAccess" not in audit_page or "listAuditEvents" not in audit_page:
+    if "requireAuditAccess" not in audit_page or "listActivityEvents" not in audit_page:
         failures.append("Audit history page is missing its server-side access or data check.")
+
+    # Un solo registro. Lo que hace una persona y lo que hace un agente son la misma
+    # historia: separarlos obliga a reconstruirla a mano y esconde de quien depende cada
+    # agente.
+    audit_lib_path = project / "src/lib/audit.ts"
+    audit_lib = audit_lib_path.read_text(encoding="utf-8") if audit_lib_path.is_file() else ""
+    if "UNION ALL" not in audit_lib or "app_agent_event" not in audit_lib:
+        failures.append("Activity is not unified: the audit log and agent tool events are read separately.")
+    if "responsible_user_id" not in audit_lib:
+        failures.append("Activity entries do not carry the responsible person.")
+
+    # Un agente es la extension de alguien: no se emite una credencial sin responsable.
+    agent_admin_path = project / "src/platform/mcp/admin.ts"
+    agent_admin = agent_admin_path.read_text(encoding="utf-8") if agent_admin_path.is_file() else ""
+    if "ownerUserId" not in agent_admin or "owner_user_id" not in agent_admin:
+        failures.append("Managed agents can be created without a human owner.")
+    agent_cli_path = project / "scripts/create-agent-token.mjs"
+    agent_cli = agent_cli_path.read_text(encoding="utf-8") if agent_cli_path.is_file() else ""
+    if "owner_user_id" not in agent_cli:
+        failures.append("The agent CLI issues credentials without a responsible person.")
     user_actions_path = project / "src/app/users/actions.ts"
     user_actions = user_actions_path.read_text(encoding="utf-8") if user_actions_path.is_file() else ""
     for invariant in ("requireUserManagementAccess", "withTransaction", "recordAuditEvent", "SELF_PROTECTION", "LOCAL_IDENTITY"):

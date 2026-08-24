@@ -4,10 +4,19 @@ import { useActionState, useState } from "react";
 import { createAgentAction, type AgentCreateState } from "@/app/agents/actions";
 
 type RoleOption = { key: string; label: string };
+type PersonOption = { id: string; name: string };
 
 const initialState: AgentCreateState = { status: "idle" };
 
-export function AgentCreateForm({ roles }: { roles: RoleOption[] }) {
+export function AgentCreateForm({
+  roles,
+  people,
+  defaultOwnerId,
+}: {
+  roles: RoleOption[];
+  people: PersonOption[];
+  defaultOwnerId: string;
+}) {
   const [state, action, pending] = useActionState(createAgentAction, initialState);
   const [copied, setCopied] = useState<"token" | "command" | null>(null);
   const token = state.token ?? "";
@@ -48,6 +57,16 @@ export function AgentCreateForm({ roles }: { roles: RoleOption[] }) {
             <span className="field-help">
               Recomendado: consultar y modificar. La configuración del sistema se otorga
               aparte y sólo funciona si el rol elegido ya puede administrar.
+            </span>
+          </label>
+          <label className="field">
+            <span className="field-label">Responsable</span>
+            <select className="control" defaultValue={defaultOwnerId} name="owner_user_id">
+              {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+            </select>
+            <span className="field-help">
+              Quién se hace cargo de lo que haga esta conexión. Toda su actividad queda a
+              nombre de esa persona.
             </span>
           </label>
           <label className="field">

@@ -157,6 +157,10 @@ tbody tr:hover { background: #1a1d25; }
 /* Dos acciones en una celda: la principal como botón, la destructiva como texto. */
 .row-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
+/* El responsable se cambia donde se lee, sin abrir otra pantalla. */
+.owner-cell { display: flex; align-items: center; gap: 8px; }
+.owner-cell .control { min-width: 150px; padding: 6px 8px; font-size: 12px; }
+
 /* Las secciones de una página de sistema venían pegadas: el formulario de alta, la
    lista y la actividad se leían como un bloque continuo. */
 .main > section + section { margin-top: 38px; }

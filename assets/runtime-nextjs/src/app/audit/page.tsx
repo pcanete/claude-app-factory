@@ -1,8 +1,9 @@
 import {
-  countAuditEvents,
-  listAuditEvents,
+  countActivityEvents,
+  listActivityAgents,
+  listActivityEvents,
   RETENCION_POR_DEFECTO_DIAS,
-  type AuditAction,
+  type ActivitySource,
 } from "@/lib/audit";
 import { Pagination } from "@/components/pagination";
 import { getSetting } from "@/platform/settings/store";
@@ -12,7 +13,14 @@ import { runtimeSpec } from "@/lib/spec";
 
 export const dynamic = "force-dynamic";
 
-const actions: Array<{ key: AuditAction; label: string }> = [
+/**
+ * Una sola pantalla para toda la actividad.
+ *
+ * Antes había dos: los cambios de datos acá y las llamadas de los agentes en `/agents`.
+ * Para reconstruir qué pasó había que mirar las dos y ordenarlas de memoria. Ahora es una
+ * línea de tiempo, con el origen como filtro en vez de como pantalla aparte.
+ */
+const acciones: Array<{ key: string; label: string }> = [
   { key: "create", label: "Creación" },
   { key: "update", label: "Modificación" },
   { key: "delete", label: "Eliminación" },
@@ -27,6 +35,7 @@ const actions: Array<{ key: AuditAction; label: string }> = [
   { key: "setting_delete", label: "Opción eliminada" },
   { key: "agent_create", label: "Conexión de agente creada" },
   { key: "agent_status", label: "Acceso de agente modificado" },
+  { key: "agent_owner", label: "Responsable de agente cambiado" },
 ];
 
 const POR_PAGINA = 50;
@@ -34,112 +43,150 @@ const POR_PAGINA = 50;
 export default async function AuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ entity?: string; action?: string; page?: string }>;
+  searchParams: Promise<{
+    entity?: string;
+    action?: string;
+    source?: string;
+    agent?: string;
+    page?: string;
+  }>;
 }) {
   await requireAuditAccess();
   const requested = await searchParams;
-  const auditEntities = [
+
+  const entidades = [
     ...runtimeSpec.entities.map((entity) => ({ key: entity.key, label: entity.label, labelPlural: entity.label_plural })),
     { key: "app_user", label: "Usuario", labelPlural: "Usuarios" },
     { key: "app_user_setting", label: "Preferencia", labelPlural: "Preferencias" },
     { key: "app_setting", label: "Configuración", labelPlural: "Configuración" },
     { key: "app_agent", label: "Agente", labelPlural: "Agentes" },
   ];
-  const entityKey = auditEntities.some((entity) => entity.key === requested.entity)
-    ? requested.entity
+
+  const agentes = await listActivityAgents();
+  const entityKey = entidades.some((entity) => entity.key === requested.entity) ? requested.entity : undefined;
+  const source = requested.source === "human" || requested.source === "agent"
+    ? (requested.source as ActivitySource)
     : undefined;
-  const action = actions.some((candidate) => candidate.key === requested.action)
-    ? requested.action as AuditAction
-    : undefined;
-  const total = await countAuditEvents({ entityKey, action });
+  // La acción no se valida contra el catálogo: las herramientas MCP también son acciones
+  // y su nombre lo pone el servidor, no esta lista.
+  const action = requested.action?.trim() || undefined;
+  const agentId = agentes.some((agente) => agente.id === requested.agent) ? requested.agent : undefined;
+
+  const filtros = { entityKey, action, source, agentId };
+  const total = await countActivityEvents(filtros);
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
   const solicitada = Number(requested.page ?? "1");
   const page = Number.isInteger(solicitada) && solicitada > 0 ? Math.min(solicitada, paginas) : 1;
-  const events = await listAuditEvents({
-    entityKey,
-    action,
+  const eventos = await listActivityEvents({
+    ...filtros,
     limit: POR_PAGINA,
     offset: (page - 1) * POR_PAGINA,
   });
+
   const retencionGuardada = await getSetting("auditoria", "retencion_dias");
   const retencion = typeof retencionGuardada?.value === "number"
     ? retencionGuardada.value
     : RETENCION_POR_DEFECTO_DIAS;
-  const entityLabels = Object.fromEntries(auditEntities.map((entity) => [entity.key, entity.label]));
-  const actionLabels = Object.fromEntries(actions.map((candidate) => [candidate.key, candidate.label]));
+
+  const etiquetasDeEntidad = Object.fromEntries(entidades.map((entity) => [entity.key, entity.label]));
+  const etiquetasDeAccion = Object.fromEntries(acciones.map((candidate) => [candidate.key, candidate.label]));
 
   return (
     <>
       <div className="page-header">
         <div>
           <p className="eyebrow">Control interno</p>
-          <h1>Auditoría</h1>
+          <h1>Actividad</h1>
           <p className="subtitle">
-            {total.toLocaleString("es-AR")} cambios registrados por el runtime. Se conservan{" "}
-            {retencion} días; lo anterior se vence solo. La auditoría no se edita ni se
-            borra a mano: si se pudiera elegir qué sacar, dejaría de ser evidencia.
+            {total.toLocaleString("es-AR")} registros de lo que hicieron personas y agentes.
+            Se conservan {retencion} días; lo anterior se vence solo. No se edita ni se borra
+            a mano: si se pudiera elegir qué sacar, dejaría de ser evidencia.
           </p>
         </div>
       </div>
+
       <form className="toolbar">
+        <select aria-label="Filtrar por origen" className="control audit-filter" defaultValue={source ?? ""} name="source">
+          <option value="">Personas y agentes</option>
+          <option value="human">Sólo personas</option>
+          <option value="agent">Sólo agentes</option>
+        </select>
+        <select aria-label="Filtrar por agente" className="control audit-filter" defaultValue={agentId ?? ""} name="agent">
+          <option value="">Cualquier agente</option>
+          {agentes.map((agente) => <option key={agente.id} value={agente.id}>{agente.name}</option>)}
+        </select>
         <select aria-label="Filtrar por entidad" className="control audit-filter" defaultValue={entityKey ?? ""} name="entity">
           <option value="">Todas las entidades</option>
-          {auditEntities.map((entity) => (
-            <option key={entity.key} value={entity.key}>{entity.labelPlural}</option>
-          ))}
+          {entidades.map((entity) => <option key={entity.key} value={entity.key}>{entity.labelPlural}</option>)}
         </select>
         <select aria-label="Filtrar por acción" className="control audit-filter" defaultValue={action ?? ""} name="action">
           <option value="">Todas las acciones</option>
-          {actions.map((candidate) => (
-            <option key={candidate.key} value={candidate.key}>{candidate.label}</option>
-          ))}
+          {acciones.map((candidate) => <option key={candidate.key} value={candidate.key}>{candidate.label}</option>)}
         </select>
         <button className="button secondary" type="submit">Filtrar</button>
       </form>
+
       <div className="table-wrap">
-        {events.length ? (
+        {eventos.length ? (
           <table className="audit-table">
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Ejecutado por</th>
+                <th>Quién</th>
+                <th>Responsable</th>
                 <th>Entidad</th>
                 <th>Acción</th>
-                <th>Registro</th>
-                <th>Cambios</th>
+                <th>Resultado</th>
+                <th>Detalle</th>
               </tr>
             </thead>
             <tbody>
-              {events.map((event) => (
-                <tr key={event.id}>
-                  <td>{formatValue(event.created_at, runtimeSpec.app.locale)}</td>
-                  <td>
-                    <div>{event.agent_name ? `Agente: ${event.agent_name}` : event.actor_name ?? "Identidad eliminada"}</div>
-                    <div className="table-secondary">{event.agent_id ? "MCP" : event.actor_email ?? "—"}</div>
+              {eventos.map((evento) => (
+                <tr key={evento.event_key}>
+                  <td data-label="Fecha">{formatValue(evento.created_at, runtimeSpec.app.locale)}</td>
+                  <td data-label="Quién">
+                    <div>
+                      {evento.source === "agent"
+                        ? evento.agent_name ?? "Agente eliminado"
+                        : evento.actor_name ?? "Identidad eliminada"}
+                    </div>
+                    <div className="table-secondary">
+                      {evento.source === "agent" ? "Agente · MCP" : evento.actor_email ?? "Persona"}
+                    </div>
                   </td>
-                  <td>{entityLabels[event.entity_key] ?? event.entity_key}</td>
-                  <td><span className={`audit-badge ${event.action}`}>{actionLabels[event.action]}</span></td>
-                  <td><code className="record-id">{event.record_id ?? "—"}</code></td>
-                  <td>
+                  <td data-label="Responsable">
+                    {evento.responsible_name ?? <span className="table-secondary">Sin responsable</span>}
+                  </td>
+                  <td data-label="Entidad">
+                    {evento.entity_key ? etiquetasDeEntidad[evento.entity_key] ?? evento.entity_key : "—"}
+                  </td>
+                  <td data-label="Acción">
+                    <span className={`audit-badge ${evento.action}`}>
+                      {etiquetasDeAccion[evento.action] ?? evento.action}
+                    </span>
+                  </td>
+                  <td data-label="Resultado">
+                    {evento.status === "failed"
+                      ? <span className="danger-text">Falló</span>
+                      : evento.result_count === null
+                        ? <code className="record-id">{evento.record_id ?? "—"}</code>
+                        : `${evento.result_count}${evento.duration_ms === null ? "" : ` · ${evento.duration_ms} ms`}`}
+                  </td>
+                  <td data-label="Detalle">
                     <details>
-                      <summary>Ver cambios</summary>
-                      <pre className="audit-json">{JSON.stringify(event.changes, null, 2)}</pre>
+                      <summary>Ver detalle</summary>
+                      <pre className="audit-json">{JSON.stringify(evento.details, null, 2)}</pre>
+                      {evento.error_message && <p className="danger-text">{evento.error_message}</p>}
                     </details>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : <div className="empty">Todavía no hay eventos de auditoría para estos filtros.</div>}
+        ) : <div className="empty">Todavía no hay actividad para estos filtros.</div>}
       </div>
       {total > POR_PAGINA && (
-        <Pagination
-          baseHref="/audit"
-          page={page}
-          pageSize={POR_PAGINA}
-          query={requested}
-          total={total}
-        />
+        <Pagination baseHref="/audit" page={page} pageSize={POR_PAGINA} query={requested} total={total} />
       )}
     </>
   );

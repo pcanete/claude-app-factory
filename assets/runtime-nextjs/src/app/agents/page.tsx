@@ -1,8 +1,10 @@
-import { deleteAgentAction, setAgentStatusAction } from "@/app/agents/actions";
+import Link from "next/link";
+import { deleteAgentAction, setAgentOwnerAction, setAgentStatusAction } from "@/app/agents/actions";
 import { AgentCreateForm } from "@/components/agent-create-form";
 import { countAgentEvents, listAgentEvents, listManagedAgents } from "@/platform/mcp/admin";
 import { Pagination } from "@/components/pagination";
 import { requireUserManagementAccess } from "@/lib/auth";
+import { listManagedUsers } from "@/platform/users/store";
 import { formatDateTimeValue } from "@/lib/presentation";
 import { runtimeSpec } from "@/lib/spec";
 
@@ -12,6 +14,7 @@ const successMessages: Record<string, string> = {
   revoked: "El acceso fue revocado inmediatamente.",
   reactivated: "La conexión volvió a estar activa.",
   deleted: "La conexión se eliminó. No tenía actividad registrada.",
+  owner: "Cambió el responsable de la conexión.",
 };
 
 // Un agente es una identidad con un rol: crearlo equivale a delegar ese rol,
@@ -21,13 +24,14 @@ export default async function AgentsPage({
 }: {
   searchParams: Promise<{ error?: string; saved?: string; page?: string }>;
 }) {
-  await requireUserManagementAccess();
+  const actor = await requireUserManagementAccess();
   const requested = await searchParams;
   const POR_PAGINA = 25;
   const totalEventos = await countAgentEvents();
   const paginas = Math.max(1, Math.ceil(totalEventos / POR_PAGINA));
   const solicitada = Number(requested.page ?? "1");
   const page = Number.isInteger(solicitada) && solicitada > 0 ? Math.min(solicitada, paginas) : 1;
+  const personas = await listManagedUsers({ active: true, limit: 200 });
   const [agents, events] = await Promise.all([
     listManagedAgents(),
     listAgentEvents({ limit: POR_PAGINA, offset: (page - 1) * POR_PAGINA }),
@@ -52,7 +56,11 @@ export default async function AgentsPage({
 
       <section>
         <div className="section-heading"><div><h2>Nueva conexión</h2><p className="subtitle">Elegí qué puede hacer y copiá el acceso listo para usar.</p></div></div>
-        <AgentCreateForm roles={runtimeSpec.roles.map((role) => ({ key: role.key, label: role.label }))} />
+        <AgentCreateForm
+          defaultOwnerId={actor.id}
+          people={personas.map((persona) => ({ id: persona.id, name: persona.displayName }))}
+          roles={runtimeSpec.roles.map((role) => ({ key: role.key, label: role.label }))}
+        />
       </section>
 
       <section>
@@ -63,12 +71,24 @@ export default async function AgentsPage({
         <div className="table-wrap">
           {agents.length ? (
             <table className="audit-table">
-              <thead><tr><th>Agente</th><th>Rol</th><th>Estado</th><th>Vencimiento</th><th>Último uso</th><th>Llamadas</th><th>Acción</th></tr></thead>
+              <thead><tr><th>Agente</th><th>Rol</th><th>Responsable</th><th>Estado</th><th>Vencimiento</th><th>Último uso</th><th>Llamadas</th><th>Acción</th></tr></thead>
               <tbody>
                 {agents.map((agent) => (
                   <tr key={agent.id}>
                     <td><strong>{agent.name}</strong><div className="table-secondary">{agent.scopes.join(", ")}</div></td>
                     <td>{agent.role_label}</td>
+                    <td>
+                      <form action={setAgentOwnerAction} className="owner-cell">
+                        <input name="id" type="hidden" value={agent.id} />
+                        <select className="control" defaultValue={agent.owner_user_id ?? ""} name="owner_user_id">
+                          {!agent.owner_user_id && <option value="">Sin responsable</option>}
+                          {personas.map((persona) => (
+                            <option key={persona.id} value={persona.id}>{persona.displayName}</option>
+                          ))}
+                        </select>
+                        <button className="text-button" type="submit">Cambiar</button>
+                      </form>
+                    </td>
                     <td><span className={`user-status ${agent.active ? "on" : "off"}`}>{agent.active ? "Activo" : "Inactivo"}</span></td>
                     <td>{agent.expires_at ? formatDateTimeValue(agent.expires_at, runtimeSpec.app.locale) : "Sin vencimiento"}</td>
                     <td>{agent.last_used_at ? formatDateTimeValue(agent.last_used_at, runtimeSpec.app.locale) : "Nunca"}</td>
@@ -99,42 +119,13 @@ export default async function AgentsPage({
       <section>
         <div className="section-heading">
           <div>
-            <h2>Actividad reciente</h2>
+            <h2>Actividad</h2>
             <p className="subtitle">
-              {totalEventos.toLocaleString("es-AR")} llamadas registradas. Se conservan con la
-              misma ventana que la auditoría.
+              Lo que hacen los agentes se registra junto con lo que hacen las personas, en
+              una sola línea de tiempo: <Link className="record-link" href="/audit?source=agent">ver la actividad de agentes</Link>.
             </p>
           </div>
         </div>
-        <div className="table-wrap">
-          {events.length ? (
-            <table className="audit-table">
-              <thead><tr><th>Fecha</th><th>Agente</th><th>Herramienta</th><th>Entidad</th><th>Estado</th><th>Resultado</th><th>Entrada</th></tr></thead>
-              <tbody>
-                {events.map((event) => (
-                  <tr key={event.id}>
-                    <td>{formatDateTimeValue(event.started_at, runtimeSpec.app.locale)}</td>
-                    <td>{event.agent_name}</td>
-                    <td><code>{event.tool_name}</code></td>
-                    <td>{event.entity_key ?? "—"}</td>
-                    <td><span className={`audit-badge ${event.status === "failed" ? "delete" : event.status === "completed" ? "create" : "update"}`}>{event.status}</span></td>
-                    <td>{event.result_count ?? "—"}{event.duration_ms === null ? "" : ` · ${event.duration_ms} ms`}</td>
-                    <td><details><summary>Ver entrada</summary><pre className="audit-json">{JSON.stringify(event.input_summary, null, 2)}</pre>{event.error_message && <p className="error-text">{event.error_message}</p>}</details></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <div className="empty">Todavía no hay actividad de agentes.</div>}
-        </div>
-        {totalEventos > POR_PAGINA && (
-          <Pagination
-            baseHref="/agents"
-            page={page}
-            pageSize={POR_PAGINA}
-            query={requested}
-            total={totalEventos}
-          />
-        )}
       </section>
     </>
   );

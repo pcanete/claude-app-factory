@@ -11,10 +11,11 @@ function argument(name) {
 
 const name = argument("name");
 const roleKey = argument("role");
+const ownerEmail = argument("owner")?.toLowerCase();
 const expiresDaysRaw = argument("expires-days");
 const access = argument("access") ?? "read";
-if (!name || !roleKey) {
-  throw new Error('Uso: pnpm mcp:agent:create -- --name "Riel" --role admin [--access read|write|full] [--expires-days 90]');
+if (!name || !roleKey || !ownerEmail) {
+  throw new Error('Uso: pnpm mcp:agent:create -- --name "Riel" --role admin --owner persona@ejemplo.com [--access read|write|full|admin] [--expires-days 90]');
 }
 if (name.length > 120 || !/^[a-z][a-z0-9_]{0,47}$/.test(roleKey)) {
   throw new Error("Nombre o rol inválido.");
@@ -45,13 +46,20 @@ await client.connect();
 try {
   const role = await client.query("SELECT key FROM app_role WHERE key = $1", [roleKey]);
   if (!role.rowCount) throw new Error(`El rol ${roleKey} no existe en AppSpec.`);
+  // Un agente responde ante una persona: sin responsable activo no se emite credencial.
+  const owner = await client.query(
+    "SELECT id, active FROM app_user WHERE lower(email) = $1",
+    [ownerEmail],
+  );
+  if (!owner.rowCount) throw new Error(`No hay ningún usuario con el correo ${ownerEmail}.`);
+  if (!owner.rows[0].active) throw new Error(`${ownerEmail} está desactivado y no puede ser responsable.`);
   const expiresAt = expiresDays === null
     ? null
     : new Date(Date.now() + expiresDays * 24 * 60 * 60 * 1_000).toISOString();
   await client.query(
-    `INSERT INTO app_agent (name, token_hash, role_key, scopes, expires_at)
+    `INSERT INTO app_agent (name, token_hash, role_key, scopes, expires_at, owner_user_id, created_by_user_id)
      VALUES ($1, $2, $3, $4::text[], $5)`,
-    [name, tokenHash, roleKey, scopes, expiresAt],
+    [name, tokenHash, roleKey, scopes, expiresAt, owner.rows[0].id, owner.rows[0].id],
   );
   console.log("Agente MCP creado. Guardá este token ahora; no puede recuperarse después:");
   console.log(token);

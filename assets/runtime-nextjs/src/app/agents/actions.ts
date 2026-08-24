@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import {
   createManagedAgent,
   deleteManagedAgent,
+  setManagedAgentOwner,
   getManagedAgentForUpdate,
   isManagedAgentId,
   setManagedAgentActive,
@@ -58,6 +59,9 @@ export async function createAgentAction(
   const roleKey = String(formData.get("role_key") ?? "");
   const access = String(formData.get("access") ?? "write") as keyof typeof accessScopes;
   const expiresDays = Number(formData.get("expires_days") ?? 90);
+  // Por defecto responde quien lo crea. Se puede designar a otra persona, pero nunca
+  // puede quedar sin responsable: un agente es la extensión de alguien, no un sujeto.
+  const ownerUserId = String(formData.get("owner_user_id") ?? "").trim() || actor.id;
   if (!name || name.length > 120) return { status: "error", message: "Ingresá un nombre de hasta 120 caracteres." };
   if (!runtimeSpec.roles.some((role) => role.key === roleKey)) return { status: "error", message: "El rol elegido no es válido." };
   if (!(access in accessScopes)) return { status: "error", message: "El nivel de acceso no es válido." };
@@ -76,6 +80,8 @@ export async function createAgentAction(
         scopes: [...accessScopes[access]],
         tokenHash,
         expiresAt,
+        ownerUserId,
+        createdByUserId: actor.id,
       });
       await recordAuditEvent(client, {
         actorId: actor.id,
@@ -145,4 +151,28 @@ export async function deleteAgentAction(formData: FormData) {
   if (resultado.estado === "con_historial") redirect("/agents?error=con_historial");
   refreshAgents();
   redirect("/agents?saved=deleted");
+}
+
+export async function setAgentOwnerAction(formData: FormData) {
+  const actor = await requireUserManagementAccess();
+  const id = String(formData.get("id") ?? "");
+  const ownerUserId = String(formData.get("owner_user_id") ?? "");
+  if (!isManagedAgentId(id) || !isManagedAgentId(ownerUserId)) redirect("/agents?error=not_found");
+  const nombre = await withTransaction(async (client) => {
+    const before = await getManagedAgentForUpdate(client, id);
+    if (!before) return null;
+    const asignado = await setManagedAgentOwner(client, id, ownerUserId);
+    if (!asignado) return null;
+    await recordAuditEvent(client, {
+      actorId: actor.id,
+      entityKey: "app_agent",
+      recordId: id,
+      action: "agent_owner",
+      changes: { name: before.name, responsable: asignado },
+    });
+    return asignado;
+  });
+  if (!nombre) redirect("/agents?error=not_found");
+  refreshAgents();
+  redirect("/agents?saved=owner");
 }
