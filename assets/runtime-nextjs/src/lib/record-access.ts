@@ -102,3 +102,22 @@ export function assertRecordOwnershipChange(
 export class RecordOutOfScopeError extends Error {
   readonly code = "record_out_of_scope";
 }
+
+/**
+ * Con alcance propio, el campo que define al dueño sólo puede ofrecer a uno mismo.
+ *
+ * `prepareRecordCreate` y `assertRecordOwnershipChange` ya rechazan lo demás, así que
+ * esto no agrega un control: quita una trampa. Un desplegable que lista a toda la
+ * organización cuando sólo una opción va a ser aceptada convierte una regla clara en un
+ * error al guardar, y encima muestra el directorio completo a quien tiene alcance
+ * acotado. Los demás campos de tipo persona no se tocan: no deciden quién ve qué.
+ */
+export function ownerFieldRestriction(
+  entity: EntitySpec,
+  access?: RecordAccessContext,
+): { ownerField: string; allowedId: string } | undefined {
+  const policy = entity.record_access;
+  if (!policy) return undefined;
+  if (effectiveRecordScope(entity, access) !== "own") return undefined;
+  return { ownerField: policy.owner_field, allowedId: access!.userId };
+}

@@ -1,4 +1,4 @@
-import { recordAccessForUser } from "@/lib/record-access";
+import { ownerFieldRestriction, recordAccessForUser } from "@/lib/record-access";
 import { listManagedUsers } from "@/platform/users/store";
 import { notFound } from "next/navigation";
 import { RecordForm } from "@/components/record-form";
@@ -31,6 +31,8 @@ export default async function NewRecordPage({
       }))
     : undefined;
 
+  const restriccionDeDueno = ownerFieldRestriction(entity, recordAccessForUser(user));
+
   return (
     <>
       <div className="page-header">
@@ -41,7 +43,7 @@ export default async function NewRecordPage({
         </div>
       </div>
       {query.rule_error && <div className="notice rule-blocked">{query.rule_error}</div>}
-      <RecordForm entity={entity} people={personas} relationshipOptions={options} />
+      <RecordForm entity={entity} ownerRestriction={restriccionDeDueno} people={personas} relationshipOptions={options} />
     </>
   );
 }

@@ -103,6 +103,7 @@ console.log("\nLa condición viaja en SQL, no en memoria");
  * declara acá abajo y queda a la vista en la revisión.
  */
 const repositorio = await readFile(resolve("src/lib/repository.ts"), "utf8");
+const repositorioDeAcceso = await readFile(resolve("src/lib/record-access.ts"), "utf8");
 
 // Las tres formas legítimas de aplicar alcance: filtrar en SQL, delegar en quien filtra,
 // o —al crear— fijar el dueño del registro.
@@ -157,6 +158,16 @@ comprobar(
     && /DELETE FROM[\s\S]{0,200}RETURNING "id"/.test(repositorio)
     && (repositorio.match(/RecordOutOfScopeError/g) ?? []).length >= 2,
 );
+
+const formulario = await readFile(resolve("src/components/record-form.tsx"), "utf8");
+comprobar(
+  "el desplegable de dueño no ofrece lo que el servidor va a rechazar",
+  /ownerRestriction/.test(formulario) && /ownerFieldRestriction/.test(repositorioDeAcceso),
+);
+for (const ruta of ["src/app/records/[entity]/new/page.tsx", "src/app/records/[entity]/[id]/page.tsx"]) {
+  const fuente = await readFile(resolve(ruta), "utf8");
+  comprobar(`${ruta} acota el campo dueño`, /ownerFieldRestriction\(/.test(fuente));
+}
 
 console.log("\nTodo camino que llega a los datos lleva identidad");
 

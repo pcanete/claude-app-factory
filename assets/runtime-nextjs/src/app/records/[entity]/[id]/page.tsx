@@ -1,5 +1,5 @@
 import { listManagedUsers } from "@/platform/users/store";
-import { recordAccessForUser } from "@/lib/record-access";
+import { ownerFieldRestriction, recordAccessForUser } from "@/lib/record-access";
 import { notFound } from "next/navigation";
 import { deleteRecordAction } from "@/app/actions";
 import { RecordForm } from "@/components/record-form";
@@ -45,6 +45,8 @@ export default async function RecordDetailPage({
       }))
     : undefined;
 
+  const restriccionDeDueno = ownerFieldRestriction(entity, access);
+
   return (
     <>
       <div className="page-header">
@@ -84,7 +86,7 @@ export default async function RecordDetailPage({
       {canUpdate && canEditRelationships ? (
         <>
           <div style={{ height: 24 }} />
-          <RecordForm entity={entity} people={personas} record={record} relationshipOptions={options} />
+          <RecordForm entity={entity} ownerRestriction={restriccionDeDueno} people={personas} record={record} relationshipOptions={options} />
         </>
       ) : (
         <div className="notice readonly">Vista de sólo lectura para el rol actual.</div>

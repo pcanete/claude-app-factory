@@ -10,6 +10,8 @@ type Props = {
   relationshipOptions: Record<string, Array<{ id: string; label: string }>>;
   /** Personas activas, para los campos de tipo `person`. */
   people?: PersonOption[];
+  /** Presente sólo cuando el alcance sobre la entidad es propio. */
+  ownerRestriction?: { ownerField: string; allowedId: string };
 };
 
 function inputValue(field: FieldSpec, value: unknown) {
@@ -26,7 +28,12 @@ function inputValue(field: FieldSpec, value: unknown) {
   return String(value);
 }
 
-function FieldControl({ field, value, people }: { field: FieldSpec; value: unknown; people?: PersonOption[] }) {
+function FieldControl({ field, value, people, ownerRestriction }: {
+  field: FieldSpec;
+  value: unknown;
+  people?: PersonOption[];
+  ownerRestriction?: { ownerField: string; allowedId: string };
+}) {
   if (field.type === "boolean") {
     return (
       <label className="checkbox">
@@ -83,7 +90,11 @@ function FieldControl({ field, value, people }: { field: FieldSpec; value: unkno
     // Se muestra como lista de personas: escribir un identificador a mano no es una
     // interfaz, es una trampa. Si no llegó la lista, el campo queda visible pero
     // bloqueado en vez de aceptar cualquier texto.
-    const opciones = people ?? [];
+    // Con alcance propio, ofrecer a otra persona sería ofrecer un error al guardar.
+    const opciones = (people ?? []).filter((persona) =>
+      !ownerRestriction
+      || field.key !== ownerRestriction.ownerField
+      || persona.id === ownerRestriction.allowedId);
     return (
       <select className="control" defaultValue={typeof value === "string" ? value : ""} disabled={!opciones.length} id={field.key} name={field.key} required={field.required}>
         <option value="">{opciones.length ? "Sin asignar" : "No hay personas disponibles"}</option>
@@ -113,7 +124,7 @@ function FieldControl({ field, value, people }: { field: FieldSpec; value: unkno
   );
 }
 
-export function RecordForm({ entity, record, relationshipOptions, people }: Props) {
+export function RecordForm({ entity, record, relationshipOptions, people, ownerRestriction }: Props) {
   const isEditing = Boolean(record?.id);
   const action = isEditing
     ? updateRecordAction.bind(null, entity.key, String(record?.id))
@@ -126,7 +137,7 @@ export function RecordForm({ entity, record, relationshipOptions, people }: Prop
         {entity.fields.map((field) => (
           <div className={`field ${["long_text", "json", "file"].includes(field.type) ? "full" : ""}`} key={field.key}>
             <label className="field-label" htmlFor={field.key}>{field.label}{field.required ? " *" : ""}</label>
-            <FieldControl field={field} people={people} value={record?.[field.key]} />
+            <FieldControl field={field} ownerRestriction={ownerRestriction} people={people} value={record?.[field.key]} />
             {field.help && <span className="field-help">{field.help}</span>}
             {field.type === "file" && <span className="field-help">Campo legado de metadatos JSON. Para archivos reales usá el panel de adjuntos de la ficha.</span>}
           </div>
