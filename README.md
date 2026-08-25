@@ -1,8 +1,25 @@
 # Claude App Factory
 
-Claude App Factory convierte un pedido de negocio en la base de una aplicación independiente, de un solo cliente. Modela el pedido como un **AppSpec** y genera código Next.js y PostgreSQL corriente, que se puede extender, desplegar y mantener sin depender de la fábrica en tiempo de ejecución.
+**Convierte un pedido de negocio en una aplicación web propia, con su base de datos, en la que trabajan personas y agentes sobre los mismos datos.**
 
-No presupone que la aplicación sea un CRM, un ERP ni ningún otro vertical.
+Le describís qué maneja la organización —clientes, expedientes, pedidos, turnos, lo que sea— y obtenés una aplicación Next.js + PostgreSQL funcionando: pantallas para cargar y consultar, permisos por rol, historial de quién hizo qué, y una puerta para que un agente de IA opere esos mismos datos sin inventar nada.
+
+No es un CRM, ni un ERP, ni un gestor de contenidos. No presupone a qué se dedica quien la usa.
+
+## Qué problema resuelve
+
+La información de una organización suele terminar repartida entre planillas, cadenas de correo, mensajes y alguna herramienta que se usa a medias. Nadie sabe cuál es la versión buena de un dato, y automatizar algo significa elegir entre un producto genérico que obliga a trabajar como él quiere, o mandar a hacer un sistema desde cero.
+
+Esto es la tercera opción: una base de datos propia con una interfaz simple encima, hecha a la medida de cómo trabaja esa organización, que además está preparada desde el primer día para que un agente la opere.
+
+Lo que eso cambia en la práctica:
+
+- **Un solo lugar donde vive la verdad**, en vez de cinco planillas parecidas.
+- **Las personas siguen trabajando en una pantalla común**, sin aprender nada raro.
+- **Un agente puede leer y escribir los mismos datos** —cargar lo que salió de una reunión, revisar qué venció, preparar un informe— con permisos propios y dejando rastro.
+- **Cada acción tiene una persona responsable**, incluso cuando la hizo un agente: una credencial no actúa por sí sola, actúa en nombre de alguien.
+- **Cuando el negocio cambia, la aplicación cambia** sin rehacerla: se agregan entidades, campos, vistas y reglas, y los datos que ya existían sobreviven.
+- **Los datos son de quien los genera.** Cada cliente tiene su repositorio, su base, sus credenciales y su despliegue. Si esta fábrica desaparece, la aplicación sigue funcionando.
 
 ## Origen
 
@@ -15,12 +32,15 @@ el otro. La historia anterior al commit de zonas de propiedad pertenece al repos
 
 - entidades, campos, relaciones, roles y permisos verificados en el servidor;
 - migraciones de PostgreSQL, ABM auditado, importación y exportación, y archivos adjuntos;
+- campos de etiquetas múltiples, con índice y filtrado por contenido;
 - vistas de tabla, kanban, calendario y tablero;
 - reglas de validación y de mutación deterministas;
 - autenticación con Clerk y administración de usuarios en la aplicación;
+- permisos a nivel de registro, opcionales: un rol puede ver todo o sólo aquello donde figura como responsable;
+- una sola línea de tiempo con lo que hicieron personas y agentes, donde cada entrada lleva a la persona que responde;
 - una primitiva de configuración clave/valor con valores JSON, acotada y auditada;
 - zonas de extensión explícitas para el comportamiento propio de cada cliente;
-- un endpoint MCP donde los agentes se autentican con credenciales propias —hasheadas, con vencimiento y con alcance—, leen y escriben bajo los permisos que el AppSpec le da a su rol, y dejan rastro por herramienta;
+- un endpoint MCP donde los agentes se autentican con credenciales propias —hasheadas, con vencimiento, con alcance y con un responsable humano—, leen y escriben bajo los permisos que el AppSpec le da a su rol, y dejan rastro por herramienta;
 - evolución incremental del esquema, que escribe la migración siguiente en vez de reescribir una ya aplicada.
 
 Cada aplicación de cliente tiene su propio repositorio, su base de datos, su despliegue, sus credenciales y su ciclo de vida. La aplicación generada no llama a Claude App Factory en producción.

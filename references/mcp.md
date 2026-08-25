@@ -87,6 +87,60 @@ Desactivá o hacé vencer la credencial en `app_agent` cuando deje de utilizarse
 
 El asistente embebido es opcional e independiente. MCP debe funcionar aunque la aplicación no tenga claves de OpenAI, Anthropic o AI Gateway.
 
+## Conectar un cliente MCP remoto (Claude, ChatGPT)
+
+Un cliente remoto no puede recibir un token pegado a mano: llega sin credencial, recibe un `401` con
+`WWW-Authenticate`, y desde ahí descubre dónde autenticarse. Esa cadena la sirve la aplicación sola.
+Lo que hay que preparar es del lado del proveedor de identidad.
+
+### Por qué falla la primera vez
+
+El cliente intenta **registrarse solo** (RFC 7591). Si el servidor de autorización no publica
+`registration_endpoint`, no puede, y el cliente pide un **Client ID** ya creado. Con Clerk hay dos
+caminos, y la diferencia importa:
+
+| | Registro dinámico | Aplicación OAuth creada a mano |
+|---|---|---|
+| Qué abre | un endpoint público donde **cualquiera** registra aplicaciones contra tu instancia | nada |
+| Riesgo | alguien registra una con nombre creíble y se la ofrece a tus usuarios para que la aprueben | ninguno |
+| Efecto secundario | la pantalla de consentimiento queda forzada y ya no se puede desactivar | ninguno |
+| Cuándo conviene | una plataforma abierta a integraciones de terceros | conectar unos pocos clientes conocidos |
+
+Para conectar dos o tres clientes propios, **la aplicación creada a mano es la opción correcta**. El
+registro dinámico resuelve un problema de escala que no se tiene.
+
+### El procedimiento
+
+1. En el panel de Clerk, instancia de **producción**: `Configure → OAuth applications → Add`.
+2. Nombre el del cliente (una aplicación por cliente: así se revocan por separado).
+3. **Public activado.** Habilita PKCE, que es la razón por la que al cliente le alcanza con el Client
+   ID y no necesita un secreto.
+4. **Pantalla de consentimiento activada.** Es la que deja ver qué permisos se otorgan.
+5. Alcances `email`, `profile` y `offline_access`. El último permite renovar la sesión sin volver a
+   autorizar cada vez.
+6. Guardá el Client ID. Clerk muestra además un Client Secret una sola vez: con `Public` activado no
+   se usa, y si algún día hace falta se regenera.
+7. **Agregá la URL de retorno del cliente y guardá.** Para Claude es
+   `https://claude.ai/api/mcp/auth_callback`.
+8. Pegá el Client ID en el conector.
+
+### El paso que se pasa por alto
+
+En el paso 7, cargar la URL la muestra en pantalla como una etiqueta **pero todavía no la guarda**:
+aparece una barra de `Unsaved changes` con un botón `Save`. Si no se confirma, el conector falla con:
+
+> The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.
+
+El mensaje sugiere que la URL está mal escrita, y en realidad no hay ninguna registrada. Después de
+guardar, conviene recargar la página y comprobar que la URL figura en la lista.
+
+### Cómo averiguar la URL exacta de un cliente
+
+No la adivines: si no coincide carácter por carácter, el intento se rechaza. Cada intento fallido
+queda en `Logs` de la instancia, y el evento `oauth_authorization.failed` incluye el `redirect_uri`
+que el cliente envió, junto con el `oauth_client_id`. Ese registro es la fuente: dice exactamente qué
+pidió el cliente, y comparándolo con lo registrado se ve de qué lado está el problema.
+
 ## Al probar el endpoint a mano
 
 El servidor responde `text/event-stream`, así que un cliente que espere JSON plano tiene que quedarse

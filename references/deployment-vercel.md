@@ -61,8 +61,11 @@ Un build en verde es necesario pero no alcanza. Verificá todo esto contra la UR
 5. Un camino representativo de alta, lectura, modificación y baja respeta los permisos y escribe eventos de auditoría.
 6. `/users` permite invitar o dejar preparado a un usuario sin habilitar la autodesactivación ni cambios de rol no autorizados.
 7. `/settings` guarda una opción y la muestra en el listado con su autor.
-8. Si hay agentes, una credencial MCP opera dentro de su alcance y su actividad aparece en `/agents`.
-9. Los logs del runtime no tienen ningún error sin manejar en el recorrido verificado.
+8. Si hay agentes, una credencial MCP opera dentro de su alcance y su actividad aparece en `/audit`.
+9. Si va a conectarse un cliente MCP remoto (Claude, ChatGPT), seguí "Conectar un cliente MCP remoto"
+   en [mcp.md](mcp.md): hace falta una aplicación OAuth con su URL de retorno registrada, y el
+   registro dinámico conviene dejarlo apagado.
+10. Los logs del runtime no tienen ningún error sin manejar en el recorrido verificado.
 
 Registrá el commit de origen, la URL del despliegue de producción, el resultado de las migraciones y la fecha de verificación en la entrega.
 
