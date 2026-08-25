@@ -25,7 +25,20 @@ function certificateAuthority() {
 
   const inline = process.env.DATABASE_CA_CERT?.trim();
   if (!inline) return "";
-  return inline.replaceAll("\\n", "\n");
+  const restaurado = inline.replaceAll("\\n", "\n");
+  // Un valor que no es un PEM no es un certificado. Vercel exporta un marcador corto en
+  // lugar del valor cuando la variable está marcada como sensible, así que
+  // `vercel env pull` trae el nombre y no el contenido. Aceptarlo hacía que Node fallara
+  // con SELF_SIGNED_CERT_IN_CHAIN, un error que no dice nada de lo que realmente pasa.
+  if (!restaurado.includes("-----BEGIN CERTIFICATE-----")) {
+    throw new Error(
+      "DATABASE_CA_CERT no contiene un certificado PEM. `vercel env pull` redacta las "
+      + "variables sensibles, así que trae el nombre y no el contenido. Apuntá "
+      + "DATABASE_CA_CERT_FILE al .crt de tu proveedor; borrar la variable sólo alcanza si "
+      + "su PostgreSQL firma con una autoridad pública, que no es el caso más común.",
+    );
+  }
+  return restaurado;
 }
 
 function databaseSsl() {
