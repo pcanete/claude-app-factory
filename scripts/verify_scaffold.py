@@ -447,9 +447,35 @@ def main() -> int:
     for invariant in ("list_attachments", "read_attachment"):
         if invariant not in mcp_server:
             failures.append(f"MCP does not expose record files to agents: {invariant}.")
-    if "requireAgentPermission(agent, file.entity_key" not in mcp_server:
+    # Un adjunto no es mas accesible que su registro padre, y los metadatos se leen
+    # antes que los bytes: cargar en memoria un archivo que quiza no corresponde solo
+    # sirve para hacer dano. Se comprueba la invariante y no el nombre de una variable,
+    # porque atarla a un identificador convierte cualquier renombre en una falla falsa.
+    for tool in ("list_attachments", "read_attachment"):
+        marker = f'"{tool}"'
+        start = mcp_server.find(marker)
+        block = mcp_server[start:start + 2500] if start >= 0 else ""
+        if "requireAgentPermission(agent," not in block:
+            failures.append(f"MCP {tool} must resolve entity permission before returning files.")
+        # `read_attachment` recibe un id de archivo suelto, asi que la entidad tiene que
+        # salir del archivo mismo: es el unico camino donde un id conocido podria saltear
+        # la matriz. `list_attachments` ya parte de la entidad que el agente nombra.
+        if tool == "read_attachment" and ".entity_key" not in block:
+            failures.append(
+                "MCP read_attachment must resolve permission on the owning entity, so a known id cannot bypass the matrix."
+            )
+        if "getRecord(" not in block:
+            failures.append(
+                f"MCP {tool} must check the parent record: an attachment is never more accessible than its record."
+            )
+    read_block_start = mcp_server.find('"read_attachment"')
+    read_block = mcp_server[read_block_start:read_block_start + 2500] if read_block_start >= 0 else ""
+    if "getAttachmentMetadata" not in read_block or (
+        "getAttachmentContent" in read_block
+        and read_block.index("getAttachmentMetadata") > read_block.index("getAttachmentContent")
+    ):
         failures.append(
-            "MCP file reads must resolve permission on the owning entity, so a known id cannot bypass the matrix."
+            "MCP read_attachment must authorize from metadata before loading the file contents."
         )
     for invariant in ("create_record", "update_record", "delete_record", "executeIdempotentMutation", "recordAuditEvent", "applyRules"):
         if invariant not in mcp_server:
