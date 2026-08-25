@@ -1,3 +1,4 @@
+import { recordAccessForUser } from "@/lib/record-access";
 import { listManagedUsers } from "@/platform/users/store";
 import { notFound } from "next/navigation";
 import { RecordForm } from "@/components/record-form";
@@ -19,7 +20,7 @@ export default async function NewRecordPage({
   if (!entity) notFound();
   const user = await requirePermission(entity.key, "create");
   if (!canAccessRelationshipOptions(user, entity)) return notFound();
-  const options = await relationshipOptions(entity);
+  const options = await relationshipOptions(entity, recordAccessForUser(user));
 
   // Sólo se cargan si la entidad tiene algún campo de tipo persona: no vale la pena
   // consultar usuarios para un formulario que no los usa.

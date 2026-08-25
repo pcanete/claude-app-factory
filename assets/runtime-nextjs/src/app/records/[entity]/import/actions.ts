@@ -1,5 +1,6 @@
 "use server";
 
+import { recordAccessForUser } from "@/lib/record-access";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { recordAuditEvent } from "@/lib/audit";
@@ -43,6 +44,8 @@ export async function previewImportAction(
 
 export async function confirmImportAction(entityKey: string, batchId: string) {
   const user = await requirePermission(entityKey, "create");
+  // Importar es crear muchas veces: los mismos invariantes que un alta suelta.
+  const access = recordAccessForUser(user);
   requireEntity(entityKey);
   let imported = 0;
   let failed = false;
@@ -57,8 +60,8 @@ export async function confirmImportAction(entityKey: string, batchId: string) {
         const appliedRules = [...(row.rules ?? []), ...evaluated.applied].filter(
           (rule, index, rules) => rules.findIndex((candidate) => candidate.ruleKey === rule.ruleKey) === index,
         );
-        const recordId = await insertRecord(entityKey, evaluated.values, client);
-        const after = await getRecord(entityKey, recordId, client);
+        const recordId = await insertRecord(entityKey, evaluated.values, client, access);
+        const after = await getRecord(entityKey, recordId, client, false, access);
         await recordAuditEvent(client, {
           actorId: user.id,
           entityKey,

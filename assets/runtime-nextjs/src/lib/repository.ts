@@ -1,6 +1,12 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import { sql, transactionSql } from "@/lib/db";
-import { effectiveRecordScope, type RecordAccessContext } from "@/lib/record-access";
+import {
+  assertRecordOwnershipChange,
+  effectiveRecordScope,
+  prepareRecordCreate,
+  RecordOutOfScopeError,
+  type RecordAccessContext,
+} from "@/lib/record-access";
 import { type EntitySpec, type FieldSpec, relationFields, requireEntity } from "@/lib/spec";
 
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,47}$/;
@@ -269,12 +275,30 @@ export async function getRecord(
   return rows[0] ?? null;
 }
 
-export async function relationshipOptions(entity: EntitySpec) {
+/**
+ * Las opciones que se ofrecen para relacionar un registro con otro.
+ *
+ * Esta consulta era la única fuga real del alcance por registro: armaba su propio SQL
+ * --`SELECT id, título FROM destino LIMIT 500`-- sin pasar por el filtro, así que
+ * devolvía el identificador y el nombre de registros que la persona no puede abrir. No
+ * fallaba ni avisaba: los ofrecía en un desplegable.
+ *
+ * Es el argumento a favor de que el alcance viva en un solo lugar y todas las lecturas
+ * pasen por ahí. Este camino se lo había salteado.
+ */
+export async function relationshipOptions(entity: EntitySpec, access?: RecordAccessContext) {
   const entries = await Promise.all(
     relationFields(entity).map(async (relationship) => {
       const target = requireEntity(relationship.target);
+      const values: unknown[] = [];
+      const alcance = recordAccessCondition(target, access, values);
+      values.push(500);
       const rows = await sql<{ id: string; label: unknown }>(
-        `SELECT "id", ${identifier(target.title_field)} AS label FROM ${identifier(target.key)} ORDER BY ${identifier(target.title_field)} ASC LIMIT 500`,
+        `SELECT "id", ${identifier(target.title_field)} AS label
+           FROM ${identifier(target.key)}${alcance ? ` WHERE ${alcance}` : ""}
+          ORDER BY ${identifier(target.title_field)} ASC
+          LIMIT $${values.length}`,
+        values,
       );
       return [relationship.key, rows.map((row) => ({ id: row.id, label: String(row.label ?? row.id) }))] as const;
     }),
@@ -473,10 +497,28 @@ export function recordInputFromForm(entity: EntitySpec, formData: FormData, mode
   return result;
 }
 
-export async function insertRecord(entityKey: string, values: Record<string, unknown>, client?: PoolClient) {
+/**
+ * El alta aplica sus propios invariantes.
+ *
+ * Antes, forzar el propietario al usuario actual dependía de que cada llamador se
+ * acordara de envolver los valores con `prepareRecordCreate`. La pantalla lo hacía, el
+ * servidor MCP también, y la importación no: la misma operación tenía distinta seguridad
+ * según por qué puerta entrara. Es la clase de olvido que no se ve hasta que alguien
+ * activa `record_access` y descubre que un camino escribía a nombre de cualquiera.
+ *
+ * Ahora el repositorio lo hace siempre. Un camino nuevo --una feature, un importador,
+ * una automatización-- nace protegido sin tener que enterarse de que esto existe.
+ */
+export async function insertRecord(
+  entityKey: string,
+  values: Record<string, unknown>,
+  client?: PoolClient,
+  access?: RecordAccessContext,
+) {
   const entity = requireEntity(entityKey);
+  const conDueno = prepareRecordCreate(entity, values, access);
   const allowed = new Set(mutableColumnsFor(entity));
-  const entries = Object.entries(values).filter(([key]) => allowed.has(key));
+  const entries = Object.entries(conDueno).filter(([key]) => allowed.has(key));
   if (!entries.length) {
     const rows = await queryRows<{ id: string }>(client, `INSERT INTO ${identifier(entity.key)} DEFAULT VALUES RETURNING "id"`);
     return rows[0].id;
@@ -499,17 +541,25 @@ export async function updateRecord(
   access?: RecordAccessContext,
 ) {
   const entity = requireEntity(entityKey);
+  // La modificación tampoco confía en que el llamador lo haya comprobado: nadie con
+  // alcance propio puede pasarle un registro a otra persona.
+  assertRecordOwnershipChange(entity, values, access);
   const allowed = new Set(mutableColumnsFor(entity));
   const entries = Object.entries(values).filter(([key]) => allowed.has(key));
   if (!entries.length) return;
   const assignments = entries.map(([key], index) => `${identifier(key)} = $${index + 1}`).join(", ");
   const parametros: unknown[] = [...entries.map(([, value]) => value), id];
   const alcance = recordAccessCondition(entity, access, parametros);
-  await queryRows(
+  // `RETURNING` convierte el silencio en respuesta: sin fila, el registro no existe o
+  // está fuera de alcance. Antes las dos cosas se veían como un éxito.
+  const filas = await queryRows<{ id: string }>(
     client,
-    `UPDATE ${identifier(entity.key)} SET ${assignments} WHERE "id" = $${entries.length + 1}${alcance ? ` AND ${alcance}` : ""}`,
+    `UPDATE ${identifier(entity.key)} SET ${assignments} WHERE "id" = $${entries.length + 1}${alcance ? ` AND ${alcance}` : ""} RETURNING "id"`,
     parametros,
   );
+  if (!filas.length) {
+    throw new RecordOutOfScopeError(`No se encontró el registro de ${entity.label} solicitado.`);
+  }
 }
 
 export async function deleteRecord(
@@ -521,9 +571,15 @@ export async function deleteRecord(
   const entity = requireEntity(entityKey);
   const values: unknown[] = [id];
   const alcance = recordAccessCondition(entity, access, values);
-  await queryRows(
+  const filas = await queryRows<{ id: string }>(
     client,
-    `DELETE FROM ${identifier(entity.key)} WHERE "id" = $1${alcance ? ` AND ${alcance}` : ""}`,
+    `DELETE FROM ${identifier(entity.key)} WHERE "id" = $1${alcance ? ` AND ${alcance}` : ""} RETURNING "id"`,
     values,
   );
+  // Un borrado que no borró nada no puede informarse como hecho: o el registro no
+  // existe, o es de otra persona, y en los dos casos la respuesta es la misma para no
+  // revelar cuál de las dos.
+  if (!filas.length) {
+    throw new RecordOutOfScopeError(`No se encontró el registro de ${entity.label} solicitado.`);
+  }
 }

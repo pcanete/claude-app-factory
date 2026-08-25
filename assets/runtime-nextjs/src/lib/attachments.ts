@@ -169,3 +169,32 @@ export async function deleteAttachmentsForRecord(client: PoolClient, entityKey: 
   );
   return rows;
 }
+
+/**
+ * Los datos de un adjunto sin su contenido.
+ *
+ * La autorización de un adjunto es la de su registro padre, y para preguntarla hace
+ * falta saber cuál es. Traer los bytes antes de esa comprobación significa cargar en
+ * memoria --y pagar-- un archivo que quizá no se puede entregar; con archivos grandes
+ * y un identificador adivinado, eso solo alcanza para hacer daño.
+ */
+export async function getAttachmentMetadata(id: string) {
+  const rows = await sql<AttachmentMetadata>(
+    `SELECT attachment.id,
+            attachment.entity_key,
+            attachment.record_id,
+            attachment.original_name,
+            attachment.content_type,
+            attachment.size_bytes,
+            attachment.sha256,
+            attachment.created_by,
+            creator.display_name AS created_by_name,
+            attachment.created_at
+       FROM app_attachment AS attachment
+       LEFT JOIN app_user AS creator ON creator.id = attachment.created_by
+      WHERE attachment.id = $1
+      LIMIT 1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}

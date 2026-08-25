@@ -30,7 +30,7 @@ export default async function RecordDetailPage({
   const attachmentPolicy = resolveAttachmentPolicy(entity);
   const [record, options, attachments] = await Promise.all([
     getRecord(entity.key, id, undefined, false, access),
-    canUpdate && canEditRelationships ? relationshipOptions(entity) : Promise.resolve({}),
+    canUpdate && canEditRelationships ? relationshipOptions(entity, access) : Promise.resolve({}),
     attachmentPolicy ? listAttachments(entity.key, id) : Promise.resolve([]),
   ]);
   if (!record) notFound();

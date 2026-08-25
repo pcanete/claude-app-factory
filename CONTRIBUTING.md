@@ -22,6 +22,25 @@ python scripts/verify_scaffold.py ../maintenance-demo
 
 Si el cambio toca el runtime, además instalá las dependencias de la aplicación generada, corré `pnpm typecheck` o `pnpm build`, aplicá las migraciones contra una base PostgreSQL descartable, corré `pnpm db:smoke` y recorré un camino de ABM completo en un navegador real.
 
+## Una invariante que el revisor no tiene que recordar
+
+Una entidad puede declarar `record_access`: quién ve todos sus registros y quién sólo
+los propios. El control no vive en las pantallas sino en `src/lib/repository.ts`, que es
+el único lugar donde se arma SQL contra las tablas de entidades.
+
+Por eso hay dos reglas, y las dos las verifica `node scripts/test-record-access.mjs`
+dentro de la aplicación generada:
+
+- **Toda función del repositorio que consulte la base aplica alcance** —filtrando en SQL,
+  delegando en quien filtra, o fijando el dueño al crear— o se declara exenta con motivo
+  escrito en `EXENTAS`.
+- **Todo archivo que importe el repositorio y lo invoque pasa identidad.**
+
+La prueba no lee una lista de funciones a revisar: recorre el repositorio y el árbol de
+rutas y falla ante lo que no conoce. Agregar una consulta sin alcance rompe el CI el día
+que se escribe, no el día que alguien la audita. Si tu cambio necesita una excepción,
+escribí el motivo; que quede a la vista en la revisión es la mitad del control.
+
 ## Pull requests
 
 - Mantené intactas las fronteras entre el código generado y el que es del cliente.

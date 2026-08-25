@@ -1,5 +1,6 @@
 "use server";
 
+import { recordAccessForUser } from "@/lib/record-access";
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -54,7 +55,7 @@ export async function uploadAttachmentAction(entityKey: string, recordId: string
     const sha256 = createHash("sha256").update(content).digest("hex");
 
     await withTransaction(async (client) => {
-      const record = await getRecord(entityKey, recordId, client);
+      const record = await getRecord(entityKey, recordId, client, false, recordAccessForUser(user));
       if (!record) throw new Error("El registro al que querés adjuntar el archivo ya no existe.");
       await lockAttachmentSet(client, entityKey, recordId);
       const currentCount = await countAttachments(client, entityKey, recordId);

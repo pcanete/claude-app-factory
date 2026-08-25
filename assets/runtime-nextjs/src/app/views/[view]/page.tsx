@@ -41,7 +41,7 @@ async function TableView({ view, query, canRead, canUpdate, user, access }: { vi
   const page = Math.min(parsed.page, Math.max(1, Math.ceil(total / parsed.pageSize)));
   if (page !== parsed.page) records = await listRecords(entity.key, { ...parsed, access, offset: (page - 1) * parsed.pageSize });
   const filterOptions = canAccessRelationshipOptions(user, entity)
-    ? await relationshipOptions(entity)
+    ? await relationshipOptions(entity, access)
     : undefined;
   const bulkFields = (view.bulk_edit_fields ?? [])
     .map((key) => entity.fields.find((field) => field.key === key))

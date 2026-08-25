@@ -45,7 +45,7 @@ export default async function EntityListPage({ params, searchParams }: Props) {
   // Las opciones para filtrar por relación sólo se ofrecen si el usuario puede
   // listar la entidad del otro lado; si no, el filtro no aparece.
   const filterOptions = canAccessRelationshipOptions(user, entity)
-    ? await relationshipOptions(entity)
+    ? await relationshipOptions(entity, access)
     : undefined;
   const bulkFields = (configuredView?.bulk_edit_fields ?? [])
     .map((key) => entity.fields.find((field) => field.key === key))

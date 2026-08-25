@@ -26,6 +26,7 @@ import { recordAuditEvent, type AuditAction } from "@/lib/audit";
 import {
   deleteAttachmentsForRecord,
   getAttachmentContent,
+  getAttachmentMetadata,
   listAttachments,
   resolveAttachmentPolicy,
 } from "@/lib/attachments";
@@ -78,11 +79,19 @@ function safeSummary(input: Record<string, unknown>) {
   );
 }
 
-async function traced<T extends Record<string, unknown>>(
+/**
+ * Ejecuta una herramienta MCP dejando rastro de quién la usó.
+ *
+ * El valor devuelto se serializa a JSON, así que acá alcanza con un objeto: fijar su
+ * forma exacta obligaría a que todas las ramas de una herramienta coincidan, y eso
+ * choca justo con lo que el alcance por registro necesita — que "no existe" y "no es
+ * tuyo" puedan responder distinto de un resultado con datos.
+ */
+async function traced(
   agent: AgentPrincipal,
   toolName: string,
   input: Record<string, unknown>,
-  execute: (eventId: string) => Promise<{ value: T; resultCount?: number }>,
+  execute: (eventId: string) => Promise<{ value: Record<string, unknown>; resultCount?: number }>,
 ) {
   // La actividad por herramienta se registra contra la credencial que la ejecutó, así
   // que sólo aplica a agentes. Una persona que opera por MCP ya deja rastro donde
@@ -340,16 +349,22 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       "list_attachments",
       { entityKey, recordId },
       async () => {
-        // Los adjuntos heredan el permiso de lectura de su entidad, igual que en la interfaz.
+        // Los adjuntos heredan la autorización de su registro padre, no sólo el permiso
+        // sobre la entidad: si el registro está fuera de alcance, sus archivos también.
         const entity = requireAgentPermission(agent, entityKey, "read");
         if (!resolveAttachmentPolicy(entity)) {
           throw new Error(`${entity.label_plural} no acepta archivos adjuntos.`);
+        }
+        const padre = await getRecord(entity.key, recordId, undefined, false, alcanceDeRegistros);
+        if (!padre) {
+          return { value: { entityKey: entity.key, recordId, found: false, attachments: [] as string[] }, resultCount: 0 };
         }
         const files = await listAttachments(entity.key, recordId);
         return {
           value: {
             entityKey: entity.key,
             recordId,
+            found: true,
             attachments: files.map((file) => ({
               id: file.id,
               name: file.original_name,
@@ -379,11 +394,18 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       "read_attachment",
       { attachmentId },
       async () => {
-        const file = await getAttachmentContent(attachmentId);
-        if (!file) throw new Error("El archivo no existe.");
+        // Primero los metadatos: traer los bytes antes de saber si se pueden entregar
+        // carga en memoria un archivo que quizá no corresponde.
+        const metadatos = await getAttachmentMetadata(attachmentId);
+        if (!metadatos) return { value: { id: attachmentId, found: false }, resultCount: 0 };
         // El permiso se resuelve sobre la entidad dueña del archivo, no sobre el archivo:
         // un identificador conocido no puede saltear la matriz de permisos.
-        const entity = requireAgentPermission(agent, file.entity_key, "read");
+        const entity = requireAgentPermission(agent, metadatos.entity_key, "read");
+        // Y además sobre el registro concreto: un adjunto no es más accesible que su padre.
+        const padre = await getRecord(entity.key, String(metadatos.record_id), undefined, false, alcanceDeRegistros);
+        if (!padre) return { value: { id: attachmentId, found: false }, resultCount: 0 };
+        const file = await getAttachmentContent(attachmentId);
+        if (!file) return { value: { id: attachmentId, found: false }, resultCount: 0 };
         const content = Buffer.from(file.content);
         const digest = createHash("sha256").update(content).digest("hex");
         if (digest !== file.sha256) {
@@ -392,6 +414,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
         return {
           value: {
             id: file.id,
+            found: true,
             entityKey: entity.key,
             recordId: file.record_id,
             name: file.original_name,
@@ -522,8 +545,8 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
         const entities = await Promise.all(selected.map(async (key) => {
           const entity = requireAgentPermission(agent, key, "list");
           const [records, total] = await Promise.all([
-            listRecords(entity.key, { sort: "id", direction: "asc", limit: maxRecordsPerEntity }),
-            countFilteredRecords(entity.key),
+            listRecords(entity.key, { sort: "id", direction: "asc", limit: maxRecordsPerEntity, access: alcanceDeRegistros }),
+            countFilteredRecords(entity.key, { access: alcanceDeRegistros }),
           ]);
           return {
             key: entity.key,

@@ -92,3 +92,13 @@ export function assertRecordOwnershipChange(
     throw new Error("No podés transferir un registro fuera de tu propio alcance.");
   }
 }
+
+/**
+ * Un registro que no existe y uno que es de otra persona dan la misma respuesta.
+ *
+ * Distinguirlos sería confirmar que existe, que es justo lo que el alcance oculta.
+ * Las pantallas la traducen a un 404 y el MCP a `found: false`.
+ */
+export class RecordOutOfScopeError extends Error {
+  readonly code = "record_out_of_scope";
+}

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { PoolClient } from "pg";
 import { recordAuditEvent } from "@/lib/audit";
 import { requirePermission } from "@/lib/auth";
+import { recordAccessForUser, type RecordAccessContext } from "@/lib/record-access";
 import { withTransaction } from "@/lib/db";
 import { getRecord, updateRecord } from "@/lib/repository";
 import { applyRules, RuleBlockedError } from "@/lib/rules";
@@ -54,12 +55,16 @@ async function updateOne(input: {
   recordId: string;
   values: Record<string, unknown>;
   source: Record<string, unknown>;
+  access: RecordAccessContext;
 }) {
-  const before = await getRecord(input.entityKey, input.recordId, input.client, true);
+  // Mover una tarjeta o cambiar una fecha es modificar un registro: pasa por el mismo
+  // alcance que el formulario. Sin esto, una entidad con permisos por registro quedaba
+  // operable desde estas pantallas.
+  const before = await getRecord(input.entityKey, input.recordId, input.client, true, input.access);
   if (!before) throw new Error("El registro ya no existe.");
   const evaluated = applyRules({ entityKey: input.entityKey, event: "before_update", values: input.values, before });
-  await updateRecord(input.entityKey, input.recordId, evaluated.values, input.client);
-  const after = await getRecord(input.entityKey, input.recordId, input.client);
+  await updateRecord(input.entityKey, input.recordId, evaluated.values, input.client, input.access);
+  const after = await getRecord(input.entityKey, input.recordId, input.client, false, input.access);
   await recordAuditEvent(input.client, {
     actorId: input.actorId,
     entityKey: input.entityKey,
@@ -96,6 +101,7 @@ export async function bulkSetRecordsAction(
           recordId,
           values: { [field.key]: value },
           source: { kind: "bulk", view: view.key, field: field.key },
+          access: recordAccessForUser(user),
         });
       }
     });
@@ -124,6 +130,7 @@ export async function moveRecordAction(viewKey: string, recordId: string, target
       recordId,
       values: { [field.key]: targetKey },
       source: { kind: "kanban", view: view.key, field: field.key },
+      access: recordAccessForUser(user),
     }));
   } catch (error) {
     return resultError(error);
@@ -202,8 +209,9 @@ export async function rescheduleRecordAction(viewKey: string, recordId: string, 
   if (!startField) return { ok: false, error: "El campo de fecha configurado no es válido." };
   const timezone = runtimeSpec.app.timezone ?? "UTC";
   try {
+    const access = recordAccessForUser(user);
     await withTransaction(async (client) => {
-      const before = await getRecord(entity.key, recordId, client, true);
+      const before = await getRecord(entity.key, recordId, client, true, access);
       if (!before) throw new Error("El registro ya no existe.");
       if (!before[startField.key]) throw new Error("Fecha inválida.");
       const values: Record<string, unknown> = {
@@ -215,8 +223,8 @@ export async function rescheduleRecordAction(viewKey: string, recordId: string, 
         values[endField.key] = rescheduledValue(endField, before[endField.key], shiftedEnd, timezone);
       }
       const evaluated = applyRules({ entityKey: entity.key, event: "before_update", values, before });
-      await updateRecord(entity.key, recordId, evaluated.values, client);
-      const after = await getRecord(entity.key, recordId, client);
+      await updateRecord(entity.key, recordId, evaluated.values, client, access);
+      const after = await getRecord(entity.key, recordId, client, false, access);
       await recordAuditEvent(client, {
         actorId: user.id,
         entityKey: entity.key,
