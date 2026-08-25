@@ -229,6 +229,14 @@ def main() -> int:
     if "owner_user_id" not in agent_cli:
         failures.append("The agent CLI issues credentials without a responsible person.")
 
+    # El calendario mantiene sus eventos en estado del cliente para poder moverlos sin
+    # recargar. Sin una `key` atada al mes, React reutiliza la instancia al navegar y
+    # muestra los eventos del mes anterior hasta que alguien recarga a mano.
+    views_page_path = project / "src/app/views/[view]/page.tsx"
+    views_page = views_page_path.read_text(encoding="utf-8") if views_page_path.is_file() else ""
+    if "key={`${view.key}-${monthKey(selected.year, selected.month)}`}" not in views_page:
+        failures.append("The calendar does not remount when the month changes: it will show stale events.")
+
     # El alcance por registro se resuelve en SQL. Filtrar despues de traer las filas deja
     # el conteo y la paginacion contando lo que la persona no puede ver.
     repository_path = project / "src/lib/repository.ts"

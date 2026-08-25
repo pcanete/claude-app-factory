@@ -160,6 +160,11 @@ async function CalendarView({ view, month, canRead, canUpdate, access }: { view:
           dateKey: recordDateKey(record[dateFieldKey], timezone),
           href: canRead ? `/records/${entity.key}/${record.id}` : undefined,
         }))}
+        // El calendario guarda sus eventos en estado para poder moverlos sin recargar, y
+        // `useState(initialEvents)` sólo lee esa prop cuando el componente se monta. Sin una
+        // `key` que cambie con el mes, React reutiliza la misma instancia al navegar y sigue
+        // mostrando los eventos del mes anterior hasta que alguien recarga a mano.
+        key={`${view.key}-${monthKey(selected.year, selected.month)}`}
         viewKey={view.key}
       />
     </>
