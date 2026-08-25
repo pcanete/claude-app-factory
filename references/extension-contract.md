@@ -16,6 +16,13 @@ Son tres zonas, no dos. Meter el código de plataforma dentro de la zona del cli
 
 - `src/platform/` (adaptador de identidad, configuración de la aplicación, administración de usuarios, servidor MCP para agentes)
 - `database/platform/` (migraciones `100`–`499` que sostienen esas funciones, incluidas las identidades de agente y su registro de actividad)
+- `src/lib/`, `src/app/` y `src/components/`, salvo `src/components/custom/`
+- `scripts/`
+
+Los tres últimos merecen una aclaración, porque durante un tiempo no estuvieron declarados y eso hizo
+difícil la primera actualización real: **son de la fábrica**. Contienen el runtime, las páginas y los
+componentes que se copian en cada generación. Que no lleven `platform` en el nombre no los vuelve del
+cliente; el comportamiento propio va en `src/features/` y `src/components/custom/`, que sí lo son.
 
 **Cliente** — es de las personas y los agentes que trabajan para ese cliente, y la fábrica nunca escribe acá:
 
@@ -73,9 +80,43 @@ Para cambiar el comportamiento de la plataforma, importalo desde una feature y e
   interruptor general, así que no puede quedar prendida por descuido. Retirar una función son dos
   despliegues, no uno: primero desacoplar el código y desplegar, después borrar los datos como paso
   separado y con respaldo.
+- **Una migración de plataforma no puede dejar el pasado en un estado que su propia función declara
+  inválido.** Si agrega una columna que el runtime va a exigir, tiene que completarla para los
+  registros que ya existen, derivándola de lo que la base ya sabe. Una actualización que deja
+  huérfano lo anterior no corrige el problema: lo divide en dos.
+- **Y no declara `NOT NULL` cuando una instalación legítima todavía no puede completar el valor.** Una
+  migración que falla deja la aplicación sin desplegar, que es peor que un dato incompleto. La
+  exigencia va en el runtime, y un índice parcial deja ver lo que quedó pendiente.
 - Los archivos de migración no deben abrir su propia transacción. `scripts/apply-migrations.mjs` envuelve cada archivo junto con su entrada en el registro dentro de una sola transacción, así la migración y la constancia de que corrió se confirman o se descartan juntas.
 - Las migraciones aplicadas tienen suma de control: editar una después de que corrió se rechaza, no se reaplica en silencio.
 - Los cambios de esquema destructivos requieren revisión explícita y un plan de reversión o de migración de datos.
+
+## Actualizar la plataforma de una aplicación ya generada
+
+Cada aplicación lleva un `platform-manifest.json` con la versión de plataforma instalada y
+la suma de control de cada archivo de fábrica **tal como salió de fábrica**. Sin eso, un
+archivo que difiere puede ser dos cosas opuestas --la fábrica avanzó, o el cliente lo
+editó-- y quien actualiza tiene que elegir entre pisar trabajo ajeno o revisar el árbol
+entero a mano. Con las sumas de control, los estados se distinguen:
+
+```bash
+python scripts/check_platform.py --project <ruta-de-la-aplicacion>
+```
+
+| Estado | Qué significa | Qué hacer |
+|---|---|---|
+| al día | coincide con la fábrica | nada |
+| se puede reemplazar | intacto desde la generación, y la fábrica avanzó | copiar |
+| nuevo de la fábrica | no existe en la aplicación | copiar |
+| **modificado de los dos lados** | el cliente lo editó y la fábrica también | resolver a mano |
+| modificado localmente | el cliente lo editó, la fábrica no | conservar |
+
+El comando termina con código 1 cuando hay archivos cambiados de los dos lados, así que
+sirve como control previo en cualquier automatización.
+
+Una aplicación generada antes de que existiera el manifiesto puede adoptarlo con `--adopt`,
+que sólo procede si todo coincide con la fábrica: adoptarlo con diferencias sin resolver
+sellaría como "de fábrica" algo que quizá escribió el cliente.
 
 ## Independencia
 

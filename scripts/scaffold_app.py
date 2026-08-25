@@ -40,6 +40,8 @@ RULE_VALUE_OPERATORS = {"eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in", "
 RULE_STATE_OPERATORS = {"is_empty", "is_not_empty", "changed", "not_changed"}
 # Capacidades administrativas: se declaran por rol en vez de inferirse de que un
 # rol tenga todos los permisos sobre todas las entidades.
+PLATFORM_VERSION = "1.0.0"
+
 CAPABILITIES = {"manage_users", "view_audit", "view_rules"}
 SYSTEM_FIELDS = {"id", "created_at", "updated_at"}
 CORE_TABLES = {"app_role", "app_user", "app_audit_log", "app_import_batch", "app_attachment"}
@@ -1247,6 +1249,63 @@ def copy_runtime(spec: dict[str, Any], output: Path) -> list[Path]:
     return copied
 
 
+# Todo lo que la fábrica reemplaza al actualizar. Lo que no está acá es del cliente y no
+# se toca nunca; `src/generated` queda afuera porque lo rehace el compilador desde la
+# AppSpec, no una actualización de plataforma.
+PLATFORM_TREES = (
+    "src/lib",
+    "src/app",
+    "src/components",
+    "src/platform",
+    "scripts",
+    "database/platform",
+)
+PLATFORM_EXCLUDED = ("src/components/custom", "src/app/api/custom")
+
+
+def normalize_newlines(raw: bytes) -> bytes:
+    """Los finales de línea cambian con el transporte, no con el contenido."""
+    return raw.replace(bytes([13, 10]), bytes([10])).replace(bytes([13]), bytes([10]))
+
+
+def platform_manifest(output: Path) -> dict[str, Any]:
+    """
+    Qué versión de plataforma tiene instalada esta aplicación, y con qué contenido.
+
+    Sin esto, actualizar obliga a comparar árboles y a leer cada diferencia para adivinar
+    si la escribió la fábrica o el cliente; el que actualiza termina eligiendo entre pisar
+    trabajo ajeno o revisarlo todo a mano. Con las sumas de control, los tres estados son
+    distinguibles: intacto (se reemplaza), modificado localmente (se avisa y se conserva)
+    o ya actualizado (se omite).
+    """
+    archivos: dict[str, str] = {}
+    for tree in PLATFORM_TREES:
+        base = output / tree
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(output).as_posix()
+            if any(relative.startswith(excluded) for excluded in PLATFORM_EXCLUDED):
+                continue
+            if relative.endswith((".md", ".keep")):
+                continue
+            # Los finales de línea cambian con el transporte, no con el contenido.
+            normalized = normalize_newlines(path.read_bytes())
+            archivos[relative] = hashlib.sha256(normalized).hexdigest()
+    return {
+        "platform_version": PLATFORM_VERSION,
+        "generated_at_unix": None,
+        "note": (
+            "Generado por la fábrica. Cada entrada es la suma de control del archivo tal como "
+            "salió de fábrica; si difiere, alguien lo editó localmente y una actualización "
+            "no debe pisarlo sin avisar."
+        ),
+        "files": archivos,
+    }
+
+
 def scaffold(spec: dict[str, Any], output: Path) -> list[Path]:
     ensure_safe_output(output)
     written = copy_runtime(spec, output)
@@ -1267,6 +1326,10 @@ def scaffold(spec: dict[str, Any], output: Path) -> list[Path]:
         destination = output / relative_path
         write_text(destination, content)
         written.append(destination)
+    # El manifiesto va último: describe el árbol ya completo, incluido lo generado recién.
+    manifest_path = output / "platform-manifest.json"
+    write_text(manifest_path, json.dumps(platform_manifest(output), ensure_ascii=False, indent=2) + chr(10))
+    written.append(manifest_path)
     return written
 
 

@@ -14,6 +14,7 @@ from scaffold_app import validate_spec
 EXPECTED_FILES = {
     "app-spec.json",
     "BUILD_REPORT.md",
+    "platform-manifest.json",
     "database/generated/001_initial.sql",
     "database/custom/EXTENSIONS.md",
     "database/platform/OWNERSHIP.md",
