@@ -5,9 +5,30 @@ import { createAgentAction, type AgentCreateState } from "@/app/agents/actions";
 
 type RoleOption = { key: string; label: string };
 type PersonOption = { id: string; name: string };
+type ClientKey = "claude" | "codex" | "json" | "manual";
 
 const initialState: AgentCreateState = { status: "idle" };
 
+const CLIENTES: Array<{ key: ClientKey; label: string; donde: string }> = [
+  { key: "claude", label: "Claude Code", donde: "una terminal" },
+  { key: "codex", label: "Codex", donde: "PowerShell" },
+  { key: "json", label: "Archivo de configuración", donde: "el archivo del cliente" },
+  { key: "manual", label: "Datos sueltos", donde: "cualquier otro cliente" },
+];
+
+/**
+ * El asistente de conexión.
+ *
+ * Dos cosas que parecen detalles y no lo son:
+ *
+ * 1. **El nombre de la conexión lo decide el servidor**, derivado del nombre del agente y
+ *    de la aplicación. Cada cliente MCP guarda sus servidores en una lista donde el nombre
+ *    es la clave: dos entradas con el mismo nombre no dan error, la segunda reemplaza a la
+ *    primera y una conexión desaparece.
+ * 2. **La credencial no va dentro del comando.** Un comando pegado en la terminal queda en
+ *    el historial del shell, en texto plano, para siempre. Se guarda primero en una
+ *    variable de entorno y el comando la referencia por nombre.
+ */
 export function AgentCreateForm({
   roles,
   people,
@@ -18,16 +39,56 @@ export function AgentCreateForm({
   defaultOwnerId: string;
 }) {
   const [state, action, pending] = useActionState(createAgentAction, initialState);
-  const [copied, setCopied] = useState<"token" | "command" | null>(null);
-  const token = state.token ?? "";
-  const command = token && typeof window !== "undefined"
-    ? `claude mcp add --transport http factory --scope user ${window.location.origin}/api/mcp --header "Authorization: Bearer ${token}"`
-    : "";
+  const [cliente, setCliente] = useState<ClientKey>("claude");
+  const [copiado, setCopiado] = useState<string | null>(null);
+  const [mostrarCredencial, setMostrarCredencial] = useState(false);
 
-  async function copy(value: string, kind: "token" | "command") {
-    await navigator.clipboard.writeText(value);
-    setCopied(kind);
-    window.setTimeout(() => setCopied(null), 1800);
+  const token = state.token ?? "";
+  const conexion = state.connectionName ?? "";
+  const variable = state.envVar ?? "";
+  const endpoint = typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "/api/mcp";
+
+  // Windows y POSIX guardan variables de entorno de forma distinta; el resto del comando
+  // es igual. Las comillas simples evitan que el shell expanda `${...}` antes de tiempo:
+  // el literal tiene que llegar a la configuración del cliente, no su valor.
+  const guardarVariable = `[Environment]::SetEnvironmentVariable("${variable}", "${token}", "User")`;
+  const guardarVariablePosix = `export ${variable}='${token}'   # y agregalo a tu perfil`;
+
+  const bloques: Record<ClientKey, { texto: string; nota: string }> = {
+    claude: {
+      texto: `${guardarVariable}\nclaude mcp add --transport http ${conexion} --scope user ${endpoint} --header 'Authorization: Bearer \${${variable}}'`,
+      nota: "Pegá las dos líneas en PowerShell. En Mac o Linux usá la variante de abajo para la primera línea. Cerrá y volvé a abrir el cliente para que lea la variable.",
+    },
+    codex: {
+      texto: `${guardarVariable}\ncodex mcp add ${conexion} --url "${endpoint}" --bearer-token-env-var ${variable}`,
+      nota: "Pegá las dos líneas en PowerShell. Cerrá y volvé a abrir Codex para que lea la variable.",
+    },
+    json: {
+      texto: JSON.stringify(
+        {
+          mcpServers: {
+            [conexion]: {
+              type: "http",
+              url: endpoint,
+              headers: { Authorization: `Bearer \${${variable}}` },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      nota: "Para clientes que se configuran por archivo. Requiere que la variable de entorno exista en la máquina.",
+    },
+    manual: {
+      texto: `Endpoint:   ${endpoint}\nNombre:     ${conexion}\nEncabezado: Authorization: Bearer <credencial>`,
+      nota: "Para cualquier cliente que pida los datos por separado. La credencial está arriba.",
+    },
+  };
+
+  async function copiar(valor: string, clave: string) {
+    await navigator.clipboard.writeText(valor);
+    setCopiado(clave);
+    window.setTimeout(() => setCopiado(null), 1800);
   }
 
   return (
@@ -88,19 +149,75 @@ export function AgentCreateForm({
 
       {state.status === "success" && token && (
         <aside aria-live="polite" className="agent-token-card">
-          <div><p className="eyebrow">Conexión lista</p><h3>{state.agentName}</h3></div>
+          <div>
+            <p className="eyebrow">Conexión lista</p>
+            <h3>{state.agentName}</h3>
+          </div>
           <p>{state.message}</p>
+
           <div className="agent-copy-block">
-            <span>Credencial</span>
-            <code>{token}</code>
-            <button className="button secondary" onClick={() => copy(token, "token")} type="button">{copied === "token" ? "Copiada" : "Copiar credencial"}</button>
+            <span>
+              Credencial
+              <button className="text-button" onClick={() => setMostrarCredencial((v) => !v)} type="button">
+                {mostrarCredencial ? "ocultar" : "mostrar"}
+              </button>
+            </span>
+            <code>{mostrarCredencial ? token : "•".repeat(48)}</code>
+            <button className="button secondary" onClick={() => copiar(token, "token")} type="button">
+              {copiado === "token" ? "Copiada" : "Copiar credencial"}
+            </button>
+            <span className="field-help">
+              Se muestra una sola vez. Queda guardada como hash: si se pierde, se emite otra.
+            </span>
           </div>
+
           <div className="agent-copy-block">
-            <span>Claude Code</span>
-            <code>{command}</code>
-            <button className="button" onClick={() => copy(command, "command")} type="button">{copied === "command" ? "Copiado" : "Copiar comando listo"}</button>
+            <span>Nombre de la conexión</span>
+            <code>{conexion}</code>
+            <span className="field-help">
+              Lleva el nombre de esta aplicación adelante para que no pise otra conexión ya
+              instalada en la misma máquina.
+            </span>
           </div>
-          <p className="field-help">Pegá el comando en PowerShell. La credencial no se guarda en texto plano y no puede recuperarse.</p>
+
+          <div className="client-tabs" role="tablist">
+            {CLIENTES.map((opcion) => (
+              <button
+                aria-selected={cliente === opcion.key}
+                className={`client-tab ${cliente === opcion.key ? "active" : ""}`}
+                key={opcion.key}
+                onClick={() => setCliente(opcion.key)}
+                role="tab"
+                type="button"
+              >
+                {opcion.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="agent-copy-block">
+            <span>Pegar en {CLIENTES.find((o) => o.key === cliente)?.donde}</span>
+            <code>{mostrarCredencial ? bloques[cliente].texto : bloques[cliente].texto.replaceAll(token, "<CREDENCIAL>")}</code>
+            <button className="button" onClick={() => copiar(bloques[cliente].texto, cliente)} type="button">
+              {copiado === cliente ? "Copiado" : "Copiar"}
+            </button>
+            <span className="field-help">{bloques[cliente].nota}</span>
+          </div>
+
+          {(cliente === "claude" || cliente === "codex") && (
+            <div className="agent-copy-block">
+              <span>En Mac o Linux, la primera línea</span>
+              <code>{mostrarCredencial ? guardarVariablePosix : guardarVariablePosix.replaceAll(token, "<CREDENCIAL>")}</code>
+              <button className="button secondary" onClick={() => copiar(guardarVariablePosix, "posix")} type="button">
+                {copiado === "posix" ? "Copiada" : "Copiar"}
+              </button>
+            </div>
+          )}
+
+          <p className="field-help">
+            La credencial va en una variable de entorno y el comando la nombra: así no queda
+            en el historial del shell ni en el archivo de configuración.
+          </p>
         </aside>
       )}
     </div>

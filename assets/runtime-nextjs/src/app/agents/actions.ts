@@ -11,6 +11,7 @@ import {
   isManagedAgentId,
   setManagedAgentActive,
 } from "@/platform/mcp/admin";
+import { connectionEnvVar, connectionSlug } from "@/platform/mcp/connection";
 import { recordAuditEvent } from "@/lib/audit";
 import { requireUserManagementAccess } from "@/lib/auth";
 import { withTransaction } from "@/lib/db";
@@ -21,6 +22,10 @@ export type AgentCreateState = {
   message?: string;
   token?: string;
   agentName?: string;
+  /** El nombre con el que la credencial se registra en la máquina de quien la usa. */
+  connectionName?: string;
+  /** La variable de entorno donde se guarda la credencial en esa máquina. */
+  envVar?: string;
 };
 
 // La configuración del sistema no es "un poco más de datos": es la superficie que

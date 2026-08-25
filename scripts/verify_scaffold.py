@@ -110,6 +110,7 @@ EXPECTED_FILES = {
     "scripts/prune-audit.mjs",
     "scripts/test-record-access.mjs",
     "src/lib/record-access.ts",
+    "src/platform/mcp/connection.ts",
     "scripts/test-destructive-guard.mjs",
     "scripts/bootstrap-admin.mjs",
     "scripts/smoke-crud.mjs",
@@ -228,6 +229,18 @@ def main() -> int:
     agent_cli = agent_cli_path.read_text(encoding="utf-8") if agent_cli_path.is_file() else ""
     if "owner_user_id" not in agent_cli:
         failures.append("The agent CLI issues credentials without a responsible person.")
+
+    # Cada cliente MCP guarda sus servidores en una lista donde el nombre es la clave:
+    # dos entradas con el mismo nombre no dan error, la segunda reemplaza a la primera y
+    # una conexion desaparece en silencio. El nombre lo deriva el servidor, con la clave
+    # de la aplicacion adelante.
+    agent_form_path = project / "src/components/agent-create-form.tsx"
+    agent_form = agent_form_path.read_text(encoding="utf-8") if agent_form_path.is_file() else ""
+    if "connectionName" not in agent_form:
+        failures.append("The agent connection helper uses a fixed server name: two applications would collide.")
+    # La credencial no puede ir dentro del comando: el historial del shell la conserva.
+    if 'Bearer ${token}' in agent_form or "Bearer ${token}" in agent_form:
+        failures.append("The connection command embeds the credential instead of an environment variable.")
 
     # El calendario mantiene sus eventos en estado del cliente para poder moverlos sin
     # recargar. Sin una `key` atada al mes, React reutiliza la instancia al navegar y

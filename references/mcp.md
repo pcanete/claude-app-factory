@@ -87,6 +87,32 @@ Desactivá o hacé vencer la credencial en `app_agent` cuando deje de utilizarse
 
 El asistente embebido es opcional e independiente. MCP debe funcionar aunque la aplicación no tenga claves de OpenAI, Anthropic o AI Gateway.
 
+## Conectar una credencial de agente
+
+`/agents` arma el bloque para pegar, ya resuelto para Claude Code, Codex, archivo de configuración o
+datos sueltos. Dos decisiones que parecen detalles y evitan los dos problemas más comunes:
+
+**El nombre de la conexión lo deriva el servidor**, con la clave de la aplicación adelante:
+`prc-operacion-claude`, no `factory`. Cada cliente MCP guarda sus servidores en una lista donde el
+nombre es la clave, así que dos entradas con el mismo nombre no dan error: **la segunda reemplaza a la
+primera** y una conexión desaparece sin aviso. Con dos aplicaciones generadas por esta fábrica en la
+misma máquina, el nombre genérico garantiza el choque. Al crear un agente, el servidor además rechaza
+un nombre cuyo derivado ya exista.
+
+**La credencial no va dentro del comando.** Se guarda primero en una variable de entorno y el comando
+la nombra:
+
+```powershell
+[Environment]::SetEnvironmentVariable("PRC_OPERACION_CLAUDE_TOKEN", "<credencial>", "User")
+claude mcp add --transport http prc-operacion-claude --scope user https://<host>/api/mcp --header 'Authorization: Bearer ${PRC_OPERACION_CLAUDE_TOKEN}'
+```
+
+Las comillas simples importan: sin ellas el shell expande `${...}` antes de tiempo y el valor termina
+escrito en la configuración, que es justo lo que se quiere evitar. Un comando con la credencial adentro
+queda en el historial del shell, en texto plano, para siempre.
+
+Después de guardar la variable hay que cerrar y volver a abrir el cliente para que la lea.
+
 ## Conectar un cliente MCP remoto (Claude, ChatGPT)
 
 Un cliente remoto no puede recibir un token pegado a mano: llega sin credencial, recibe un `401` con

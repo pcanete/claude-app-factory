@@ -159,6 +159,17 @@ tbody tr:hover { background: #1a1d25; }
 
 /* El responsable se cambia donde se lee, sin abrir otra pantalla. */
 .owner-cell { display: flex; align-items: center; gap: 8px; }
+
+/* Elegir el cliente sin salir de la tarjeta: cada uno necesita otro formato del mismo
+   dato, y saltar de pantalla para eso rompe el hilo de "copiar y pegar". */
+.client-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.client-tab {
+  background: transparent; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); cursor: pointer; font-size: 12px; padding: 6px 12px;
+}
+.client-tab:hover { color: var(--text); }
+.client-tab.active { background: var(--primary-soft); border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); color: var(--text); }
+.agent-copy-block > span > .text-button { font-size: 11px; margin-left: 8px; padding: 0; }
 .owner-cell .control { min-width: 150px; padding: 6px 8px; font-size: 12px; }
 
 /* Las secciones de una página de sistema venían pegadas: el formulario de alta, la

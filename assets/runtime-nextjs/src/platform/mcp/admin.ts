@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { sql, transactionSql } from "@/lib/db";
+import { connectionSlug } from "@/platform/mcp/connection";
 
 export type ManagedAgent = {
   id: string;
