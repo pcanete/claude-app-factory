@@ -5,6 +5,7 @@ import {
   RETENCION_POR_DEFECTO_DIAS,
   type ActivitySource,
 } from "@/lib/audit";
+import { ActivityOrganism } from "@/components/activity-organism";
 import { Pagination } from "@/components/pagination";
 import { getSetting } from "@/platform/settings/store";
 import { requireAuditAccess } from "@/lib/auth";
@@ -104,6 +105,8 @@ export default async function AuditPage({
           </p>
         </div>
       </div>
+
+      <ActivityOrganism entityLabels={etiquetasDeEntidad} events={eventos} total={total} />
 
       <form className="toolbar">
         <select aria-label="Filtrar por origen" className="control audit-filter" defaultValue={source ?? ""} name="source">

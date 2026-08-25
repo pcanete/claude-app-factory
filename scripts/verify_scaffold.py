@@ -111,6 +111,7 @@ EXPECTED_FILES = {
     "scripts/test-record-access.mjs",
     "src/lib/record-access.ts",
     "src/platform/mcp/connection.ts",
+    "src/components/activity-organism.tsx",
     "scripts/test-destructive-guard.mjs",
     "scripts/bootstrap-admin.mjs",
     "scripts/smoke-crud.mjs",
@@ -229,6 +230,19 @@ def main() -> int:
     agent_cli = agent_cli_path.read_text(encoding="utf-8") if agent_cli_path.is_file() else ""
     if "owner_user_id" not in agent_cli:
         failures.append("The agent CLI issues credentials without a responsible person.")
+
+    # El dibujo de actividad se anima con CSS y SVG declarativo. Si alguien lo reescribe
+    # con un bucle de animacion, pasa a competir con el resto de la interfaz por el hilo
+    # principal en una pantalla que ya consulta la base en cada carga.
+    organism_path = project / "src/components/activity-organism.tsx"
+    organism = organism_path.read_text(encoding="utf-8") if organism_path.is_file() else ""
+    if "requestAnimationFrame" in organism or "useEffect" in organism:
+        failures.append("The activity map animates with JavaScript instead of declarative SVG and CSS.")
+    # Movimiento constante sin salida marea de verdad a algunas personas.
+    styles_path = project / "src/app/globals.css"
+    styles = styles_path.read_text(encoding="utf-8") if styles_path.is_file() else ""
+    if "prefers-reduced-motion" not in styles:
+        failures.append("The activity map keeps animating for people who asked for reduced motion.")
 
     # Cada cliente MCP guarda sus servidores en una lista donde el nombre es la clave:
     # dos entradas con el mismo nombre no dan error, la segunda reemplaza a la primera y

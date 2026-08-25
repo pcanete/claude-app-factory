@@ -474,3 +474,110 @@ tbody tr:hover { background: #1a1d25; }
   .settings-provider-grid, .settings-preference-form { grid-template-columns: 1fr; }
 }
 .tag-options { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+
+/* ── La actividad como organismo ─────────────────────────────────────────────
+   Todo el movimiento vive acá, en animaciones declarativas que corre el
+   compositor del navegador: sin bucle de animación, sin lienzo, sin repintar la
+   página. Sale gratis y no compite con el resto de la interfaz. */
+
+.organism-card {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--primary) 7%, var(--surface)) 0%, var(--surface) 58%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 22px;
+  overflow: hidden;
+  padding: 22px 24px 16px;
+}
+.organism-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+.organism-head h2 { margin: 4px 0 6px; }
+.organism-head .subtitle { font-size: 13px; }
+.organism-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.organism-stats span {
+  background: color-mix(in srgb, var(--background) 60%, transparent);
+  border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); font-size: 12px; padding: 5px 11px;
+}
+.organism-stats strong { color: var(--text); }
+.organism-stats .organism-failures { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); color: var(--danger); }
+.organism-stats .organism-failures strong { color: var(--danger); }
+.organism-empty { margin: 24px 0 8px; }
+
+.organism-canvas { display: block; width: 100%; height: auto; max-height: 46vh; margin: 6px 0 2px; }
+
+/* El halo del núcleo late lento: es el pulso de fondo, el que se percibe sin mirarlo. */
+.organism-halo { animation: organismo-latido 5.5s ease-in-out infinite; transform-origin: center; }
+@keyframes organismo-latido {
+  0%, 100% { opacity: .55; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.06); }
+}
+
+.organism-link { fill: none; stroke: var(--primary); stroke-width: 1.4; }
+.organism-link.failed { stroke: var(--danger); }
+
+/* Cada partícula es una llamada que ocurrió. */
+.organism-pulse { fill: var(--primary); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--primary) 75%, transparent)); }
+.organism-pulse.failed { fill: var(--danger); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--danger) 75%, transparent)); }
+
+.organism-core circle { fill: color-mix(in srgb, var(--primary) 16%, var(--background)); stroke: var(--primary); stroke-width: 1.6; }
+.organism-core-ring {
+  fill: none !important;
+  animation: organismo-onda 3.8s ease-out infinite;
+  transform-origin: center;
+}
+@keyframes organismo-onda {
+  0%   { opacity: .8; transform: scale(1); }
+  100% { opacity: 0;  transform: scale(1.85); }
+}
+.organism-core-dot { fill: var(--primary) !important; stroke: none !important; animation: organismo-latido 2.6s ease-in-out infinite; transform-origin: center; }
+
+/* Los nodos respiran, cada uno a su ritmo: al unísono se ve mecánico. */
+.organism-node { animation-name: organismo-respirar; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+@keyframes organismo-respirar {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+.organism-node-glow { fill: color-mix(in srgb, var(--primary) 13%, transparent); }
+.organism-node-body { fill: var(--background); stroke: var(--primary); stroke-width: 1.7; }
+.organism-node-core { fill: var(--primary); }
+.organism-node.persona .organism-node-body { stroke: #7cb8ff; }
+.organism-node.persona .organism-node-core  { fill:   #7cb8ff; }
+.organism-node.persona .organism-node-glow  { fill: color-mix(in srgb, #7cb8ff 13%, transparent); }
+.organism-node.agente  .organism-node-body { stroke: #c59cff; }
+.organism-node.agente  .organism-node-core  { fill:   #c59cff; }
+.organism-node.agente  .organism-node-glow  { fill: color-mix(in srgb, #c59cff 13%, transparent); }
+.organism-node.entidad .organism-node-body { stroke: #5bd6a2; }
+.organism-node.entidad .organism-node-core  { fill:   #5bd6a2; }
+.organism-node.entidad .organism-node-glow  { fill: color-mix(in srgb, #5bd6a2 13%, transparent); }
+.organism-node.failed  .organism-node-body { stroke: var(--danger); }
+.organism-node.failed  .organism-node-core  { fill:   var(--danger); }
+
+.organism-node-label  { fill: var(--text);  font-size: 13px; font-weight: 650; }
+.organism-node-detail { fill: var(--muted); font-size: 11px; }
+
+.organism-legend { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; color: var(--muted); font-size: 12px; padding-top: 6px; }
+.organism-legend .dot { border-radius: 50%; display: inline-block; height: 8px; margin-right: 6px; width: 8px; }
+.organism-legend .dot.persona { background: #7cb8ff; }
+.organism-legend .dot.agente  { background: #c59cff; }
+.organism-legend .dot.entidad { background: #5bd6a2; }
+.organism-legend .dot.fallo   { background: var(--danger); }
+.organism-legend-note { margin-left: auto; }
+
+/* Quien pidió menos movimiento recibe el mismo dibujo, quieto. Una preferencia del
+   sistema operativo no es un detalle de accesibilidad: para algunas personas el
+   movimiento constante marea de verdad. */
+@media (prefers-reduced-motion: reduce) {
+  .organism-halo, .organism-core-ring, .organism-core-dot, .organism-node { animation: none; }
+  .organism-pulse { display: none; }
+  .organism-link { stroke-dasharray: 4 5; }
+}
+
+@media (max-width: 760px) {
+  .organism-card { padding: 16px 14px 12px; }
+  .organism-head { flex-direction: column; gap: 12px; }
+  .organism-legend-note { margin-left: 0; width: 100%; }
+  /* Encogido al ancho del teléfono, el dibujo entra pero sus nombres quedan en cuatro
+     píxeles: ilegible. Se lo trata como a una tabla ancha --se desliza-- en vez de
+     achicarlo hasta que no se entienda. */
+  .organism-scroll { overflow-x: auto; margin: 0 -14px; padding: 0 14px; }
+  .organism-canvas { min-width: 820px; max-height: none; }
+}
