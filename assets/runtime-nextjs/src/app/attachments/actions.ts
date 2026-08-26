@@ -95,6 +95,12 @@ export async function deleteAttachmentAction(entityKey: string, recordId: string
   try {
     if (!resolveAttachmentPolicy(entity)) throw new Error("Esta entidad no admite archivos adjuntos.");
     await withTransaction(async (client) => {
+      // Un adjunto hereda la autorización de su registro, igual que al subirlo y al
+      // descargarlo. Sin esto, tener permiso de modificación sobre la entidad alcanzaba
+      // para borrar archivos de un registro fuera de alcance con sólo conocer su id: el
+      // borrado quedaba siendo el único camino de adjuntos que no preguntaba de quién es.
+      const padre = await getRecord(entityKey, recordId, client, false, recordAccessForUser(user));
+      if (!padre) throw new Error("El registro del que querés borrar el archivo ya no existe.");
       await lockAttachmentSet(client, entityKey, recordId);
       const deleted = await deleteAttachment(client, entityKey, recordId, attachmentId);
       if (!deleted) throw new Error("El archivo ya no existe o no pertenece a este registro.");

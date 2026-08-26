@@ -596,7 +596,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
           request: { values: normalized },
           execute: async (client) => {
             const evaluated = applyRules({ entityKey: entity.key, event: "before_create", values: normalized });
-            const recordId = await insertRecord(entity.key, evaluated.values, client);
+            const recordId = await insertRecord(entity.key, evaluated.values, client, alcanceDeRegistros);
             const after = await getRecord(entity.key, recordId, client, false, alcanceDeRegistros);
             await recordAuditEvent(client, {
               ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),

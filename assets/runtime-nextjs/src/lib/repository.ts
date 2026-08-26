@@ -47,7 +47,12 @@ function mutableColumnsFor(entity: EntitySpec) {
  * conteo y la paginación siguen contando lo que la persona no puede ver, y eso ya es
  * una filtración aunque las filas no se muestren.
  */
-function recordAccessCondition(
+/**
+ * Se exporta para que la resolución de referencias de la importación use exactamente
+ * esta condición y no una copia parecida. Dos implementaciones del mismo filtro divergen
+ * en el primer cambio, y la que quede atrás es la que abre los datos.
+ */
+export function recordAccessCondition(
   entity: EntitySpec,
   access: RecordAccessContext | undefined,
   values: unknown[],
@@ -57,6 +62,47 @@ function recordAccessCondition(
   if (alcance === "none") return "FALSE";
   values.push(access!.userId);
   return `${identifier(entity.record_access!.owner_field)} = $${values.length}::uuid`;
+}
+
+/**
+ * Una relación no puede apuntar a un registro que quien escribe no puede ver.
+ *
+ * Sin esto, el alcance se filtra por la puerta de al lado: alcanza con asignar el
+ * identificador de un cliente ajeno a un compromiso propio para que su nombre aparezca
+ * en la ficha, en el listado y en cualquier vista que muestre la relación. El registro
+ * ajeno nunca se leyó directamente y sin embargo se ve.
+ *
+ * También convierte el formulario en un oráculo: probar identificadores hasta que uno
+ * sea aceptado revela qué existe del otro lado, que es justo lo que el alcance oculta.
+ *
+ * Sólo se comprueban las entidades destino que declaran política — donde no hay
+ * política, todos ven todo y la consulta sería puro costo.
+ */
+async function assertRelationshipAssignments(
+  entity: EntitySpec,
+  values: Record<string, unknown>,
+  client?: PoolClient,
+  access?: RecordAccessContext,
+) {
+  for (const relationship of relationFields(entity)) {
+    const target = requireEntity(relationship.target);
+    if (!target.record_access) continue;
+    const asignado = values[`${relationship.key}_id`] ?? values[relationship.key];
+    if (asignado === undefined || asignado === null || asignado === "") continue;
+    const parametros: unknown[] = [asignado];
+    const alcance = recordAccessCondition(target, access, parametros);
+    if (!alcance) continue;
+    const filas = await queryRows<{ id: string }>(
+      client,
+      `SELECT "id" FROM ${identifier(target.key)} WHERE "id" = $1 AND ${alcance}`,
+      parametros,
+    );
+    if (!filas.length) {
+      throw new RecordOutOfScopeError(
+        `No se encontró el registro de ${target.label} que querés relacionar.`,
+      );
+    }
+  }
 }
 
 export async function countRecords(entityKey: string, access?: RecordAccessContext) {
@@ -517,6 +563,7 @@ export async function insertRecord(
 ) {
   const entity = requireEntity(entityKey);
   const conDueno = prepareRecordCreate(entity, values, access);
+  await assertRelationshipAssignments(entity, conDueno, client, access);
   const allowed = new Set(mutableColumnsFor(entity));
   const entries = Object.entries(conDueno).filter(([key]) => allowed.has(key));
   if (!entries.length) {
@@ -542,8 +589,10 @@ export async function updateRecord(
 ) {
   const entity = requireEntity(entityKey);
   // La modificación tampoco confía en que el llamador lo haya comprobado: nadie con
-  // alcance propio puede pasarle un registro a otra persona.
+  // alcance propio puede pasarle un registro a otra persona, ni apuntar una relación a
+  // algo que no puede ver.
   assertRecordOwnershipChange(entity, values, access);
+  await assertRelationshipAssignments(entity, values, client, access);
   const allowed = new Set(mutableColumnsFor(entity));
   const entries = Object.entries(values).filter(([key]) => allowed.has(key));
   if (!entries.length) return;

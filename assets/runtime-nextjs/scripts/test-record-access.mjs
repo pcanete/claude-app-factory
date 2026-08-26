@@ -219,5 +219,56 @@ comprobar(
   `sólo ${consumidores}: revisá que el recorrido siga alcanzando las rutas`,
 );
 
+console.log("\nEscribir tambien lleva identidad");
+
+/**
+ * Que el repositorio aplique alcance no sirve si el llamador no le pasa quien escribe:
+ * `insertRecord` sin identidad no filtra de menos, directamente falla, y una entidad con
+ * politica queda sin poder crearse. Se enumeran las llamadas en vez de listarlas.
+ */
+const ESCRITURAS = ["insertRecord", "updateRecord", "deleteRecord"];
+let llamadas = 0;
+for (const ruta of candidatos) {
+  const fuente = await readFile(resolve(ruta), "utf8");
+  if (!/import (?!type )[^;]*from "@\/lib\/repository"/.test(fuente)) continue;
+  for (const nombre of ESCRITURAS) {
+    // Sin expresiones regulares a proposito: escapar parentesis a traves de capas de
+    // comillas es justo donde esta prueba se rompio antes, y una prueba de seguridad que
+    // falla por su propio escapado entrena a ignorarla.
+    let desde = fuente.indexOf(nombre + "(");
+    while (desde >= 0) {
+      const llamada = fuente.slice(desde, fuente.indexOf(")", desde) + 1);
+      llamadas += 1;
+      comprobar(
+        ruta + ": " + nombre + " (linea " + (fuente.slice(0, desde).split("\n").length) + ")",
+        /access|alcanceDeRegistros/.test(llamada),
+        "escribe sin pasar identidad al repositorio",
+      );
+      desde = fuente.indexOf(nombre + "(", desde + 1);
+    }
+  }
+}
+comprobar("la prueba encontro las escrituras", llamadas >= 5, "solo " + llamadas);
+
+// Un adjunto hereda la autorizacion de su registro en los tres caminos, no en dos.
+const accionesAdjuntos = await readFile(resolve("src/app/attachments/actions.ts"), "utf8");
+for (const accion of ["uploadAttachmentAction", "deleteAttachmentAction"]) {
+  const desde = accionesAdjuntos.indexOf(accion);
+  const cuerpo = desde >= 0 ? accionesAdjuntos.slice(desde, desde + 2000) : "";
+  comprobar(accion + " valida el registro padre", /getRecord\([\s\S]{0,140}recordAccessForUser/.test(cuerpo));
+}
+
+// Una relacion no puede apuntar a lo que quien escribe no ve, ni la importacion
+// confirmar que existe del otro lado.
+comprobar(
+  "crear y modificar validan las relaciones asignadas",
+  (repositorio.match(/await assertRelationshipAssignments\(/g) ?? []).length >= 2,
+);
+const transferencia = await readFile(resolve("src/lib/data-transfer.ts"), "utf8");
+comprobar(
+  "la vista previa de importacion resuelve relaciones con alcance",
+  /async function relationshipMaps\([\s\S]{0,900}recordAccessCondition/.test(transferencia),
+);
+
 console.log(fallos === 0 ? "\nAlcance por registro verificado." : `\n${fallos} comprobaciones fallaron.`);
 process.exit(fallos === 0 ? 0 : 1);

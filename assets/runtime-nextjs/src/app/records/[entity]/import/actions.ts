@@ -28,7 +28,9 @@ export async function previewImportAction(
 
   let validation;
   try {
-    validation = await parseAndValidateImport(entity, file);
+    // La vista previa resuelve nombres contra las entidades relacionadas: sin identidad
+    // informaría cuáles existen fuera del alcance de quien sube el archivo.
+    validation = await parseAndValidateImport(entity, file, recordAccessForUser(user));
   } catch (error) {
     return { issues: [{ row: 0, message: error instanceof Error ? error.message : "No se pudo leer el archivo." }] };
   }

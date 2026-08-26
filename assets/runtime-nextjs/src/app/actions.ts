@@ -25,7 +25,7 @@ export async function createRecordAction(entityKey: string, formData: FormData) 
   try {
     id = await withTransaction(async (client) => {
       const evaluated = applyRules({ entityKey, event: "before_create", values });
-      const recordId = await insertRecord(entityKey, evaluated.values, client);
+      const recordId = await insertRecord(entityKey, evaluated.values, client, access);
       const after = await getRecord(entityKey, recordId, client, false, access);
       await recordAuditEvent(client, {
         actorId: user.id,

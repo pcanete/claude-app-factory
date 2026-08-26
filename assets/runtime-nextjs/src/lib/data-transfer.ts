@@ -1,5 +1,7 @@
 import ExcelJS from "exceljs";
 import { sql } from "@/lib/db";
+import type { RecordAccessContext } from "@/lib/record-access";
+import { recordAccessCondition } from "@/lib/repository";
 import { applyRules, type AppliedRule, RuleBlockedError } from "@/lib/rules";
 import { type EntitySpec, type FieldSpec, relationFields, requireEntity, runtimeSpec } from "@/lib/spec";
 
@@ -220,7 +222,20 @@ function scalarValue(field: FieldSpec, raw: unknown): unknown {
   return text;
 }
 
-async function relationshipMaps(entity: EntitySpec, rawRows: Array<{ rowNumber: number; raw: Record<string, unknown> }>) {
+/**
+ * Resuelve las referencias de una columna de relación: acepta el identificador o el
+ * nombre visible, y devuelve con qué registro se corresponde cada uno.
+ *
+ * Lleva alcance porque si no, la vista previa de una importación es un oráculo: se sube
+ * un archivo con nombres tentativos y la pantalla informa cuáles existen del otro lado,
+ * sin haber leído nunca esos registros. La consulta usa la misma condición que el
+ * repositorio; una copia parecida diverge en el primer cambio.
+ */
+async function relationshipMaps(
+  entity: EntitySpec,
+  rawRows: Array<{ rowNumber: number; raw: Record<string, unknown> }>,
+  access?: RecordAccessContext,
+) {
   const result = new Map<string, { ids: Map<string, string>; labels: Map<string, string | null> }>();
   for (const relationship of relationFields(entity)) {
     const key = `${relationship.key}_id`;
@@ -230,13 +245,17 @@ async function relationshipMaps(entity: EntitySpec, rawRows: Array<{ rowNumber: 
       continue;
     }
     const target = requireEntity(relationship.target);
+    const parametros: unknown[] = [values, values, values.map((value) => value.toLocaleLowerCase("es"))];
+    const alcance = recordAccessCondition(target, access, parametros);
     const rows = await sql<{ id: string; label: string }>(
       `SELECT "id"::text AS id, CAST(${identifier(target.title_field)} AS text) AS label
         FROM ${identifier(target.key)}
-        WHERE "id"::text = ANY($1::text[])
-           OR CAST(${identifier(target.title_field)} AS text) = ANY($2::text[])
-           OR lower(CAST(${identifier(target.title_field)} AS text)) = ANY($3::text[])`,
-      [values, values, values.map((value) => value.toLocaleLowerCase("es"))],
+        WHERE (
+             "id"::text = ANY($1::text[])
+          OR CAST(${identifier(target.title_field)} AS text) = ANY($2::text[])
+          OR lower(CAST(${identifier(target.title_field)} AS text)) = ANY($3::text[])
+        )${alcance ? ` AND ${alcance}` : ""}`,
+      parametros,
     );
     const ids = new Map(rows.map((row) => [row.id, row.id]));
     const labels = new Map<string, string | null>();
@@ -265,7 +284,11 @@ async function existingUniqueValues(entity: EntitySpec, rows: ValidatedImportRow
   return result;
 }
 
-export async function parseAndValidateImport(entity: EntitySpec, file: File): Promise<ImportValidation> {
+export async function parseAndValidateImport(
+  entity: EntitySpec,
+  file: File,
+  access?: RecordAccessContext,
+): Promise<ImportValidation> {
   const matrix = await readMatrix(file);
   const columns = importColumns(entity);
   const issues: ImportIssue[] = [];
@@ -295,7 +318,7 @@ export async function parseAndValidateImport(entity: EntitySpec, file: File): Pr
     return { columns, rows: [], issues: [{ row: MAX_IMPORT_ROWS + 2, message: `El límite es de ${MAX_IMPORT_ROWS} filas por importación.` }] };
   }
 
-  const relationLookups = await relationshipMaps(entity, rawRows);
+  const relationLookups = await relationshipMaps(entity, rawRows, access);
   const rows: ValidatedImportRow[] = [];
   for (const row of rawRows) {
     const values: Record<string, unknown> = {};
