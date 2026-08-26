@@ -101,23 +101,28 @@ async function sembrarPersona(nombre, roleKey) {
 }
 
 /** Valores mínimos para que la fila pase los NOT NULL y los CHECK de la entidad. */
+let secuencia = 0;
 function valoresMinimos(sufijo, deEntidad = entidad) {
   const valores = {};
+  // Cada fila estrena valores: una entidad puede declarar campos únicos, y dos filas
+  // sembradas con el mismo correo chocan contra el índice antes de llegar a la prueba.
+  secuencia += 1;
+  const unico = `${marca}-${secuencia}`;
   // El dueño lo fija el repositorio; y es el de *esta* entidad, no el de la principal.
   const campoDueno = deEntidad.record_access?.owner_field;
   for (const campo of deEntidad.fields) {
     if (!campo.required || campo.key === campoDueno) continue;
     switch (campo.type) {
-      case "integer": valores[campo.key] = 1; break;
-      case "decimal": valores[campo.key] = 1.5; break;
+      case "integer": valores[campo.key] = secuencia; break;
+      case "decimal": valores[campo.key] = secuencia + 0.5; break;
       case "boolean": valores[campo.key] = true; break;
       case "date": valores[campo.key] = "2026-01-01"; break;
       case "datetime": valores[campo.key] = new Date().toISOString(); break;
-      case "email": valores[campo.key] = `x-${marca}@prueba.local`; break;
-      case "url": valores[campo.key] = "https://ejemplo.test/x"; break;
+      case "email": valores[campo.key] = `x-${unico}@prueba.local`; break;
+      case "url": valores[campo.key] = `https://ejemplo.test/${unico}`; break;
       case "enum": valores[campo.key] = campo.options?.[0]?.key; break;
-      case "json": case "file": valores[campo.key] = { prueba: marca }; break;
-      default: valores[campo.key] = `${marca} ${sufijo}`;
+      case "json": case "file": valores[campo.key] = { prueba: unico }; break;
+      default: valores[campo.key] = `${unico} ${sufijo}`;
     }
   }
   return valores;
