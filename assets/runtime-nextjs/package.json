@@ -9,6 +9,7 @@
     "start": "next start",
     "db:apply": "node --env-file-if-exists=.env.local scripts/apply-migrations.mjs",
     "db:smoke": "node --env-file-if-exists=.env.local scripts/smoke-crud.mjs",
+    "db:access": "node --experimental-strip-types --env-file-if-exists=.env.local --import ./scripts/alias-register.mjs scripts/test-record-access-db.mjs",
     "auth:bootstrap": "node --env-file-if-exists=.env.local scripts/bootstrap-admin.mjs",
     "typecheck": "tsc --noEmit",
     "mcp:agent:create": "node --env-file-if-exists=.env.local scripts/create-agent-token.mjs",

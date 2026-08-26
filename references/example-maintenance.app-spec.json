@@ -247,6 +247,12 @@
           "key": "report",
           "label": "Informe",
           "type": "file"
+        },
+        {
+          "key": "assignee",
+          "label": "Responsable",
+          "type": "person",
+          "help": "Quien responde por esta orden. Un tecnico solo ve las propias."
         }
       ],
       "relationships": [
@@ -296,6 +302,14 @@
           "read",
           "update"
         ]
+      },
+      "record_access": {
+        "owner_field": "assignee",
+        "roles": {
+          "admin": "all",
+          "supervisor": "all",
+          "technician": "own"
+        }
       }
     }
   ],

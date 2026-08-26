@@ -34,12 +34,24 @@ dentro de la aplicación generada:
 - **Toda función del repositorio que consulte la base aplica alcance** —filtrando en SQL,
   delegando en quien filtra, o fijando el dueño al crear— o se declara exenta con motivo
   escrito en `EXENTAS`.
-- **Todo archivo que importe el repositorio y lo invoque pasa identidad.**
+- **Todo archivo que importe el repositorio y lo invoque pasa identidad**, tanto para leer
+  como para escribir.
 
 La prueba no lee una lista de funciones a revisar: recorre el repositorio y el árbol de
 rutas y falla ante lo que no conoce. Agregar una consulta sin alcance rompe el CI el día
 que se escribe, no el día que alguien la audita. Si tu cambio necesita una excepción,
 escribí el motivo; que quede a la vista en la revisión es la mitad del control.
+
+Esa prueba comprueba que el filtro esté escrito. **Que además filtre lo comprueba
+`pnpm db:access`**, que siembra dos personas del mismo rol acotado en una base
+descartable y ejerce el repositorio real —importado, no reescrito— con la identidad de
+cada una: quién lee qué, quién puede modificar y borrar qué, y qué pasa al asignar una
+relación ajena. Corre en el CI contra PostgreSQL.
+
+Las dos hacen falta y ninguna reemplaza a la otra. La matriz sólo falla en los caminos
+que ejercita, así que una ruta nueva sin alcance la esquiva sin hacer ruido; el recorrido
+del código encuentra esa ruta pero no puede afirmar nada sobre el comportamiento. Una
+responde "¿está puesto el control?" y la otra "¿funciona?".
 
 ## Pull requests
 

@@ -87,7 +87,7 @@ jobs:
           version: 10
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Generate the reference application
         run: python scripts/scaffold_app.py --spec references/example-maintenance.app-spec.json --output /tmp/reference-app
       - name: Install generated dependencies
@@ -108,6 +108,15 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:smoke
+
+      # La matriz de alcance ejerce el repositorio real con dos identidades distintas
+      # contra esta base. Es la unica prueba que responde "puede Ana ver lo de Bruno":
+      # las que leen el codigo fuente comprueban que el filtro este escrito, no que filtre.
+      - name: Record-level access behaves (A/B against PostgreSQL)
+        working-directory: /tmp/reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: pnpm db:access
       # La prueba que importa de la guarda no es que analice SQL: es que frene un
       # despliegue real contra datos reales, y que no frene cuando no hay nada que
       # perder. Las dos mitades, contra PostgreSQL.
