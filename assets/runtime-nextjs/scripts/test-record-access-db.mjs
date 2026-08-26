@@ -39,14 +39,30 @@ function comprobar(nombre, condicion, detalle = "") {
   }
 }
 
-async function esperaRechazo(nombre, accion) {
+/**
+ * Hay dos formas legítimas de rechazar, y la diferencia es de diseño.
+ *
+ * Cuando el registro es de otra persona, el sistema no puede decir que existe: responde
+ * `RecordOutOfScopeError`, indistinguible de "no está". Ahí se exige el código, porque un
+ * mensaje más explicativo sería una filtración.
+ *
+ * Cuando el rechazo es sobre lo que quien escribe ya sabe —intentar crear a nombre de
+ * otro, o pasarle un registro propio a otra persona— no hay nada que ocultar y el mensaje
+ * debe explicar. Exigir el mismo código en los cuatro casos empeoraría dos mensajes para
+ * que la prueba quedara más prolija.
+ */
+async function esperaRechazo(nombre, accion, { ocultando = false } = {}) {
   try {
     await accion();
     fallos += 1;
     console.error(`  FALLA  ${nombre} -- la operación se completó y debía ser rechazada`);
   } catch (error) {
-    const codigo = error?.code === "record_out_of_scope";
-    comprobar(nombre, codigo, `rechazó con "${error?.message ?? error}" en vez del alcance`);
+    if (!ocultando) {
+      comprobar(nombre, true);
+      return;
+    }
+    comprobar(nombre, error?.code === "record_out_of_scope",
+      `rechazó con "${error?.message ?? error}" en vez de ocultar la existencia del registro`);
   }
 }
 
@@ -87,8 +103,10 @@ async function sembrarPersona(nombre, roleKey) {
 /** Valores mínimos para que la fila pase los NOT NULL y los CHECK de la entidad. */
 function valoresMinimos(sufijo, deEntidad = entidad) {
   const valores = {};
+  // El dueño lo fija el repositorio; y es el de *esta* entidad, no el de la principal.
+  const campoDueno = deEntidad.record_access?.owner_field;
   for (const campo of deEntidad.fields) {
-    if (!campo.required || campo.key === politica.owner_field) continue;
+    if (!campo.required || campo.key === campoDueno) continue;
     switch (campo.type) {
       case "integer": valores[campo.key] = 1; break;
       case "decimal": valores[campo.key] = 1.5; break;
@@ -196,12 +214,13 @@ try {
     const releido = await getRecord(entidad.key, idDeAna, undefined, false, deAna);
     comprobar("modificar lo propio funciona", String(releido?.[campoTexto.key]).endsWith("editado"));
     await esperaRechazo("modificar lo ajeno se rechaza", () =>
-      updateRecord(entidad.key, idDeBruno, { [campoTexto.key]: "intruso" }, undefined, deAna));
+      updateRecord(entidad.key, idDeBruno, { [campoTexto.key]: "intruso" }, undefined, deAna),
+      { ocultando: true });
     await esperaRechazo("transferir un registro a otra persona se rechaza", () =>
       updateRecord(entidad.key, idDeAna, { [politica.owner_field]: bruno.id }, undefined, deAna));
   }
   await esperaRechazo("borrar lo ajeno se rechaza", () =>
-    deleteRecord(entidad.key, idDeBruno, undefined, deAna));
+    deleteRecord(entidad.key, idDeBruno, undefined, deAna), { ocultando: true });
   const sigueVivo = await getRecord(entidad.key, idDeBruno, undefined, false, deDora);
   comprobar("el registro ajeno sobrevivió al intento", Boolean(sigueVivo));
 
@@ -215,9 +234,23 @@ try {
   const conRelacionAcotada = runtimeSpec.entities.find((candidata) => apuntaAAcotada(candidata));
   if (conRelacionAcotada) {
     const relacion = apuntaAAcotada(conRelacionAcotada);
+    const destino = runtimeSpec.entities.find((e) => e.key === relacion.target);
+    // El registro ajeno tiene que ser de la entidad *destino*: si la relación apunta a
+    // otra tabla, el registro de Bruno que ya existe no sirve para probar nada.
+    let ajeno = idDeBruno;
+    if (destino.key !== entidad.key) {
+      const requisitosDeDestino = await sembrarPrerequisitos(destino, deDora);
+      ajeno = await insertRecord(
+        destino.key,
+        { ...valoresMinimos("ajeno", destino), ...requisitosDeDestino, [destino.record_access.owner_field]: bruno.id },
+        undefined,
+        deDora,
+      );
+      sembrados.registros.push({ entityKey: destino.key, id: ajeno });
+    }
     const opciones = await relationshipOptions(conRelacionAcotada, deAna);
     const ofrecidos = new Set((opciones[relacion.key] ?? []).map((opcion) => String(opcion.id)));
-    comprobar("el desplegable de relación no ofrece registros ajenos", !ofrecidos.has(idDeBruno),
+    comprobar(`el desplegable de ${relacion.key} no ofrece registros ajenos`, !ofrecidos.has(ajeno),
       "ofrecía un registro fuera de alcance");
     const requisitosDeOrigen = await sembrarPrerequisitos(conRelacionAcotada, deDora);
     await esperaRechazo("asignar una relación fuera de alcance se rechaza", () =>
@@ -226,11 +259,11 @@ try {
         {
           ...valoresMinimos("con-relacion", conRelacionAcotada),
           ...requisitosDeOrigen,
-          [`${relacion.key}_id`]: idDeBruno,
+          [`${relacion.key}_id`]: ajeno,
         },
         undefined,
         deAna,
-      ));
+      ), { ocultando: true });
   } else {
     // No es un aprobado: es que esta aplicación no tiene dónde ejercerlo. Se dice, para
     // que nadie lea el verde de arriba como cobertura de algo que no se probó.

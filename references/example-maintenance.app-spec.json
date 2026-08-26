@@ -164,6 +164,12 @@
           "type": "boolean",
           "required": true,
           "default": true
+        },
+        {
+          "key": "user_account",
+          "label": "Cuenta",
+          "type": "person",
+          "help": "La persona del sistema que corresponde a este tecnico."
         }
       ],
       "relationships": [
@@ -192,6 +198,14 @@
           "list",
           "read"
         ]
+      },
+      "record_access": {
+        "owner_field": "user_account",
+        "roles": {
+          "admin": "all",
+          "supervisor": "all",
+          "technician": "own"
+        }
       }
     },
     {
