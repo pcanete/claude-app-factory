@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { deleteAgentAction, setAgentOwnerAction, setAgentStatusAction } from "@/app/agents/actions";
 import { AgentCreateForm } from "@/components/agent-create-form";
+import { WebClientConnection } from "@/components/web-client-connection";
+import { headers } from "next/headers";
 import { countAgentEvents, listAgentEvents, listManagedAgents } from "@/platform/mcp/admin";
 import { Pagination } from "@/components/pagination";
 import { requireUserManagementAccess } from "@/lib/auth";
@@ -36,6 +38,10 @@ export default async function AgentsPage({
     listManagedAgents(),
     listAgentEvents({ limit: POR_PAGINA, offset: (page - 1) * POR_PAGINA }),
   ]);
+  const cabeceras = await headers();
+  const anfitrion = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host") ?? "";
+  const protocolo = cabeceras.get("x-forwarded-proto") ?? "https";
+  const endpointMcp = anfitrion ? `${protocolo}://${anfitrion}/api/mcp` : "/api/mcp";
   return (
     <>
       <div className="page-header">
@@ -53,6 +59,11 @@ export default async function AgentsPage({
         </div>
       )}
       {requested.saved && successMessages[requested.saved] && <div className="notice success">{successMessages[requested.saved]}</div>}
+
+      <section>
+        <div className="section-heading"><div><h2>Conectar un cliente web</h2><p className="subtitle">ChatGPT, claude.ai y cualquier cliente donde cada persona entra con su cuenta.</p></div></div>
+        <WebClientConnection clientId={process.env.MCP_OAUTH_CLIENT_ID?.trim() || null} endpoint={endpointMcp} />
+      </section>
 
       <section>
         <div className="section-heading"><div><h2>Nueva conexión</h2><p className="subtitle">Elegí qué puede hacer y copiá el acceso listo para usar.</p></div></div>
