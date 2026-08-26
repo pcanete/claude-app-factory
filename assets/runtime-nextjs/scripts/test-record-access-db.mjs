@@ -74,19 +74,20 @@ const sembrados = { usuarios: [], registros: [] };
 
 async function sembrarPersona(nombre, roleKey) {
   const id = randomUUID();
+  // `email` lleva un CHECK de minúsculas y sin espacios; `display_name`, uno de largo.
   await sql(
-    `INSERT INTO app_user ("id", "email", "display_name", "role_key", "status", "auth_subject")
-     VALUES ($1, $2, $3, $4, 'active', $5)`,
-    [id, `${nombre}-${marca}@prueba.local`, `${nombre} ${marca}`, roleKey, `prueba:${id}`],
+    `INSERT INTO app_user ("id", "email", "display_name", "role_key", "active", "auth_subject")
+     VALUES ($1, $2, $3, $4, TRUE, $5)`,
+    [id, `${nombre}-${marca}@prueba.local`.toLowerCase(), `${nombre} ${marca}`, roleKey, `prueba:${id}`],
   );
   sembrados.usuarios.push(id);
   return { id, roleKey };
 }
 
 /** Valores mínimos para que la fila pase los NOT NULL y los CHECK de la entidad. */
-function valoresMinimos(sufijo) {
+function valoresMinimos(sufijo, deEntidad = entidad) {
   const valores = {};
-  for (const campo of entidad.fields) {
+  for (const campo of deEntidad.fields) {
     if (!campo.required || campo.key === politica.owner_field) continue;
     switch (campo.type) {
       case "integer": valores[campo.key] = 1; break;
@@ -104,9 +105,35 @@ function valoresMinimos(sufijo) {
   return valores;
 }
 
+/**
+ * Una entidad puede exigir relaciones: `work_order` no existe sin su equipo. Se siembran
+ * con alcance total para que el prerrequisito nunca sea el que falla — lo que se está
+ * probando es el alcance, no la capacidad de armar una fila válida.
+ */
+async function sembrarPrerequisitos(deEntidad, comoQuienVeTodo, profundidad = 0) {
+  const referencias = {};
+  if (profundidad > 2) return referencias;
+  for (const relacion of deEntidad.relationships ?? []) {
+    if (relacion.type !== "belongs_to" || !relacion.required) continue;
+    const destino = runtimeSpec.entities.find((candidata) => candidata.key === relacion.target);
+    if (!destino) continue;
+    const anidadas = await sembrarPrerequisitos(destino, comoQuienVeTodo, profundidad + 1);
+    const id = await insertRecord(
+      destino.key,
+      { ...valoresMinimos(`req-${destino.key}`, destino), ...anidadas },
+      undefined,
+      comoQuienVeTodo,
+    );
+    sembrados.registros.unshift({ entityKey: destino.key, id });
+    referencias[`${relacion.key}_id`] = id;
+  }
+  return referencias;
+}
+
 async function limpiar() {
-  for (const id of sembrados.registros) {
-    await sql(`DELETE FROM "${entidad.key}" WHERE "id" = $1`, [id]).catch(() => {});
+  // En orden inverso al sembrado: lo que depende de otra fila se borra primero.
+  for (const { entityKey, id } of [...sembrados.registros].reverse()) {
+    await sql(`DELETE FROM "${entityKey}" WHERE "id" = $1`, [id]).catch(() => {});
   }
   if (sembrados.usuarios.length) {
     await sql(`DELETE FROM app_user WHERE "id" = ANY($1::uuid[])`, [sembrados.usuarios]).catch(() => {});
@@ -126,18 +153,19 @@ try {
     effectiveRecordScope(entidad, deAna) === "own" && effectiveRecordScope(entidad, deDora) === "all");
 
   console.log("\nCrear");
-  const idDeAna = await insertRecord(entidad.key, valoresMinimos("de-ana"), undefined, deAna);
-  sembrados.registros.push(idDeAna);
+  const requisitos = await sembrarPrerequisitos(entidad, deDora);
+  const idDeAna = await insertRecord(entidad.key, { ...valoresMinimos("de-ana"), ...requisitos }, undefined, deAna);
+  sembrados.registros.push({ entityKey: entidad.key, id: idDeAna });
   const filaDeAna = await getRecord(entidad.key, idDeAna, undefined, false, deDora);
   comprobar("el registro nace a nombre de quien lo crea",
     String(filaDeAna?.[politica.owner_field]) === ana.id,
     `quedó a nombre de ${filaDeAna?.[politica.owner_field]}`);
 
-  const idDeBruno = await insertRecord(entidad.key, valoresMinimos("de-bruno"), undefined, deBruno);
-  sembrados.registros.push(idDeBruno);
+  const idDeBruno = await insertRecord(entidad.key, { ...valoresMinimos("de-bruno"), ...requisitos }, undefined, deBruno);
+  sembrados.registros.push({ entityKey: entidad.key, id: idDeBruno });
 
   await esperaRechazo("crear a nombre de otra persona se rechaza", () =>
-    insertRecord(entidad.key, { ...valoresMinimos("robado"), [politica.owner_field]: bruno.id }, undefined, deAna));
+    insertRecord(entidad.key, { ...valoresMinimos("robado"), ...requisitos, [politica.owner_field]: bruno.id }, undefined, deAna));
 
   console.log("\nLeer");
   const leidoPropio = await getRecord(entidad.key, idDeAna, undefined, false, deAna);
@@ -178,25 +206,35 @@ try {
   comprobar("el registro ajeno sobrevivió al intento", Boolean(sigueVivo));
 
   console.log("\nRelaciones");
-  const conRelacionAcotada = runtimeSpec.entities.find((candidata) =>
-    (candidata.relationships ?? []).some((relacion) => {
-      const destino = runtimeSpec.entities.find((e) => e.key === relacion.target);
-      return destino?.record_access;
-    }));
+  // Sólo `belongs_to`: es el único tipo que se guarda como columna en el origen y el
+  // único que `relationshipOptions` ofrece. Buscar sobre `has_many` daría un falso
+  // aprobado — la asignación no fallaría porque la columna directamente no existe.
+  const apuntaAAcotada = (candidata) => (candidata.relationships ?? []).find((relacion) =>
+    relacion.type === "belongs_to"
+    && runtimeSpec.entities.find((e) => e.key === relacion.target)?.record_access);
+  const conRelacionAcotada = runtimeSpec.entities.find((candidata) => apuntaAAcotada(candidata));
   if (conRelacionAcotada) {
+    const relacion = apuntaAAcotada(conRelacionAcotada);
     const opciones = await relationshipOptions(conRelacionAcotada, deAna);
-    const relacion = (conRelacionAcotada.relationships ?? []).find((r) => {
-      const destino = runtimeSpec.entities.find((e) => e.key === r.target);
-      return destino?.record_access;
-    });
     const ofrecidos = new Set((opciones[relacion.key] ?? []).map((opcion) => String(opcion.id)));
     comprobar("el desplegable de relación no ofrece registros ajenos", !ofrecidos.has(idDeBruno),
       "ofrecía un registro fuera de alcance");
+    const requisitosDeOrigen = await sembrarPrerequisitos(conRelacionAcotada, deDora);
     await esperaRechazo("asignar una relación fuera de alcance se rechaza", () =>
-      insertRecord(conRelacionAcotada.key,
-        { ...valoresMinimos("con-relacion"), [`${relacion.key}_id`]: idDeBruno }, undefined, deAna));
+      insertRecord(
+        conRelacionAcotada.key,
+        {
+          ...valoresMinimos("con-relacion", conRelacionAcotada),
+          ...requisitosDeOrigen,
+          [`${relacion.key}_id`]: idDeBruno,
+        },
+        undefined,
+        deAna,
+      ));
   } else {
-    console.log("  --  ninguna entidad relaciona con una entidad de alcance acotado");
+    // No es un aprobado: es que esta aplicación no tiene dónde ejercerlo. Se dice, para
+    // que nadie lea el verde de arriba como cobertura de algo que no se probó.
+    console.log("  --  sin cobertura: ninguna entidad tiene un belongs_to hacia una entidad con política");
   }
 } finally {
   await limpiar();
