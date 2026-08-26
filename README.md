@@ -115,6 +115,32 @@ Nunca subas al repositorio `.env.local`, credenciales de proveedores, URLs de ba
 Una migración que borra datos no se aplica sola durante un despliegue: la guarda le pregunta a la base
 si hay algo que perder y, si lo hay, frena hasta que una persona autorice esa migración por nombre.
 
+**Permisos por registro.** Los permisos de la AppSpec responden "¿este rol puede modificar
+compromisos?". Una entidad puede además declarar `record_access` para responder la otra mitad:
+*cuáles*. Se nombra el campo que dice de quién es el registro y el alcance de cada rol.
+
+```json
+"record_access": {
+  "owner_field": "responsable",
+  "roles": { "director": "all", "socio": "own" }
+}
+```
+
+Tres decisiones separan un control de un adorno:
+
+- **Falla cerrado.** Si una entidad declara política y la consulta llega sin identidad, el sistema
+  lanza en vez de asumir "todos": un olvido rompe la pantalla, nunca abre los datos.
+- **El silencio no concede.** Un rol que la política no menciona no ve nada, y un agente nunca excede
+  a la persona que responde por él.
+- **"No existe" y "no es tuyo" dan la misma respuesta.** Distinguirlas confirmaría que el registro
+  existe, que es justo lo que el alcance oculta.
+
+El filtro vive en el repositorio, el único lugar donde se arma SQL contra las tablas de entidades, y
+alcanza a leer, listar, contar, exportar, crear, modificar, borrar, los desplegables de relación, la
+vista previa de importación y los adjuntos. Dos pruebas lo sostienen: una recorre el código y exige
+alcance en todo camino que llega a los datos; la otra (`pnpm db:access`) siembra dos personas en
+PostgreSQL y comprueba que una no vea, modifique ni borre lo de la otra.
+
 El respaldo del código no reemplaza al respaldo de la base. El código vive en GitHub, los datos de la aplicación en PostgreSQL, la configuración del despliegue en el proveedor de hosting y la configuración de identidad en Clerk. Cada capa necesita su propio plan de recuperación.
 
 Leé [SECURITY.md](SECURITY.md) antes de reportar una vulnerabilidad.

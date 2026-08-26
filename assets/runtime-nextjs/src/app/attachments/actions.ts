@@ -22,8 +22,22 @@ function detailPath(entityKey: string, recordId: string) {
   return `/records/${entityKey}/${recordId}`;
 }
 
+/**
+ * Devuelve al usuario sólo los mensajes escritos para él.
+ *
+ * Los que esta acción lanza a propósito explican qué hacer: el archivo pesa de más, el
+ * tipo no está permitido, el registro ya no existe. Los que llegan desde abajo hablan
+ * otro idioma —nombres de columnas, restricciones, rutas— y publicarlos le cuenta a
+ * cualquiera cómo está armada la base. Un error de PostgreSQL viaja con marcas propias
+ * (`severity`, `routine`, un `code` de cinco caracteres), y eso alcanza para separarlos.
+ */
 function safeMessage(error: unknown) {
-  return error instanceof Error ? error.message : "No se pudo procesar el archivo.";
+  if (!(error instanceof Error)) return "No se pudo procesar el archivo.";
+  const detalle = error as { severity?: unknown; routine?: unknown; code?: unknown };
+  const vieneDeLaBase = typeof detalle.severity === "string"
+    || typeof detalle.routine === "string"
+    || (typeof detalle.code === "string" && /^[0-9A-Z]{5}$/.test(detalle.code));
+  return vieneDeLaBase ? "No se pudo procesar el archivo." : error.message;
 }
 
 function cleanFileName(value: string) {

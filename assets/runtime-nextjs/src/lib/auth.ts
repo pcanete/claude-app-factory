@@ -180,16 +180,25 @@ export function canAccessRelationshipOptions(user: RuntimeUser, entity: EntitySp
 export type Capability = "manage_users" | "view_audit" | "view_rules";
 
 /**
- * Administracion explicita: la AppSpec declara que rol administra usuarios, ve la
- * auditoria y consulta las reglas. Cuando ningun rol declara capacidades se cae en
- * la heuristica historica (tener todos los permisos sobre todas las entidades), que
- * concede administracion sin que nadie la haya declarado; el BUILD_REPORT la reporta
- * como puerta pendiente.
+ * Administración explícita: la AppSpec declara qué rol administra usuarios, ve la
+ * auditoría y consulta las reglas.
+ *
+ * Cuando ningún rol las declara existió una heurística —tener todos los permisos sobre
+ * todas las entidades concedía administración— que es un fail-open: nadie escribió que
+ * ese rol administrara y sin embargo administraba, incluida la gestión de usuarios, que
+ * es la capacidad desde la que se consigue cualquier otra.
+ *
+ * Ahora el silencio no concede. La heurística sigue disponible para una aplicación vieja
+ * que dependa de ella, pero hay que pedirla por su nombre con
+ * `LEGACY_CAPABILITY_FALLBACK=true`: así queda como una decisión que alguien tomó y no
+ * como el comportamiento que aparece cuando nadie miró. El BUILD_REPORT la reporta como
+ * puerta pendiente; declarar `capabilities` en la AppSpec es la salida definitiva.
  */
 export function hasCapability(user: RuntimeUser, capability: Capability) {
   if (generatedCapabilities) {
     return generatedCapabilities[user.roleKey]?.includes(capability) ?? false;
   }
+  if (process.env.LEGACY_CAPABILITY_FALLBACK?.trim().toLowerCase() !== "true") return false;
   return runtimeSpec.entities.every(
     (entity) =>
       hasPermission(user, entity.key, "list") &&
