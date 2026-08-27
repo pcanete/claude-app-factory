@@ -29,15 +29,26 @@ export async function executeIdempotentMutation(input: {
   request: Record<string, unknown>;
   execute: (client: PoolClient) => Promise<{ recordId?: string; result: MutationResult }>;
 }) {
+  // Quien escribe puede ser una credencial de agente o una persona entrando por OAuth.
+  // El identificador se guarda en la columna que corresponde: el de una persona no existe
+  // en la tabla de agentes, y meterlo ahí hacía fallar la escritura entera.
+  const esAgente = input.agent.kind !== "user";
   return withTransaction(async (client) => {
     const hash = requestHash(input.request);
     const inserted = await transactionSql<{ agent_id: string }>(
       client,
-      `INSERT INTO app_agent_mutation (agent_id, idempotency_key, tool_name, entity_key, request_hash)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (agent_id, idempotency_key) DO NOTHING
-       RETURNING agent_id`,
-      [input.agent.id, input.idempotencyKey, input.toolName, input.entityKey, hash],
+      `INSERT INTO app_agent_mutation (agent_id, user_id, idempotency_key, tool_name, entity_key, request_hash)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (principal_id, idempotency_key) DO NOTHING
+       RETURNING principal_id AS agent_id`,
+      [
+        esAgente ? input.agent.id : null,
+        esAgente ? null : input.agent.id,
+        input.idempotencyKey,
+        input.toolName,
+        input.entityKey,
+        hash,
+      ],
     );
 
     if (!inserted.length) {
@@ -50,7 +61,7 @@ export async function executeIdempotentMutation(input: {
         client,
         `SELECT tool_name, entity_key, request_hash, result
            FROM app_agent_mutation
-          WHERE agent_id = $1 AND idempotency_key = $2
+          WHERE principal_id = $1 AND idempotency_key = $2
           FOR UPDATE`,
         [input.agent.id, input.idempotencyKey],
       );
@@ -66,7 +77,7 @@ export async function executeIdempotentMutation(input: {
       client,
       `UPDATE app_agent_mutation
           SET record_id = $3, result = $4::jsonb
-        WHERE agent_id = $1 AND idempotency_key = $2`,
+        WHERE principal_id = $1 AND idempotency_key = $2`,
       [
         input.agent.id,
         input.idempotencyKey,
