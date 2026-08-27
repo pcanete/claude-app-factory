@@ -56,10 +56,13 @@ export async function recordAuditEvent(
     `INSERT INTO app_audit_log (actor_id, agent_id, agent_event_id, responsible_user_id, entity_key, record_id, action, changes)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
     [
-      event.actorId ?? null,
-      event.agentId ?? null,
-      event.agentEventId ?? null,
-      event.responsibleUserId ?? null,
+      // `||` y no `??`: una cadena vacía tampoco es un identificador. Llegaba una desde
+      // el MCP y PostgreSQL la rechazaba al convertirla a uuid, con un error que hablaba
+      // de sintaxis y no de lo que realmente faltaba.
+      event.actorId || null,
+      event.agentId || null,
+      event.agentEventId || null,
+      event.responsibleUserId || null,
       event.entityKey,
       event.recordId,
       event.action,

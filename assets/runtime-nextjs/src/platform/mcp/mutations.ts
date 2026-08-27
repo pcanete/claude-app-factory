@@ -81,7 +81,8 @@ export async function executeIdempotentMutation(input: {
       [
         input.agent.id,
         input.idempotencyKey,
-        completed.recordId ?? null,
+        // Mismo motivo que en la auditoria: una cadena vacia no es un identificador.
+        completed.recordId || null,
         JSON.stringify(completed.result),
       ],
     );

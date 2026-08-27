@@ -91,13 +91,15 @@ async function traced(
   agent: AgentPrincipal,
   toolName: string,
   input: Record<string, unknown>,
-  execute: (eventId: string) => Promise<{ value: Record<string, unknown>; resultCount?: number }>,
+  execute: (eventId?: string) => Promise<{ value: Record<string, unknown>; resultCount?: number }>,
 ) {
   // La actividad por herramienta se registra contra la credencial que la ejecutó, así
   // que sólo aplica a agentes. Una persona que opera por MCP ya deja rastro donde
   // corresponde: en la auditoría, junto a lo que hace desde el panel.
   if (agent.kind === "user") {
-    const executed = await execute("");
+    // Sin evento de agente que referenciar. Antes viajaba una cadena vacía y terminaba
+    // en una columna uuid: la escritura moría con "invalid input syntax for type uuid".
+    const executed = await execute(undefined);
     return result(executed.value);
   }
 
@@ -223,7 +225,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
    */
   async function registrarConfiguracion(
     client: Parameters<typeof recordAuditEvent>[0],
-    evento: { eventId: string; action: AuditAction; changes: unknown },
+    evento: { eventId?: string; action: AuditAction; changes: unknown },
   ) {
     await recordAuditEvent(client, {
       ...(agent.kind === "agent"
