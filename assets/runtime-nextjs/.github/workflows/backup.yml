@@ -18,6 +18,12 @@ jobs:
   dump:
     runs-on: ubuntu-latest
     steps:
+      # El volcado no necesita el repositorio, pero el vencimiento de la auditoría corre
+      # un script que vive acá. Sin esto el respaldo se hacía y el paso siguiente moría
+      # con "Cannot find module", así que el flujo terminaba en rojo todos los días
+      # aunque la copia estuviera bien hecha.
+      - uses: actions/checkout@v4
+
       - name: Dump the database
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
