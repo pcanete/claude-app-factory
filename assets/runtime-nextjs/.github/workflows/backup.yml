@@ -63,6 +63,12 @@ jobs:
       - name: Age out old audit events
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          # Opcional, y necesario cuando el proveedor firma con su propia autoridad
+          # (Supabase, entre otros): `pg_dump` no verifica el certificado, pero este paso
+          # se conecta desde Node y sí lo hace, así que sin el certificado corta con
+          # SELF_SIGNED_CERT_IN_CHAIN. Es un certificado público, no un secreto; se guarda
+          # como secreto sólo porque es la forma cómoda de pasarle un PEM al flujo.
+          DATABASE_CA_CERT: ${{ secrets.DATABASE_CA_CERT }}
         run: |
           node --version
           npm install pg@8 --no-save --silent
