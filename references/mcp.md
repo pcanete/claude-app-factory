@@ -23,6 +23,38 @@ Herramientas de escritura:
 
 No se ofrece SQL arbitrario, ejecución de código ni acceso directo a tablas internas.
 
+## Instrucciones de servidor
+
+Todo cliente MCP recibe, al conectarse y antes de llamar a ninguna herramienta, las
+instrucciones del servidor. Son el manual de inducción: le dicen a cualquier IA —la de la
+organización o la que cada persona compró— dónde está, como quién opera y por dónde empezar,
+sin instalar nada.
+
+La fábrica pone una base mínima: el nombre y la descripción de la aplicación, el nombre y el rol
+de quien se conecta, a nombre de quién queda lo que escriba, el identificador de persona que tiene
+que usar en los campos `person` (el suyo, o el de quien responde por el agente), y que empiece por
+`list_entities`. Sin ese identificador una IA no puede ponerse a sí misma como responsable de nada:
+no hay herramienta que responda "quién soy".
+El resto lo escribe la organización en la configuración, bajo `mcp` / `instrucciones`, y se
+cambia sin desplegar:
+
+```json
+{
+  "general": "Todo trabajo de un cliente se registra en una instancia de su proceso.",
+  "roles": {
+    "colaborador": "Empezá buscando las instancias en cola de tu etapa.",
+    "director": "Revisá las instancias en revisión antes que las nuevas."
+  }
+}
+```
+
+Cada rol recibe lo general más lo suyo, nunca lo de otro rol. Un texto plano en lugar del objeto
+se envía a todos. Si la configuración falta, está mal formada o no se puede leer, la conexión
+sigue con la base: unas instrucciones ausentes empobrecen la sesión, y un servidor que no arranca
+la impide. El total se recorta a 16.000 caracteres.
+
+Escribirlas requiere el alcance de configuración, como cualquier otra opción del sistema.
+
 ## Archivos
 
 `list_attachments` devuelve la metadata de los archivos de un registro —nombre, tipo, tamaño y

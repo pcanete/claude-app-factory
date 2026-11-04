@@ -58,6 +58,13 @@ try {
   });
   await client.connect(transport);
 
+  // Las instrucciones de servidor llegan en el saludo, antes de cualquier herramienta.
+  // Sin ellas la IA que se conecta no sabe dónde está ni quién responde por lo que escriba.
+  const instructions = client.getInstructions() ?? "";
+  if (!instructions.includes("Estás conectado a") || !instructions.includes("list_entities")) {
+    throw new Error("El servidor MCP no envió instrucciones de servidor.");
+  }
+
   const listed = await client.listTools();
   const expectedTools = ["list_entities", "describe_entity", "query_records", "get_record", "create_record", "update_record", "delete_record"];
   const names = new Set(listed.tools.map((tool) => tool.name));

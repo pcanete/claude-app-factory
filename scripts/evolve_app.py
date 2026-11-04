@@ -114,6 +114,15 @@ def compile_enum_constraint(entity_key: str, field_spec: dict[str, Any]) -> str:
     )
 
 
+def compile_person_reference(entity_key: str, field_spec: dict[str, Any]) -> str:
+    """La misma clave foránea que pone el scaffold inicial a un campo person."""
+    restriccion = database_object_name("fk", entity_key, field_spec["key"])
+    return (
+        f"CONSTRAINT {sql_identifier(restriccion)} "
+        f"FOREIGN KEY ({sql_identifier(field_spec['key'])}) REFERENCES app_user(id) ON DELETE SET NULL"
+    )
+
+
 def compile_new_entity_table(entity: dict[str, Any]) -> list[str]:
     columns = [
         "  id uuid PRIMARY KEY DEFAULT gen_random_uuid()",
@@ -143,6 +152,8 @@ def compile_new_entity_table(entity: dict[str, Any]) -> list[str]:
             constraints.append(
                 f"  CONSTRAINT {sql_identifier(tope)} CHECK (cardinality({nombre}) <= 50)"
             )
+        if field_spec["type"] == "person":
+            constraints.append(f"  {compile_person_reference(entity['key'], field_spec)}")
     for relationship in entity.get("relationships", []):
         if relationship["type"] != "belongs_to":
             continue
@@ -354,6 +365,10 @@ def plan_existing_entity(
         )
         if field_spec["type"] == "enum":
             plan.sql.append(compile_enum_constraint(entity_key, field_spec))
+        if field_spec["type"] == "person":
+            plan.sql.append(
+                f"ALTER TABLE {sql_identifier(entity_key)} ADD {compile_person_reference(entity_key, field_spec)};"
+            )
         if field_spec["type"] == "tags":
             plan.sql.extend(compile_tags_statements(entity_key, field_spec))
         elif field_spec.get("searchable"):

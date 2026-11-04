@@ -56,6 +56,11 @@ jobs:
       - name: Typecheck the generated application
         working-directory: /tmp/reference-app
         run: pnpm typecheck
+      # Las instrucciones son lo primero que recibe cualquier IA que se conecta. Si un rol
+      # recibe las de otro, la plataforma le explica a alguien un trabajo que no es suyo.
+      - name: MCP server instructions compose per role
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-mcp-instructions.mjs
       - name: Build the generated application
         working-directory: /tmp/reference-app
         run: pnpm build

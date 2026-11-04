@@ -141,11 +141,14 @@ function recordForAgent(entityKey: string, record: Record<string, unknown>) {
   ]);
 }
 
-export function createFactoryMcpServer(agent: AgentPrincipal) {
-  const server = new McpServer({
-    name: `${runtimeSpec.app.key}-factory`,
-    version: "0.1.0",
-  });
+export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: string) {
+  const server = new McpServer(
+    {
+      name: `${runtimeSpec.app.key}-factory`,
+      version: "0.1.0",
+    },
+    instructions ? { instructions } : undefined,
+  );
 
   server.registerTool(
     "list_entities",
