@@ -3,16 +3,17 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createFactoryMcpServer } from "@/platform/mcp/server";
 import { authenticateAgentToken, type AgentPrincipal } from "@/platform/mcp/store";
 import { authenticateOAuthUser, oauthMessage } from "@/platform/mcp/oauth";
+import { instruccionesPara } from "@/platform/mcp/instructions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type FactoryAuthInfo = AuthInfo & { factoryAgent: AgentPrincipal };
+type FactoryAuthInfo = AuthInfo & { factoryAgent: AgentPrincipal; factoryInstructions: string };
 
 const handler = createMcpHandler(({ authInfo }) => {
-  const agent = (authInfo as FactoryAuthInfo | undefined)?.factoryAgent;
-  if (!agent) throw new Error("Identidad de agente ausente.");
-  return createFactoryMcpServer(agent);
+  const info = authInfo as FactoryAuthInfo | undefined;
+  if (!info?.factoryAgent) throw new Error("Identidad de agente ausente.");
+  return createFactoryMcpServer(info.factoryAgent, info.factoryInstructions);
 }, { responseMode: "json" });
 
 function bearerToken(request: Request) {
@@ -90,11 +91,14 @@ async function serve(request: Request) {
     if (resultado.estado !== "ok") return unauthorized(request, oauthMessage(resultado));
     agent = resultado.principal;
   }
+  // Se leen antes de crear el servidor porque la fábrica de servidores es síncrona.
+  const factoryInstructions = await instruccionesPara(agent);
   const authInfo: FactoryAuthInfo = {
     token,
     clientId: agent.id,
     scopes: agent.scopes,
     factoryAgent: agent,
+    factoryInstructions,
   };
   return handler.fetch(request, { authInfo });
 }

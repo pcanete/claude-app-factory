@@ -42,6 +42,7 @@ import {
 } from "@/platform/settings/store";
 import { withTransaction } from "@/lib/db";
 import { generatedCapabilities } from "@/generated/permissions";
+import { registrarHerramientasDeProcesos } from "@/platform/processes/tools";
 
 const entityKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
 const settingNameSchema = z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/);
@@ -141,11 +142,14 @@ function recordForAgent(entityKey: string, record: Record<string, unknown>) {
   ]);
 }
 
-export function createFactoryMcpServer(agent: AgentPrincipal) {
-  const server = new McpServer({
-    name: `${runtimeSpec.app.key}-factory`,
-    version: "0.1.0",
-  });
+export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: string) {
+  const server = new McpServer(
+    {
+      name: `${runtimeSpec.app.key}-factory`,
+      version: "0.1.0",
+    },
+    instructions ? { instructions } : undefined,
+  );
 
   server.registerTool(
     "list_entities",
@@ -731,6 +735,10 @@ export function createFactoryMcpServer(agent: AgentPrincipal) {
       },
     ),
   );
+
+  // Las herramientas del motor de procesos, sólo si la AppSpec tiene sus entidades.
+  registrarHerramientasDeProcesos(server, agent, (herramienta, entrada, ejecutar) =>
+    traced(agent, herramienta, entrada, ejecutar));
 
   return server;
 }

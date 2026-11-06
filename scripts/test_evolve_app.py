@@ -236,6 +236,33 @@ class EvolutionTests(unittest.TestCase):
         migration = compile_migration(plan)
         self.assertIn('ALTER TABLE "supplier" ENABLE ROW LEVEL SECURITY;', migration)
 
+    def test_person_field_references_app_user_like_the_scaffold(self) -> None:
+        # Un campo person sin clave foránea acepta cualquier uuid: una persona que no
+        # existe queda como responsable, y borrar a alguien deja filas apuntando a nada.
+        # El scaffold inicial la pone; la evolución tiene que poner la misma.
+        spec = copy.deepcopy(self.spec)
+        spec["entities"].append({
+            "key": "handoff", "label": "Traspaso", "label_plural": "Traspasos",
+            "title_field": "name",
+            "fields": [
+                {"key": "name", "label": "Nombre", "type": "text", "required": True},
+                {"key": "taken_by", "label": "Tomado por", "type": "person"},
+            ],
+            "permissions": {role["key"]: ["list", "read"] for role in spec["roles"]},
+        })
+        spec["entities"][0]["fields"].append({"key": "reviewer", "label": "Revisa", "type": "person"})
+        migration = compile_migration(plan_evolution(self.spec, spec))
+        self.assertIn(
+            'CONSTRAINT "fk_handoff_taken_by" FOREIGN KEY ("taken_by") REFERENCES app_user(id) ON DELETE SET NULL',
+            migration,
+        )
+        existing = spec["entities"][0]["key"]
+        self.assertIn(
+            f'ALTER TABLE "{existing}" ADD CONSTRAINT "fk_{existing}_reviewer" '
+            'FOREIGN KEY ("reviewer") REFERENCES app_user(id) ON DELETE SET NULL;',
+            migration,
+        )
+
     def test_migration_does_not_open_its_own_transaction(self) -> None:
         spec = copy.deepcopy(self.spec)
         spec["entities"][0]["fields"].append({"key": "extra", "label": "Extra", "type": "text"})
