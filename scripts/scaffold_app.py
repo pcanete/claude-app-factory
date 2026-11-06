@@ -1261,11 +1261,60 @@ PLATFORM_TREES = (
     "database/platform",
 )
 PLATFORM_EXCLUDED = ("src/components/custom", "src/app/api/custom")
+# Archivos de plataforma que no viven dentro de un árbol. `package.json` y el lockfile no
+# están: el cliente suma dependencias propias, así que se combinan en vez de reemplazarse
+# (lo hace `update_platform.py`). `next-env.d.ts` tampoco: lo reescribe Next en cada build.
+PLATFORM_ROOT_FILES = (
+    "src/proxy.ts",
+    "next.config.ts",
+    "tsconfig.json",
+    "Dockerfile",
+    "compose.yaml",
+    "pnpm-workspace.yaml",
+    ".env.example",
+    ".gitattributes",
+    ".gitignore",
+)
+PLATFORM_ROOT_TREES = (".github/workflows", "public")
+# Lo que la fábrica declara en `package.json`. Se guarda en el manifiesto para que una
+# actualización pueda saber qué quitó la fábrica y qué agregó el cliente.
+PACKAGE_SECTIONS = ("scripts", "dependencies", "devDependencies")
 
 
 def normalize_newlines(raw: bytes) -> bytes:
     """Los finales de línea cambian con el transporte, no con el contenido."""
     return raw.replace(bytes([13, 10]), bytes([10])).replace(bytes([13]), bytes([10]))
+
+
+def platform_paths(root: Path) -> dict[str, Path]:
+    """Los archivos de plataforma presentes en `root`, por ruta relativa."""
+    encontrados: dict[str, Path] = {}
+    for tree in PLATFORM_TREES + PLATFORM_ROOT_TREES:
+        base = root / tree
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(root).as_posix()
+            if any(relative.startswith(excluded) for excluded in PLATFORM_EXCLUDED):
+                continue
+            if relative.endswith((".md", ".keep")):
+                continue
+            encontrados[relative] = path
+    for relative in PLATFORM_ROOT_FILES:
+        path = root / relative
+        if path.is_file():
+            encontrados[relative] = path
+    return dict(sorted(encontrados.items()))
+
+
+def platform_checksum(path: Path) -> str:
+    return hashlib.sha256(normalize_newlines(path.read_bytes())).hexdigest()
+
+
+def package_snapshot(package: dict[str, Any]) -> dict[str, dict[str, str]]:
+    return {section: dict(package.get(section) or {}) for section in PACKAGE_SECTIONS}
 
 
 def platform_manifest(output: Path) -> dict[str, Any]:
@@ -1278,22 +1327,13 @@ def platform_manifest(output: Path) -> dict[str, Any]:
     distinguibles: intacto (se reemplaza), modificado localmente (se avisa y se conserva)
     o ya actualizado (se omite).
     """
-    archivos: dict[str, str] = {}
-    for tree in PLATFORM_TREES:
-        base = output / tree
-        if not base.is_dir():
-            continue
-        for path in sorted(base.rglob("*")):
-            if not path.is_file():
-                continue
-            relative = path.relative_to(output).as_posix()
-            if any(relative.startswith(excluded) for excluded in PLATFORM_EXCLUDED):
-                continue
-            if relative.endswith((".md", ".keep")):
-                continue
-            # Los finales de línea cambian con el transporte, no con el contenido.
-            normalized = normalize_newlines(path.read_bytes())
-            archivos[relative] = hashlib.sha256(normalized).hexdigest()
+    archivos = {relative: platform_checksum(path) for relative, path in platform_paths(output).items()}
+    package_path = output / "package.json"
+    package = json.loads(package_path.read_text(encoding="utf-8")) if package_path.is_file() else {}
+    return manifest_document(archivos, package_snapshot(package))
+
+
+def manifest_document(files: dict[str, str], package: dict[str, dict[str, str]]) -> dict[str, Any]:
     return {
         "platform_version": PLATFORM_VERSION,
         "generated_at_unix": None,
@@ -1302,7 +1342,8 @@ def platform_manifest(output: Path) -> dict[str, Any]:
             "salió de fábrica; si difiere, alguien lo editó localmente y una actualización "
             "no debe pisarlo sin avisar."
         ),
-        "files": archivos,
+        "files": dict(sorted(files.items())),
+        "package": package,
     }
 
 

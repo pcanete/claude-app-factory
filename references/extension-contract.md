@@ -93,30 +93,73 @@ Para cambiar el comportamiento de la plataforma, importalo desde una feature y e
 
 ## Actualizar la plataforma de una aplicación ya generada
 
-Cada aplicación lleva un `platform-manifest.json` con la versión de plataforma instalada y
-la suma de control de cada archivo de fábrica **tal como salió de fábrica**. Sin eso, un
-archivo que difiere puede ser dos cosas opuestas --la fábrica avanzó, o el cliente lo
-editó-- y quien actualiza tiene que elegir entre pisar trabajo ajeno o revisar el árbol
-entero a mano. Con las sumas de control, los estados se distinguen:
+La evolución resuelve «cambió lo que el cliente necesita». Esto resuelve «mejoró la fábrica»:
+sin un actualizador, cada aplicación desplegada se queda con la plataforma con la que nació, y
+cada organización nueva es una copia que se desactualiza.
 
 ```bash
-python scripts/check_platform.py --project <ruta-de-la-aplicacion>
+python scripts/update_platform.py --project <ruta-de-la-aplicacion>            # el plan
+python scripts/update_platform.py --project <ruta-de-la-aplicacion> --apply    # aplicarlo
 ```
 
-| Estado | Qué significa | Qué hacer |
+### El manifiesto
+
+Cada aplicación lleva un `platform-manifest.json` con la versión de plataforma instalada, la
+suma de control de cada archivo de fábrica **tal como salió de fábrica** y lo que la fábrica
+declaró en `package.json`. Sin eso, un archivo que difiere puede ser dos cosas opuestas --la
+fábrica avanzó, o el cliente lo editó-- y quien actualiza tiene que elegir entre pisar trabajo
+ajeno o revisar el árbol entero a mano.
+
+Son de plataforma los árboles `src/lib`, `src/app`, `src/components`, `src/platform`, `scripts`,
+`database/platform`, `.github/workflows` y `public` (salvo `src/components/custom` y
+`src/app/api/custom`), y los archivos `src/proxy.ts`, `next.config.ts`, `tsconfig.json`,
+`Dockerfile`, `compose.yaml`, `pnpm-workspace.yaml`, `.env.example`, `.gitattributes` y
+`.gitignore`. Un archivo que el cliente agrega dentro de esos árboles es suyo: la fábrica nunca
+lo tuvo y la actualización no lo toca.
+
+### Qué decide para cada archivo
+
+| Estado | Qué significa | Qué hace |
 |---|---|---|
 | al día | coincide con la fábrica | nada |
-| se puede reemplazar | intacto desde la generación, y la fábrica avanzó | copiar |
-| nuevo de la fábrica | no existe en la aplicación | copiar |
-| **modificado de los dos lados** | el cliente lo editó y la fábrica también | resolver a mano |
-| modificado localmente | el cliente lo editó, la fábrica no | conservar |
+| se puede reemplazar | intacto desde la generación, y la fábrica avanzó | lo reemplaza |
+| nuevo de la fábrica | no existe en la aplicación | lo agrega |
+| retirado | la fábrica lo quitó y la aplicación lo tiene intacto | lo borra |
+| modificado localmente | el cliente lo editó, la fábrica no | lo conserva |
+| **modificado de los dos lados** | el cliente lo editó y la fábrica también | se detiene sin escribir nada |
+| sin registro | difiere y el manifiesto no lo conoce | lo conserva: no hay forma de saber de quién es |
+| **bloqueado** | la fábrica cambió o quitó una migración de plataforma publicada | se detiene: es un error de la fábrica |
 
-El comando termina con código 1 cuando hay archivos cambiados de los dos lados, así que
-sirve como control previo en cualquier automatización.
+Un archivo conservado guarda en el manifiesto la suma anterior, así sigue figurando como
+modificado hasta que alguien lo resuelva. Con `--conservar-locales` la actualización sigue
+aunque haya conflictos y los deja como están.
 
-Una aplicación generada antes de que existiera el manifiesto puede adoptarlo con `--adopt`,
-que sólo procede si todo coincide con la fábrica: adoptarlo con diferencias sin resolver
-sellaría como "de fábrica" algo que quizá escribió el cliente.
+### Lo que no es un archivo
+
+- **`package.json` se combina.** Lo que declara la fábrica se actualiza; lo que la fábrica dejó
+  de declarar se quita si el cliente no lo cambió; lo que agregó el cliente queda. `name` y
+  `version` son de la aplicación.
+- **El lockfile** se copia sólo si la aplicación no tiene dependencias propias. Si las tiene,
+  el lockfile de fábrica no las conoce y hay que regenerarlo con `pnpm install`.
+- **`src/generated/`** se vuelve a compilar desde la `app-spec.json` de la aplicación, porque la
+  plataforma nueva puede esperar otra forma de lo generado. `database/generated/` no se toca
+  nunca: esas migraciones ya corrieron.
+- **Las migraciones de plataforma nuevas** se listan, no se aplican.
+- **Las variables de entorno** que la versión nueva lee y la instalada no, se avisan.
+
+### Lo que exige
+
+- Un árbol git limpio, para que la actualización quede como un cambio aparte y se pueda deshacer.
+- Que la `app-spec.json` valide con la fábrica nueva.
+- Que la versión instalada no sea más nueva que la de la fábrica.
+
+Después: `pnpm install` si cambió `package.json`, `pnpm db:apply` primero contra una base de
+prueba, `pnpm typecheck`, y desplegar comprobando contra la aplicación corriendo.
+
+`check_platform.py` muestra la misma comparación sin el resto del plan, y termina con código 1
+si hay conflictos o bloqueos, así que sirve como control previo en cualquier automatización.
+Una aplicación generada antes de que existiera el manifiesto puede adoptarlo con
+`check_platform.py --adopt`, que sólo procede si todo coincide con la fábrica.
 
 ## Independencia
 
