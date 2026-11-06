@@ -1,8 +1,19 @@
 # Motor de procesos
 
-**Estado: propuesta, 2026-11-04. Nada de esto está implementado.** Este documento fija qué se
-construye y en qué orden, antes de escribir código. Cuando una parte se construya, su contrato pasa a
-un documento propio y acá queda solo la referencia.
+**Estado: fase 0 y núcleo de la fase 1 construidos (plataforma 1.2.0, 2026-11-06).** El contrato
+de lo construido —definición, estados, herramientas, permisos— está en [`procesos.md`](procesos.md).
+Este documento queda como el porqué y el plan de lo que falta.
+
+Lo que la fase 1 cambió respecto de este plan:
+
+- Los procesos no son tablas propias de la plataforma: el motor opera sobre las entidades
+  `proceso`, `instancia` y `evento` de la AppSpec. Así se ven en las vistas y respetan el alcance
+  por registro sin construir pantallas.
+- El formulario del pedido es `definicion.pedido`, no las entradas de la primera etapa: un pedido
+  no es una etapa que alguien tenga que cerrar.
+- Las herramientas se llaman `tomar_caso`, `esperar_caso`, `liberar_caso`, `revisar_etapa` y
+  `crear_caso`, además de las previstas.
+- Falta de la fase 1: plazo de toma, membresía con vencimiento y una interfaz para operar sin IA.
 
 ## El problema
 

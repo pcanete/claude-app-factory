@@ -23,6 +23,11 @@ Herramientas de escritura:
 
 No se ofrece SQL arbitrario, ejecución de código ni acceso directo a tablas internas.
 
+Si la AppSpec tiene las entidades `proceso`, `instancia` y `evento`, se suman las herramientas del
+motor de procesos (`mis_pendientes`, `tomar_caso`, `cerrar_etapa`, `revisar_etapa` y las demás),
+los prompts `pendientes` y `trabajar_caso`, y las instrucciones de servidor mandan a la IA a empezar
+por ahí. El contrato está en [`procesos.md`](procesos.md).
+
 ## Instrucciones de servidor
 
 Todo cliente MCP recibe, al conectarse y antes de llamar a ninguna herramienta, las

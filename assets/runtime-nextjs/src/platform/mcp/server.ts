@@ -42,6 +42,7 @@ import {
 } from "@/platform/settings/store";
 import { withTransaction } from "@/lib/db";
 import { generatedCapabilities } from "@/generated/permissions";
+import { registrarHerramientasDeProcesos } from "@/platform/processes/tools";
 
 const entityKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
 const settingNameSchema = z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/);
@@ -734,6 +735,10 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
       },
     ),
   );
+
+  // Las herramientas del motor de procesos, sólo si la AppSpec tiene sus entidades.
+  registrarHerramientasDeProcesos(server, agent, (herramienta, entrada, ejecutar) =>
+    traced(agent, herramienta, entrada, ejecutar));
 
   return server;
 }

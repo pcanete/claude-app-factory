@@ -74,6 +74,10 @@ comprobar("el rol no recibe lo de otro", !colaborador.includes("SOLO_DIRECTOR"))
 const sinTexto = componerInstrucciones({ ...persona, rol: "socio" }, porRol);
 comprobar("un rol sin texto propio recibe sólo lo general", sinTexto.includes("GENERAL") && !sinTexto.includes("SOLO_"));
 
+const conMotor = componerInstrucciones({ ...persona, motorDeProcesos: true }, null);
+comprobar("con motor de procesos, manda a mis_pendientes", conMotor.includes("mis_pendientes") && conMotor.includes("tomar_caso"));
+comprobar("sin motor, no nombra herramientas que no existen", !componerInstrucciones(persona, null).includes("mis_pendientes"));
+
 const largo = componerInstrucciones(persona, "x".repeat(LIMITE_INSTRUCCIONES * 2));
 comprobar("respeta el límite", largo.length <= LIMITE_INSTRUCCIONES, `largo ${largo.length}`);
 comprobar("avisa que recortó", largo.endsWith("[Instrucciones recortadas: superan el límite de la plataforma.]"));

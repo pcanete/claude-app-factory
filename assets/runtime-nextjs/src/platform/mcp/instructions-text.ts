@@ -21,6 +21,8 @@ export type ContextoInstrucciones = {
   tipo: "agent" | "user";
   /** El `app_user.id` de la persona que opera, o de la que responde por el agente. */
   persona?: string | null;
+  /** Si la aplicación tiene motor de procesos: cambia por dónde se empieza a trabajar. */
+  motorDeProcesos?: boolean;
 };
 
 function texto(valor: unknown) {
@@ -45,6 +47,19 @@ export function componerInstrucciones(contexto: ContextoInstrucciones, valor: un
     );
   }
   partes.push("Para saber qué podés consultar y modificar, usá list_entities y describe_entity.");
+  // Con motor de procesos, la forma de trabajar no la tiene que saber la IA: se la da la
+  // plataforma etapa por etapa. Esto la manda ahí antes de que improvise con los registros.
+  if (contexto.motorDeProcesos) {
+    partes.push(
+      "",
+      "Esta aplicación organiza el trabajo en procesos, y el método de cada etapa lo da la plataforma: no hace falta conocerlo de antemano.",
+      "- Empezá por mis_pendientes: lo que tenés para seguir, para revisar y lo que podés tomar.",
+      "- tomar_caso te devuelve la guía de la etapa: qué tenés para trabajar, qué herramientas usar, cómo se hace, qué se controla y cómo cerrar. Seguila; no improvises otro método.",
+      "- A la persona pedile sólo lo que la guía dice que le toca: insumos, decisiones y su criterio sobre el resultado.",
+      "- Si falta algo que no podés conseguir, esperar_caso. Para terminar, cerrar_etapa con la receta y la evidencia de cada criterio. Para revisar, revisar_etapa.",
+      "- No muevas casos editando registros con update_record o create_record: las herramientas del motor son las que registran y controlan cada paso.",
+    );
+  }
 
   let general: string | null = null;
   let delRol: string | null = null;

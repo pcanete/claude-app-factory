@@ -61,6 +61,11 @@ jobs:
       - name: MCP server instructions compose per role
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-mcp-instructions.mjs
+      # El motor de procesos decide con la definición si un pedido abre, si una etapa
+      # cierra y adónde va el caso. Un error acá deja trabajo mal controlado sin avisar.
+      - name: Process definitions validate, close and guide
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-process-definition.mjs
       - name: Build the generated application
         working-directory: /tmp/reference-app
         run: pnpm build
