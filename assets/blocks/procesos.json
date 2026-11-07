@@ -270,6 +270,7 @@
     {
       "key": "casos_en_curso",
       "label": "Casos en curso",
+      "description": "Cada caso abierto, en la columna de su estado. Lo que está en revisión o devuelto frena a alguien: empezá por ahí.",
       "type": "kanban",
       "entity": "instancia",
       "navigation": true,
@@ -284,6 +285,7 @@
     {
       "key": "casos",
       "label": "Casos",
+      "description": "Todos los casos, con su etapa, quién los tiene y para cuándo. Para buscar uno o ver lo que vence.",
       "type": "table",
       "entity": "instancia",
       "navigation": false,
@@ -304,6 +306,7 @@
     {
       "key": "bitacora",
       "label": "Bitácora",
+      "description": "Lo que pasó en cada caso: quién hizo qué, en qué etapa, con qué y dónde quedó. No se edita.",
       "type": "table",
       "entity": "evento",
       "navigation": true,
@@ -319,6 +322,7 @@
     {
       "key": "procesos",
       "label": "Procesos",
+      "description": "Cómo se hace cada trabajo: las etapas, quién las toma, qué se controla. Una versión publicada no se edita: se publica la siguiente.",
       "type": "table",
       "entity": "proceso",
       "navigation": true,

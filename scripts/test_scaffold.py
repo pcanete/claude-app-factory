@@ -114,6 +114,15 @@ class ScaffoldTests(unittest.TestCase):
         errors = validate_spec(spec)
         self.assertTrue(any("Unknown property at views[0]: execute_sql" in error for error in errors))
 
+    def test_view_description_is_bounded_text(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["views"][0]["description"] = "Para qué sirve esta vista."
+        self.assertEqual(validate_spec(spec), [])
+        spec["views"][0]["description"] = "x" * 301
+        self.assertTrue(any("description must be a string" in error for error in validate_spec(spec)))
+        spec["views"][0]["description"] = 42
+        self.assertTrue(any("description must be a string" in error for error in validate_spec(spec)))
+
     def test_operational_flags_are_type_specific(self) -> None:
         spec = copy.deepcopy(self.spec)
         table = next(view for view in spec["views"] if view["type"] == "table")

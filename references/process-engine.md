@@ -226,6 +226,7 @@ Actualizado con la plataforma 1.2.0, el 2026-11-07.
 | Devolución por abandono (plazo de toma) | Falta |
 | Visibilidad de campos por etapa | Existe en la guía (`entradas_visibles`); la lectura directa de `evento` no está acotada |
 | Reasignar de a muchas | Falta |
+| Tablero del trabajo: tiempos por etapa, devolución, modelo contra resultado, trabas | Existe: `/trabajo` y `tablero_de_trabajo`. Ver [`procesos.md`](procesos.md#el-tablero-del-trabajo) |
 | Taller | Falta |
 | Actualizar la plataforma de una app ya instalada (issue #5) | Existe: `scripts/update_platform.py`. Ver [`extension-contract.md`](extension-contract.md) |
 

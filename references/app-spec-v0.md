@@ -173,12 +173,33 @@ Los tipos aceptados en v0 son `table`, `form`, `detail`, `dashboard`, `calendar`
 {
   "key": "open_orders",
   "label": "Órdenes abiertas",
+  "description": "Las órdenes que todavía no se cerraron. Empezá por las que vencen hoy.",
   "type": "table",
   "entity": "work_order",
   "navigation": true,
   "fields": ["summary", "status", "scheduled_for"]
 }
 ```
+
+`description` es opcional y es lo primero que lee quien entra a la vista: para qué sirve y qué
+se hace ahí, en una o dos frases. Sin ella, la vista muestra la descripción de su entidad.
+Aparece también en el inicio, en «Dónde está cada cosa».
+
+### El menú
+
+El menú del panel se arma solo, por lo que la persona viene a hacer:
+
+| Sección | Qué lleva |
+|---|---|
+| Mi trabajo | «Mis pendientes», si la aplicación opera procesos |
+| Operación | Las vistas con `navigation: true`, salvo las de procesos |
+| Procesos | Las vistas y entidades del [bloque de procesos](#bloques) y el tablero del trabajo |
+| Datos | Las entidades que no tienen una vista en el menú, plegadas |
+| Sistema | Usuarios, Agentes, Actividad, Reglas y Configuración, según las capacidades del rol |
+
+Una entidad con una vista en el menú no se repite en Datos: se llega por su vista, que tiene
+«Abrir listado base». Para que una entidad aparezca en Operación, dale una vista con
+`navigation: true`.
 
 Las vistas de tabla soportan filtros dinámicos por campo, búsqueda de texto libre sobre los campos buscables y ordenamiento validado. Configuración opcional:
 

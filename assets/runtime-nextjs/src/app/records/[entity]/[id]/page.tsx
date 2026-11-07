@@ -1,4 +1,5 @@
 import { listManagedUsers } from "@/platform/users/store";
+import { conNombresDePersonas } from "@/lib/people-display";
 import { ownerFieldRestriction, recordAccessForUser } from "@/lib/record-access";
 import { notFound } from "next/navigation";
 import { deleteRecordAction } from "@/app/actions";
@@ -46,6 +47,8 @@ export default async function RecordDetailPage({
     : undefined;
 
   const restriccionDeDueno = ownerFieldRestriction(entity, access);
+  // Para mostrar: los campos de persona con el nombre. El formulario sigue con el id.
+  const [paraMostrar] = await conNombresDePersonas(entity, [record]);
 
   return (
     <>
@@ -66,7 +69,7 @@ export default async function RecordDetailPage({
         {entity.fields.map((field) => (
           <div className="detail-item" key={field.key}>
             <div className="detail-key">{field.label}</div>
-            <div className="detail-value">{formatFieldValue(field, record[field.key], runtimeSpec.app.locale)}</div>
+            <div className="detail-value">{formatFieldValue(field, paraMostrar[field.key], runtimeSpec.app.locale)}</div>
           </div>
         ))}
       </section>
