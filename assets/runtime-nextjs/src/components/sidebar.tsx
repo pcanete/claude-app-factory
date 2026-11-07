@@ -105,10 +105,18 @@ export async function Sidebar() {
         {lista(procesos)}
 
         {datos.length > 0 && (
-          <details className="nav-group" open={datosAbiertos}>
-            <summary className="nav-section">Datos · {datos.length}</summary>
+          <div className="nav-group">
+            {/* Una casilla, por lo mismo que la navegación entera: sin CSS, se ve todo. */}
+            <input
+              aria-label="Mostrar u ocultar los datos"
+              className="nav-group-switch"
+              defaultChecked={datosAbiertos}
+              id="nav-datos"
+              type="checkbox"
+            />
+            <label className="nav-section nav-group-toggle" htmlFor="nav-datos">Datos · {datos.length}</label>
             <div className="nav-group-links">{lista(datos)}</div>
-          </details>
+          </div>
         )}
 
         {sistema.length > 0 && <div className="nav-section">Sistema</div>}
