@@ -1,4 +1,5 @@
 import { recordAccessForUser } from "@/lib/record-access";
+import { conNombresDePersonas } from "@/lib/people-display";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BulkRecordTable } from "@/components/bulk-record-table";
@@ -42,6 +43,7 @@ export default async function EntityListPage({ params, searchParams }: Props) {
   ]);
   const page = Math.min(query.page, Math.max(1, Math.ceil(total / query.pageSize)));
   if (page !== query.page) records = await listRecords(entity.key, { ...query, access, offset: (page - 1) * query.pageSize });
+  records = await conNombresDePersonas(entity, records);
   // Las opciones para filtrar por relación sólo se ofrecen si el usuario puede
   // listar la entidad del otro lado; si no, el filtro no aparece.
   const filterOptions = canAccessRelationshipOptions(user, entity)
@@ -55,7 +57,7 @@ export default async function EntityListPage({ params, searchParams }: Props) {
     <>
       <div className="page-header">
         <div>
-          <p className="eyebrow">Entidad</p>
+          <p className="eyebrow">Datos</p>
           <h1>{entity.label_plural}</h1>
           <p className="subtitle">{entity.description ?? `Administrá registros de ${entity.label_plural.toLowerCase()}.`}</p>
         </div>
