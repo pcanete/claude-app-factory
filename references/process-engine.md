@@ -226,7 +226,7 @@ Verificado contra el runtime de la fábrica el 2026-11-04.
 | Visibilidad de campos por etapa | Falta |
 | Reasignar de a muchas | Falta |
 | Taller | Falta |
-| Actualizar la plataforma de una app ya instalada (issue #5) | Falta. **Bloquea tener una segunda organización** |
+| Actualizar la plataforma de una app ya instalada (issue #5) | Existe: `scripts/update_platform.py`. Ver [`extension-contract.md`](extension-contract.md) |
 
 ## Pruebas de aceptación
 
