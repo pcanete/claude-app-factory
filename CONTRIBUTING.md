@@ -60,5 +60,12 @@ responde "¿está puesto el control?" y la otra "¿funciona?".
 - Documentá las variables de entorno nuevas y los controles previos a producción.
 - Nunca incluyas credenciales, datos de clientes, secretos de despliegue ni archivos `.env` locales.
 - Señalá de forma explícita las migraciones, los efectos de seguridad y los riesgos de compatibilidad hacia atrás.
+- Si el cambio toca la plataforma —lo que `update_platform.py` lleva a las aplicaciones ya
+  generadas—, subí `PLATFORM_VERSION` en `scripts/scaffold_app.py`: menor si agrega algo,
+  parche si sólo corrige. Es lo único que dice qué tiene instalado cada aplicación, y el CI
+  falla si la plataforma cambió respecto de main y la versión no se movió. Lo que el CI no
+  ve: dos PR abiertos a la vez que suben a la misma versión pasan los dos, porque cada uno
+  se compara con el main de antes del otro. Antes de fusionar el segundo, traé main a la
+  rama para que el CI vuelva a correr contra lo nuevo.
 
 Los pull requests chicos y enfocados son más fáciles de revisar y de reutilizar.
