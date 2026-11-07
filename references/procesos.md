@@ -28,6 +28,10 @@ El motor opera sobre tres entidades de la aplicación, así que los casos se ven
 respetan el alcance por registro y dejan auditoría como cualquier registro. Si falta alguna, las
 herramientas no se registran y la aplicación sigue igual.
 
+La forma de tenerlas es declarar el bloque `"blocks": ["procesos"]` en la AppSpec: la fábrica las
+agrega con sus vistas y permisos. Ver [Bloques](app-spec-v0.md#bloques). La tabla dice lo mínimo
+que el motor comprueba, para quien las declare o las extienda a mano.
+
 | Entidad | Campos | Relación |
 |---|---|---|
 | `proceso` | `nombre`, `estado` (con `publicado`), `definicion` (json) | — |

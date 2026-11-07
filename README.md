@@ -129,8 +129,9 @@ pnpm dev
 `ALLOW_UNSAFE_LOCAL_PREVIEW=true` es sólo para desarrollo local: habilita el selector de roles en
 `/dev-access`, y producción siempre lo ignora.
 
-Para que la aplicación opere procesos, el AppSpec tiene que declarar las entidades `proceso`,
-`instancia` y `evento`. El contrato está en [el motor de procesos](references/procesos.md).
+Para que la aplicación opere procesos, el AppSpec declara una línea, `"blocks": ["procesos"]`, y la
+fábrica agrega las entidades `proceso`, `instancia` y `evento` con sus vistas y permisos. El ejemplo
+ya la trae. El contrato está en [el motor de procesos](references/procesos.md).
 
 ## El ciclo de vida de una aplicación
 

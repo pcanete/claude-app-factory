@@ -11,6 +11,9 @@
       "surface": "#111318"
     }
   },
+  "blocks": [
+    "procesos"
+  ],
   "roles": [
     {
       "key": "admin",

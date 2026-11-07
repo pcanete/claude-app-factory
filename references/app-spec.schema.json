@@ -49,6 +49,16 @@
       "items": {
         "$ref": "#/$defs/decision"
       }
+    },
+    "blocks": {
+      "description": "Bloques estándar que la fábrica expande antes de validar. procesos agrega proceso, instancia y evento para el motor de procesos.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "procesos"
+        ]
+      }
     }
   },
   "$defs": {
