@@ -91,6 +91,9 @@ vistas, roles y reglas— en una aplicación funcionando:
   instrucciones según su rol;
 - el **motor de procesos**: definiciones versionadas, casos con toma bloqueada, espera, liberación,
   cierre con receta obligatoria, revisión y devolución con motivo;
+- un **tablero del trabajo**, en el panel y por MCP: tiempo en cola, trabajando, esperando y en
+  revisión por etapa, tasa de devolución, qué modelo de IA declaró cada cierre y cómo le fue, y
+  dónde se traba cada proceso;
 - una configuración clave/valor JSON, acotada y auditada;
 - zonas de extensión explícitas para el comportamiento propio de cada organización.
 
@@ -260,7 +263,6 @@ anterior de la fábrica se actualiza a la actual.
 - la cara del cliente: pedido, seguimiento, aprobación y entrega;
 - plazo de toma y membresía de personas con vencimiento;
 - procesos contratados y casos recurrentes, como una liquidación de cada mes;
-- un tablero del trabajo: tiempo por etapa, tasa de devolución, qué modelo rinde mejor;
 - el taller, el servicio aparte que ejecuta lo que necesita código: el agente revisor, renders,
   correos de entrega;
 - relaciones `many_to_many`.
