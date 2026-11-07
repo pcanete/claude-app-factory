@@ -416,6 +416,10 @@
           "type": "string",
           "minLength": 1
         },
+        "description": {
+          "type": "string",
+          "maxLength": 300
+        },
         "type": {
           "enum": [
             "table",

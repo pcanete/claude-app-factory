@@ -7,35 +7,63 @@ import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { runtimeSpec } from "@/lib/spec";
 import { motorDisponible } from "@/platform/processes/engine";
 
+/** Las entidades del motor de procesos: tienen su propia sección. */
+const ENTIDADES_DE_PROCESO = new Set(["proceso", "instancia", "evento"]);
+
+type Enlace = { key: string; label: string; href: string };
+
+/**
+ * El menú se ordena por lo que la persona viene a hacer, no por el tipo de dato.
+ *
+ * Antes eran tres listas —entidades, vistas, sistema— y lo mismo aparecía dos veces con
+ * otro nombre: «Instancias» y «Procesos en curso» llevaban a los mismos casos. Ahora:
+ *
+ *   Mi trabajo   lo que la persona tiene para hacer, si la aplicación opera procesos
+ *   Operación    las vistas del dominio
+ *   Procesos     definiciones, casos, bitácora y el tablero del trabajo
+ *   Datos        las entidades sin vista propia, plegadas: para cargar o buscar
+ *   Sistema      administración
+ *
+ * Una entidad que tiene una vista en el menú no se repite en Datos: se llega por su vista,
+ * y la vista tiene «Abrir listado base». Una sección vacía no se muestra.
+ */
 export async function Sidebar() {
   const user = await getCurrentUser();
+  const motor = motorDisponible();
+  const deProceso = (entityKey?: string) => motor && Boolean(entityKey) && ENTIDADES_DE_PROCESO.has(entityKey!);
 
-  const entityLinks = runtimeSpec.entities
-    .filter((entity) => user && hasPermission(user, entity.key, "list"))
-    .map((entity) => ({
-      key: entity.key,
-      label: entity.label_plural,
-      href: `/records/${entity.key}`,
-    }));
-
-  // La página de una entidad ya aplica la configuración de su vista de tabla: campos,
-  // orden y edición masiva. Así que una vista de tabla que se llama igual que su
-  // entidad lleva al mismo lugar con el mismo nombre, y en el menú sólo agrega ruido.
-  const nombresDeEntidad = new Set(entityLinks.map((link) => link.label.toLowerCase()));
-  const viewLinks = runtimeSpec.views
+  const vistas = runtimeSpec.views
     .filter((view) => view.navigation && ["table", "kanban", "calendar", "dashboard"].includes(view.type))
-    .filter((view) => user && hasViewAccess(user, view))
-    .filter((view) => !(view.type === "table" && nombresDeEntidad.has(view.label.toLowerCase())))
-    .map((view) => ({ key: view.key, label: view.label, href: `/views/${view.key}` }));
+    .filter((view) => user && hasViewAccess(user, view));
+  const entidadesConVista = new Set(vistas.map((view) => view.entity).filter((key): key is string => Boolean(key)));
+  const enlaceDeVista = (view: (typeof vistas)[number]): Enlace => ({ key: `view:${view.key}`, label: view.label, href: `/views/${view.key}` });
+  const entidades = runtimeSpec.entities
+    .filter((entity) => user && hasPermission(user, entity.key, "list"))
+    .filter((entity) => !entidadesConVista.has(entity.key));
+  const enlaceDeEntidad = (entity: (typeof entidades)[number]): Enlace => ({ key: `entity:${entity.key}`, label: entity.label_plural, href: `/records/${entity.key}` });
 
-  const systemLinks = [
-    ...(user ? [{ key: "settings", label: "Configuración", href: "/settings" }] : []),
+  const miTrabajo: Enlace[] = motor && user && hasPermission(user, "instancia", "read")
+    ? [{ key: "pendientes", label: "Mis pendientes", href: "/pendientes" }]
+    : [];
+  const operacion = vistas.filter((view) => !deProceso(view.entity)).map(enlaceDeVista);
+  const procesos: Enlace[] = [
+    ...vistas.filter((view) => deProceso(view.entity)).map(enlaceDeVista),
+    ...entidades.filter((entity) => deProceso(entity.key)).map(enlaceDeEntidad),
+    ...(user && motor && canViewAudit(user) ? [{ key: "trabajo", label: "Trabajo", href: "/trabajo" }] : []),
+  ];
+  const datos = entidades.filter((entity) => !deProceso(entity.key)).map(enlaceDeEntidad);
+  const sistema: Enlace[] = [
     ...(user && canManageUsers(user) ? [{ key: "users", label: "Usuarios", href: "/users" }] : []),
     ...(user && canViewAudit(user) ? [{ key: "agents", label: "Agentes", href: "/agents" }] : []),
     ...(user && canViewAudit(user) ? [{ key: "audit", label: "Actividad", href: "/audit" }] : []),
-    ...(user && canViewAudit(user) && motorDisponible() ? [{ key: "trabajo", label: "Trabajo", href: "/trabajo" }] : []),
     ...(user && canViewRules(user) ? [{ key: "rules", label: "Reglas", href: "/rules" }] : []),
+    ...(user ? [{ key: "settings", label: "Configuración", href: "/settings" }] : []),
   ];
+  // Sin vistas de dominio, los datos son lo único que hay para hacer: van abiertos.
+  const datosAbiertos = operacion.length === 0;
+  const lista = (enlaces: Enlace[]) => enlaces.map((link) => (
+    <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
+  ));
 
   return (
     <aside className="sidebar">
@@ -65,22 +93,26 @@ export async function Sidebar() {
       </label>
 
       <nav className="nav" aria-label="Navegación principal">
-        <Link className="nav-link home" href="/">Resumen</Link>
+        <Link className="nav-link home" href="/">Por dónde empezar</Link>
 
-        {entityLinks.length > 0 && <div className="nav-section">Datos</div>}
-        {entityLinks.map((link) => (
-          <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
-        ))}
+        {miTrabajo.length > 0 && <div className="nav-section">Mi trabajo</div>}
+        {lista(miTrabajo)}
 
-        {viewLinks.length > 0 && <div className="nav-section">Vistas</div>}
-        {viewLinks.map((link) => (
-          <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
-        ))}
+        {operacion.length > 0 && <div className="nav-section">Operación</div>}
+        {lista(operacion)}
 
-        {systemLinks.length > 0 && <div className="nav-section">Sistema</div>}
-        {systemLinks.map((link) => (
-          <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
-        ))}
+        {procesos.length > 0 && <div className="nav-section">Procesos</div>}
+        {lista(procesos)}
+
+        {datos.length > 0 && (
+          <details className="nav-group" open={datosAbiertos}>
+            <summary className="nav-section">Datos · {datos.length}</summary>
+            <div className="nav-group-links">{lista(datos)}</div>
+          </details>
+        )}
+
+        {sistema.length > 0 && <div className="nav-section">Sistema</div>}
+        {lista(sistema)}
       </nav>
 
       <div className="session-panel">

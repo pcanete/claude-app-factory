@@ -191,6 +191,11 @@ techo fijo. Existe para tres cosas:
 - que el cliente pida, siga, apruebe y reciba;
 - que se vea lo que hicieron las personas y los agentes.
 
+El menú se arma por lo que la persona viene a hacer: Mi trabajo (sus pendientes), Operación
+(las vistas del dominio), Procesos (definiciones, casos, bitácora y el tablero del trabajo),
+Datos (las entidades sin vista propia, plegadas) y Sistema. Cada vista abre con su
+`description`: para qué sirve y qué se hace ahí. El inicio dice por dónde empezar según el rol.
+
 Lo que no cae en ninguna de las tres va a la API, al MCP y al esquema. Quedan fuera de alcance un
 editor visual de procesos, un constructor libre de páginas o formularios, y pantallas que repitan lo
 que ya resuelve una vista generada. Agregar una pantalla a la plataforma necesita una decisión
