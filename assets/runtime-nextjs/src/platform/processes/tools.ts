@@ -149,7 +149,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
       "Abre un caso nuevo de un proceso publicado. El pedido tiene que traer todos los insumos que el proceso exige: si falta alguno, no se abre y la respuesta dice cuáles pedir.",
     inputSchema: z.object({
       proceso: z.string().uuid().describe("El id del proceso publicado (query_records sobre proceso)."),
-      titulo: z.string().min(3).max(200).describe("Qué es y para quién, por ejemplo «Carrusel Día del Padre — Empresa X»."),
+      titulo: z.string().min(3).max(200).describe("Qué es y para quién, por ejemplo «IVA de marzo — Estudio X»."),
       cliente: z.string().uuid().optional(),
       insumos: z.record(z.string(), z.unknown()).describe("Las entradas del pedido, clave por clave."),
       responde: z.string().uuid().optional().describe("Quién responde por el caso ante el cliente. Por defecto, vos."),

@@ -130,7 +130,7 @@ El asistente embebido es opcional e independiente. MCP debe funcionar aunque la 
 datos sueltos. Dos decisiones que parecen detalles y evitan los dos problemas más comunes:
 
 **El nombre de la conexión lo deriva el servidor**, con la clave de la aplicación adelante:
-`prc-operacion-claude`, no `factory`. Cada cliente MCP guarda sus servidores en una lista donde el
+`mi-app-claude`, no `factory`. Cada cliente MCP guarda sus servidores en una lista donde el
 nombre es la clave, así que dos entradas con el mismo nombre no dan error: **la segunda reemplaza a la
 primera** y una conexión desaparece sin aviso. Con dos aplicaciones generadas por esta fábrica en la
 misma máquina, el nombre genérico garantiza el choque. Al crear un agente, el servidor además rechaza
@@ -140,8 +140,8 @@ un nombre cuyo derivado ya exista.
 la nombra:
 
 ```powershell
-[Environment]::SetEnvironmentVariable("PRC_OPERACION_CLAUDE_TOKEN", "<credencial>", "User")
-claude mcp add --transport http prc-operacion-claude --scope user https://<host>/api/mcp --header 'Authorization: Bearer ${PRC_OPERACION_CLAUDE_TOKEN}'
+[Environment]::SetEnvironmentVariable("MI_APP_CLAUDE_TOKEN", "<credencial>", "User")
+claude mcp add --transport http mi-app-claude --scope user https://<host>/api/mcp --header 'Authorization: Bearer ${MI_APP_CLAUDE_TOKEN}'
 ```
 
 Las comillas simples importan: sin ellas el shell expande `${...}` antes de tiempo y el valor termina

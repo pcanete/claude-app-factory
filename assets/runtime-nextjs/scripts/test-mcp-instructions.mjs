@@ -28,12 +28,12 @@ function comprobar(nombre, condicion, detalle = "") {
 const persona = {
   aplicacion: "Operación",
   descripcion: "Clientes y procesos",
-  nombre: "Yani",
+  nombre: "Persona de prueba",
   rol: "colaborador",
   rolEtiqueta: "Colaborador",
   tipo: "user",
 };
-const agente = { ...persona, nombre: "Claude de Yani", tipo: "agent" };
+const agente = { ...persona, nombre: "Claude de la persona de prueba", tipo: "agent" };
 
 for (const [nombre, valor] of [["sin configuración", null], ["número", 42], ["lista", ["x"]], ["texto vacío", "   "]]) {
   const salida = componerInstrucciones(persona, valor);
