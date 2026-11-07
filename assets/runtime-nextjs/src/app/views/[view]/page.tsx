@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { conNombresDePersonas } from "@/lib/people-display";
 import { notFound } from "next/navigation";
 import { BulkRecordTable } from "@/components/bulk-record-table";
 import { OperationalCalendar } from "@/components/operational-calendar";
@@ -40,6 +41,7 @@ async function TableView({ view, query, canRead, canUpdate, user, access }: { vi
   ]);
   const page = Math.min(parsed.page, Math.max(1, Math.ceil(total / parsed.pageSize)));
   if (page !== parsed.page) records = await listRecords(entity.key, { ...parsed, access, offset: (page - 1) * parsed.pageSize });
+  records = await conNombresDePersonas(entity, records);
   const filterOptions = canAccessRelationshipOptions(user, entity)
     ? await relationshipOptions(entity, access)
     : undefined;
@@ -62,7 +64,10 @@ async function KanbanView({ view, canRead, canUpdate, access }: { view: ViewSpec
   if (!entity) notFound();
   const groupField = entity.fields.find((field) => field.key === view.group_by && field.type === "enum");
   if (!groupField) notFound();
-  const records = await listRecords(entity.key, { sort: view.default_sort?.field, direction: view.default_sort?.direction, limit: 500, access });
+  const records = await conNombresDePersonas(
+    entity,
+    await listRecords(entity.key, { sort: view.default_sort?.field, direction: view.default_sort?.direction, limit: 500, access }),
+  );
   const cardFields = visibleFields(entity, view, 4).filter((field) => field.key !== entity.title_field && field.key !== groupField.key);
   const titleField = entity.fields.find((field) => field.key === entity.title_field);
   const grouped = new Map<string, Array<Record<string, unknown>>>((groupField.options ?? []).map((option) => [option.key, []]));
@@ -88,6 +93,14 @@ async function KanbanView({ view, canRead, canUpdate, access }: { view: ViewSpec
     viewKey={view.key}
   />;
 }
+
+/** Cómo se nombra cada tipo de vista para quien la usa: el tipo interno no le dice nada. */
+const TIPOS_DE_VISTA: Record<string, string> = {
+  table: "Lista",
+  kanban: "Por estado",
+  calendar: "Calendario",
+  dashboard: "Resumen",
+};
 
 function timezoneDateParts(date: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -185,7 +198,9 @@ async function resolveWidget(widget: DashboardWidgetSpec, access: RecordAccessCo
   if (widget.type === "breakdown") {
     return { widget, kind: "breakdown", rows: await breakdownRecords(widget.entity, widget.group_by ?? "", access) };
   }
-  return { widget, kind: "recent", records: await listRecords(widget.entity, { limit: widget.limit ?? 5, access }) };
+  const recentEntity = getEntity(widget.entity);
+  const recent = await listRecords(widget.entity, { limit: widget.limit ?? 5, access });
+  return { widget, kind: "recent", records: recentEntity ? await conNombresDePersonas(recentEntity, recent) : recent };
 }
 
 async function DashboardView({ view, userRole, access }: { view: ViewSpec; userRole: string; access: RecordAccessContext }) {
@@ -259,7 +274,7 @@ export default async function NamedViewPage({
     <>
       <div className="page-header">
         <div>
-          <p className="eyebrow">Vista · {view.type}</p>
+          <p className="eyebrow">{entity ? `${entity.label_plural} · ${TIPOS_DE_VISTA[view.type] ?? view.type}` : TIPOS_DE_VISTA[view.type] ?? view.type}</p>
           <h1>{view.label}</h1>
           <p className="subtitle">{entity?.description ?? "Resumen configurable generado desde AppSpec."}</p>
         </div>
