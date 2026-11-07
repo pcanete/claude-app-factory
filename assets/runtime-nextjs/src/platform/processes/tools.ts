@@ -16,6 +16,7 @@ import {
   validarProceso,
   verCaso,
 } from "@/platform/processes/engine";
+import { DIAS_POR_DEFECTO, listarProcesos, rolesVenTablero, tableroDeProceso } from "@/platform/processes/dashboard";
 
 type ResultadoMcp = {
   content: { type: "text"; text: string }[];
@@ -175,6 +176,44 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   }, async (entrada) => rastreo("validar_proceso", { definicion: "(omitida)" }, async () => ({
     value: validarProceso(entrada.definicion),
   })));
+
+  // Sólo para quien ve toda la actividad: el tablero incluye la tasa de devolución por
+  // persona, y medir el trabajo no tiene que volverse un ranking a la vista de quien opera.
+  const roles = agent.kind === "user" ? [agent.roleKey] : [...new Set([agent.roleKey, agent.ownerRoleKey ?? agent.roleKey])];
+  if (agent.scopes.includes("records:read") && rolesVenTablero(roles)) {
+    server.registerTool("tablero_de_trabajo", {
+      description:
+        "Cómo rinde el trabajo, según la bitácora. Sin proceso, un resumen de todos: casos, entregados, tiempo de ciclo y dónde se traba cada uno. Con proceso, el detalle por etapa: tiempo en cola, trabajando, esperando y en revisión; tasa de devolución; qué modelo de IA declaró cada cierre y cómo le fue; los últimos motivos de espera y devolución; los casos detenidos y la tasa por persona. Usalo para decidir qué mejorar en la próxima versión de un proceso.",
+      inputSchema: z.object({
+        proceso: z.string().uuid().optional().describe("El id del proceso. Sin él, devuelve el resumen de todos."),
+        dias: z.number().int().min(1).max(730).optional().describe("Período en días: los casos abiertos más los creados en ese lapso. Por defecto, 90."),
+      }),
+    }, async (entrada) => rastreo("tablero_de_trabajo", entrada, async () => {
+      if (entrada.proceso) {
+        const detalle = await tableroDeProceso(entrada.proceso, entrada.dias);
+        if (!detalle) throw new Error("Ese proceso no existe.");
+        return { value: detalle, resultCount: detalle.tablero.casos };
+      }
+      const procesos = await listarProcesos();
+      const resumen = [];
+      for (const proceso of procesos) {
+        const detalle = await tableroDeProceso(proceso.id, entrada.dias);
+        if (!detalle) continue;
+        const { tablero } = detalle;
+        resumen.push({
+          id: proceso.id,
+          nombre: proceso.nombre,
+          estado: proceso.estado,
+          casos: tablero.casos,
+          entregados: tablero.entregados,
+          ciclo_mediana_horas: tablero.ciclo.mediana_horas,
+          detenidos: tablero.detenidos.length,
+          traba: tablero.traba,
+        });
+      }
+      return { value: { dias: entrada.dias ?? DIAS_POR_DEFECTO, procesos: resumen }, resultCount: resumen.length };
+    }));
+  }
 
   // Los prompts aparecen como comandos en los clientes que los muestran: para alguien que
   // no sabe qué pedirle a su IA, elegir «pendientes» es más fácil que redactarlo.

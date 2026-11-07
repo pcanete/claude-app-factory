@@ -21,6 +21,8 @@ resultado. Qué skill usar, cómo cerrar y qué controlar se lo dice la etapa.
 | `definition.ts` | Puro, sin dependencias: valida definiciones, pedidos y cierres, decide el destino y arma la guía. Lo prueba `scripts/test-process-definition.mjs` |
 | `engine.ts` | Las operaciones sobre la base, cada una en una transacción con el caso bloqueado |
 | `tools.ts` | Las herramientas y prompts MCP |
+| `metrics.ts` | Puro, sin dependencias: mide un proceso a partir de su bitácora. Lo prueba `scripts/test-process-metrics.mjs` |
+| `dashboard.ts` | Lee la base para el tablero y decide quién lo ve |
 
 ## Qué necesita la AppSpec
 
@@ -133,6 +135,7 @@ con el enlace del último cierre como resultado.
 | `revisar_etapa` | revisores, nunca quien cerró | Aprueba, o devuelve con motivo |
 | `ver_caso` | roles que leen `evento` | El recorrido completo: quién, cuándo, con qué receta y dónde quedó |
 | `validar_proceso` | cualquiera | Revisa una definición |
+| `tablero_de_trabajo` | roles con `view_audit` | Cómo rinde cada proceso. Ver [El tablero del trabajo](#el-tablero-del-trabajo) |
 
 Prompts: `pendientes` y `trabajar_caso`. En los clientes que los muestran como comandos, la
 persona no necesita saber qué pedirle a su IA.
@@ -148,8 +151,37 @@ reglas de la AppSpec sobre `instancia` y `evento` corren igual: son una segunda 
 primera.
 
 La receta se guarda dentro del evento `cerrada`, junto con la respuesta a cada criterio. Es lo
-que permite al que define el proceso ver dónde se traban los juniors y mejorar la guía con eso,
-no de memoria.
+que permite a quien define el proceso ver dónde se traba la gente y mejorar la guía con eso, no
+de memoria.
+
+## El tablero del trabajo
+
+Lo que se registra se lee. El tablero mide cada proceso a partir de su bitácora, en `/trabajo`
+dentro del panel y con la herramienta `tablero_de_trabajo` por MCP. Las dos usan la misma
+medición: la pantalla es para quien prefiere mirarla, no una fuente distinta.
+
+| Medida | De dónde sale |
+|---|---|
+| **En cola** | Desde que la etapa queda disponible (pedido, cierre anterior, aprobación o liberación) hasta que alguien la toma |
+| **Trabajando** | Los tramos entre `tomada` y `esperando`, `liberada` o `cerrada`, sumados por caso |
+| **Esperando** | Desde `esperando` hasta que se retoma. Incluye lo que tarda en retomarse una devolución |
+| **En revisión** | Desde `cerrada` hasta `revisada` o `devuelta` |
+| **Ciclo** | Desde `creada` hasta `entregada` |
+| **Devolución** | Devoluciones sobre revisiones, por etapa. Por persona, sobre sus cierres: la devolución es de quien cerró, no de quien revisó |
+| **Modelo y resultado** | El `modelo` que declaró cada receta, agrupado sin mayúsculas, y qué pasó después: aprobado, devuelto, sin revisión o pendiente |
+| **Por qué se frena** | Los últimos motivos de espera, devolución y liberación de cada etapa |
+| **Dónde se traba** | La etapa con más esperas, devoluciones y liberaciones por caso que pasó por ella, desde dos frenos |
+| **Detenidos** | Casos abiertos sin movimiento hace tres días o más |
+
+Los tiempos se informan como mediana y percentil 90, con la cantidad de casos medidos: con
+pocos casos, un número no dice nada todavía. El período abarca los casos abiertos más los
+creados en los últimos 90 días (30, 180 o 365 a elección), y cada caso cuenta con toda su
+bitácora aunque haya empezado antes.
+
+**Quién lo ve:** los roles con `view_audit`, que ya ven cada cambio en la actividad. El tablero
+incluye la devolución por persona, y medir el trabajo no tiene que volverse un ranking a la
+vista de quien opera. Por la misma razón la herramienta ni siquiera se registra para los demás
+roles. No muestra conversaciones: sólo lo que quedó en la bitácora.
 
 ## Verificado
 

@@ -253,6 +253,9 @@ tbody tr:hover { background: #1a1d25; }
 .detail-value { margin-top: 8px; word-break: break-word; }
 
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.work-section { margin-top: 30px; }
+.work-section h2 { margin-bottom: 6px; }
+.work-section .table-wrap { margin-top: 14px; }
 .attachment-panel { max-width: 920px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
 .attachment-count { background: var(--primary-soft); border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--border)); border-radius: 999px; color: #d8d5ff; font-size: 12px; padding: 5px 9px; }
 .attachment-upload { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin: 20px 0; }
