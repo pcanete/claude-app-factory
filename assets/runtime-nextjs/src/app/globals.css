@@ -60,6 +60,10 @@ button, input, select, textarea { font: inherit; }
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  /* Fijo a la altura de la pantalla: sin desplazamiento propio, lo que no entra quedaba
+     inalcanzable en una pantalla baja. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .brand { margin: 0 10px 28px; }
@@ -367,6 +371,7 @@ tbody tr:hover { background: #1a1d25; }
     border-bottom: 1px solid var(--border);
     border-right: 0;
     height: auto;
+    max-height: 100vh;
     padding: 0;
     position: sticky;
     top: 0;
