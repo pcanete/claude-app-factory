@@ -50,8 +50,10 @@ resuelven a mano, no con un flag. Después de `--apply`: `pnpm install`, `pnpm d
 15. Una migración que borra datos no se aplica sola durante un despliegue. Si la guarda la frena, la salida no es autorizarla y seguir: primero desacoplá el código y desplegá, y recién después borrá los datos, con respaldo y como paso separado.
 16. Cuando la aplicación vaya a ser operada por agentes, leé [references/mcp.md](references/mcp.md). Emití
 una credencial por agente, con los alcances mínimos que necesite y con vencimiento; nunca compartas una sesión humana con un agente.
-17. Cuando la organización trabaje por procesos, declará en el AppSpec las entidades `proceso`,
-`instancia` y `evento` y seguí [references/procesos.md](references/procesos.md). A los roles que
+17. Cuando la organización entregue un servicio que pasa por varias manos, declará
+`"blocks": ["procesos"]` en el AppSpec: la fábrica agrega `proceso`, `instancia` y `evento` con sus
+vistas y permisos. No las escribas a mano. Seguí [references/procesos.md](references/procesos.md); para
+una aplicación existente, `scripts/blocks.py` arma la propuesta para `evolve_app.py`. A los roles que
 operan dales sólo `list` y `read` sobre `instancia` y `evento`: el motor es la única puerta para mover
 un caso. Validá cada definición con `validar_proceso` antes de publicarla.
 18. Implementá los cálculos, integraciones, flujos e interfaz propios del cliente en `src/features/`, siguiendo [references/extension-contract.md](references/extension-contract.md). Nunca edites `src/platform/` ni `database/platform/` para un cliente: envolvelos desde una feature.

@@ -20,6 +20,7 @@ jobs:
           python scripts/test_scaffold.py
           python scripts/test_evolve_app.py
           python scripts/test_update_platform.py
+          python scripts/test_blocks.py
       # El actualizador se prueba contra la historia real: una aplicación generada con la
       # plataforma de main tiene que poder subir a la de esta rama y seguir verificando.
       - name: An application generated from main updates to this platform

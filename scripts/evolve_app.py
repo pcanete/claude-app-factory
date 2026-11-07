@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from blocks import BlockError, expand_blocks
 from scaffold_app import (
     SpecError,
     compile_navigation,
@@ -628,6 +629,10 @@ def load_proposed_spec(path: Path) -> dict[str, Any]:
         raise SpecError(
             f"Proposed spec has invalid JSON at line {error.lineno}, column {error.colno}: {error.msg}"
         ) from error
+    try:
+        spec, _ = expand_blocks(spec)
+    except BlockError as error:
+        raise SpecError(str(error)) from error
     errors = validate_spec(spec)
     if errors:
         raise SpecError("Proposed AppSpec is invalid:\n- " + "\n- ".join(errors))

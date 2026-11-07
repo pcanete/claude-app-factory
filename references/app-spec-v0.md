@@ -16,6 +16,7 @@ Claves opcionales:
 
 - `rules`: reglas de negocio declarativas que ejecuta el runtime.
 - `decisions`: supuestos, decisiones confirmadas y preguntas sin resolver.
+- `blocks`: bloques estándar que la fábrica expande. Ver [Bloques](#bloques).
 
 ## App
 
@@ -261,6 +262,46 @@ Las acciones se limitan a:
 ```
 
 Los estados permitidos son `confirmed`, `assumption` y `unresolved`.
+
+## Bloques
+
+Un bloque es un conjunto de entidades y vistas que la plataforma necesita con una forma fija. Se
+pide con una línea y la fábrica lo expande antes de validar, al generar y al evolucionar:
+
+```json
+{
+  "blocks": ["procesos"]
+}
+```
+
+Hoy hay un bloque, `procesos`: agrega las entidades `proceso`, `instancia` y `evento` sobre las que
+opera el [motor de procesos](procesos.md), y las vistas «Casos en curso» (kanban por estado),
+«Casos», «Bitácora» y «Procesos». Declaralo siempre que la organización entregue un servicio que
+pasa por varias manos; dejalo afuera en una herramienta interna sin procesos.
+
+- **La expansión queda escrita** en el `app-spec.json` de la aplicación. Después de generarla, esas
+  entidades son de la aplicación: se ven, se evolucionan y se extienden como cualquier otra. Se les
+  pueden agregar campos, opciones y relaciones, por ejemplo una relación con el cliente.
+- **Sólo agrega.** Si la AppSpec ya declara una de esas entidades, la fábrica no la toca: comprueba
+  que tenga lo que el motor exige y, si le falta algo, frena y dice qué. Una versión nueva del bloque
+  nunca cambia en silencio el esquema de una aplicación instalada.
+- **Las vistas acompañan a la entidad.** Sólo se agregan junto con una entidad que el bloque agrega
+  en esa pasada; si la aplicación quitó una vista, no vuelve.
+- **Los permisos salen de los roles.** Los roles con `manage_users` tienen todo sobre `proceso` e
+  `instancia`; el resto, `list` y `read`. Sobre `evento`, todos sólo leen: la bitácora no se edita.
+  Si ningún rol declara capacidades, el primero hace de administrador.
+- **Los nombres quedan tomados.** Una organización cuyo dominio ya usa `proceso`, `instancia` o
+  `evento` para otra cosa tiene que nombrar distinto esa entidad propia.
+
+Para agregarlo a una aplicación que ya existe:
+
+```bash
+python scripts/blocks.py --spec <app>/app-spec.json --output propuesta.app-spec.json
+python scripts/evolve_app.py --project <app> --spec propuesta.app-spec.json
+```
+
+La evolución crea las tres tablas en una migración nueva. Si la aplicación ya tenía las entidades,
+no hay migración: sólo queda declarado el bloque.
 
 ## Invariantes de compilación
 
