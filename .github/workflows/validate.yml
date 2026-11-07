@@ -80,6 +80,10 @@ jobs:
       - name: Process definitions validate, close and guide
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-process-definition.mjs
+      # El tablero mide con la bitácora: un error acá hace que se mejore la etapa equivocada.
+      - name: The work dashboard measures from the log
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-process-metrics.mjs
       - name: Build the generated application
         working-directory: /tmp/reference-app
         run: pnpm build

@@ -5,6 +5,7 @@ import { clerkAuthConfigured } from "@/platform/auth/config";
 import { canManageUsers, canViewAudit, canViewRules, getCurrentUser, hasPermission, hasViewAccess } from "@/lib/auth";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { runtimeSpec } from "@/lib/spec";
+import { motorDisponible } from "@/platform/processes/engine";
 
 export async function Sidebar() {
   const user = await getCurrentUser();
@@ -32,6 +33,7 @@ export async function Sidebar() {
     ...(user && canManageUsers(user) ? [{ key: "users", label: "Usuarios", href: "/users" }] : []),
     ...(user && canViewAudit(user) ? [{ key: "agents", label: "Agentes", href: "/agents" }] : []),
     ...(user && canViewAudit(user) ? [{ key: "audit", label: "Actividad", href: "/audit" }] : []),
+    ...(user && canViewAudit(user) && motorDisponible() ? [{ key: "trabajo", label: "Trabajo", href: "/trabajo" }] : []),
     ...(user && canViewRules(user) ? [{ key: "rules", label: "Reglas", href: "/rules" }] : []),
   ];
 
