@@ -495,7 +495,7 @@ def validate_spec(spec: Any) -> list[str]:
             errors.append(f"{path} must be an object.")
             continue
         allowed_view_keys = {
-            "key", "label", "type", "entity", "navigation", "fields", "default_sort",
+            "key", "label", "description", "type", "entity", "navigation", "fields", "default_sort",
             "page_size", "bulk_edit_fields", "group_by", "allow_move", "date_field",
             "end_date_field", "allow_reschedule", "widgets",
         }
@@ -503,6 +503,8 @@ def validate_spec(spec: Any) -> list[str]:
             errors.append(f"Unknown property at {path}: {key}.")
         if not is_identifier(view.get("key")):
             errors.append(f"{path}.key must be a snake_case identifier.")
+        if "description" in view and (not isinstance(view["description"], str) or len(view["description"]) > 300):
+            errors.append(f"{path}.description must be a string of at most 300 characters.")
         else:
             view_keys.append(view["key"])
         if not required_string(view.get("label")):

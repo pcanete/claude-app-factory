@@ -81,6 +81,8 @@ export type DashboardWidgetSpec = {
 export type ViewSpec = {
   key: string;
   label: string;
+  /** Para qué sirve la vista y qué se hace en ella: es lo primero que lee quien entra. */
+  description?: string;
   type: ViewType;
   entity?: string;
   navigation?: boolean;

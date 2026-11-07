@@ -276,7 +276,7 @@ export default async function NamedViewPage({
         <div>
           <p className="eyebrow">{entity ? `${entity.label_plural} · ${TIPOS_DE_VISTA[view.type] ?? view.type}` : TIPOS_DE_VISTA[view.type] ?? view.type}</p>
           <h1>{view.label}</h1>
-          <p className="subtitle">{entity?.description ?? "Resumen configurable generado desde AppSpec."}</p>
+          <p className="subtitle">{view.description ?? entity?.description ?? "Un resumen de lo que está pasando."}</p>
         </div>
         {entity && <Link className="button secondary" href={`/records/${entity.key}`}>Abrir listado base</Link>}
       </div>

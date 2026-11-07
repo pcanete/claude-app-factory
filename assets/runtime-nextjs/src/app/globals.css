@@ -75,6 +75,14 @@ button, input, select, textarea { font: inherit; }
 .nav-link.home { color: var(--primary); margin-bottom: 8px; }
 .nav-link.audit-link { margin-top: 8px; border-top: 1px solid var(--border); border-radius: 0; padding-top: 16px; }
 .nav-section { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; margin: 14px 12px 3px; text-transform: uppercase; }
+.nav-group { display: grid; gap: 6px; }
+.nav-group-switch { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.nav-group-toggle { cursor: pointer; }
+.nav-group-toggle::after { content: " ▸"; }
+.nav-group-switch:checked + .nav-group-toggle::after { content: " ▾"; }
+.nav-group-switch:focus-visible + .nav-group-toggle { outline: 2px solid var(--primary); outline-offset: 2px; }
+.nav-group-links { display: grid; gap: 6px; }
+.nav-group-switch:not(:checked) ~ .nav-group-links { display: none; }
 .session-panel { margin-top: auto; border-top: 1px solid var(--border); padding: 18px 10px 0; }
 .session-name { font-size: 12px; font-weight: 700; line-height: 1.4; }
 .session-email { color: var(--muted); font-size: 11px; margin-top: 3px; word-break: break-all; }
@@ -419,6 +427,8 @@ tbody tr:hover { background: #1a1d25; }
   /* Un objetivo táctil cómodo: los enlaces medían 36 píxeles de alto. */
   .nav-link { min-height: 44px; display: flex; align-items: center; }
   .nav-section { grid-column: 1 / -1; }
+  .nav-group { grid-column: 1 / -1; }
+  .nav-group-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .session-panel { padding: 0 16px 16px; }
 
   /* La tabla se vuelve una ficha por registro.
