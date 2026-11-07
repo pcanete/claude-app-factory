@@ -20,9 +20,9 @@ Lo que la fase 1 cambió respecto de este plan:
 Las organizaciones ya trabajan con IA, pero cada persona lo hace con la suya, que compró ella y usa
 para todo. El resultado tiene dos caras:
 
-- **Lo que hace la IA de una persona es invisible para el resto.** Si Yani encuentra cómo hacer un
-  buen carrusel, nadie más puede repetirlo. Para que otro siga los mismos pasos tendría que instalar
-  una skill que ella armó, y eso no pasa en la vida real.
+- **Lo que hace la IA de una persona es invisible para el resto.** Si alguien del equipo encuentra
+  cómo hacer bien una pieza, nadie más puede repetirlo. Para que otro siga los mismos pasos tendría
+  que instalar una skill que esa persona armó, y eso no pasa en la vida real.
 - **Los procesos cruzan personas.** Un carrusel o una web pasan por varias manos, y entre una y otra
   se pierde qué entró, qué se hizo y dónde quedó.
 
@@ -49,7 +49,7 @@ el resto de la fábrica. Nada de esto introduce multi-tenencia compartida.
 
 | Nivel | Quién | Qué hace |
 |---|---|---|
-| **Define** | Quien vende el servicio (PRC, o quien lo opere) | Diseña los procesos, los versiona y asciende lo que funcionó |
+| **Define** | Quien vende el servicio | Diseña los procesos, los versiona y asciende lo que funcionó |
 | **Opera** | Los empleados y colaboradores de la organización, cada uno con su IA | Toman etapas, las ejecutan, revisan |
 | **Recibe** | Los clientes de la organización | Cargan el insumo, siguen el estado y reciben el resultado |
 
@@ -205,7 +205,7 @@ humana. Después pasan a revisión por muestreo, si la tasa de devolución es ba
 
 ## Qué existe y qué falta
 
-Verificado contra el runtime de la fábrica el 2026-11-04.
+Actualizado con la plataforma 1.2.0, el 2026-11-07.
 
 | Pieza | Estado |
 |---|---|
@@ -218,12 +218,13 @@ Verificado contra el runtime de la fábrica el 2026-11-04.
 | Campo `json` | Existe |
 | Vista kanban | Existe |
 | Reglas que bloquean | Existen, pero no ven el valor anterior de un campo ni adjuntos. No alcanzan para un motor de transiciones |
-| Instrucciones de servidor, prompts y resources en MCP | Falta. Hoy el MCP solo expone herramientas |
-| Herramientas con forma de tarea | Falta |
-| Procesos, versiones, etapas, instancias, eventos | Falta |
+| Instrucciones de servidor según el rol, y prompts en MCP | Existe. Las instrucciones se leen de la configuración |
+| Herramientas con forma de tarea | Existe: `mis_pendientes`, `tomar_caso`, `guia_de_etapa`, `esperar_caso`, `liberar_caso`, `cerrar_etapa`, `revisar_etapa`, `crear_caso`, `ver_caso`, `validar_proceso` |
+| Procesos, versiones, etapas, instancias, eventos | Existe, sobre entidades de la AppSpec. Ver [`procesos.md`](procesos.md) |
 | Membresía de personas con alcance y vencimiento | Falta. Las personas tienen `active`, sin vencimiento ni alcance por proceso |
-| Colas, toma con bloqueo, devolución por abandono | Falta |
-| Visibilidad de campos por etapa | Falta |
+| Colas y toma con bloqueo | Existe |
+| Devolución por abandono (plazo de toma) | Falta |
+| Visibilidad de campos por etapa | Existe en la guía (`entradas_visibles`); la lectura directa de `evento` no está acotada |
 | Reasignar de a muchas | Falta |
 | Taller | Falta |
 | Actualizar la plataforma de una app ya instalada (issue #5) | Existe: `scripts/update_platform.py`. Ver [`extension-contract.md`](extension-contract.md) |
@@ -233,9 +234,9 @@ Verificado contra el runtime de la fábrica el 2026-11-04.
 El motor está terminado cuando pasa estas tres, en una instalación real, sin ayuda de quien lo
 construyó:
 
-1. **Alguien se va.** Se desactiva a Yani con un carrusel a medio hacer. Mauri lo retoma leyendo solo
-   la plataforma, sin llamarla, y lo entrega.
-2. **Alguien entra.** Pepe recibe una invitación para la etapa 3 por un mes. Conecta su propia IA,
+1. **Alguien se va.** Se desactiva a una persona con un caso a medio hacer. Otra lo retoma leyendo
+   solo la plataforma, sin llamar a la primera, y lo entrega.
+2. **Alguien entra.** Una persona nueva recibe una invitación para la etapa 3 por un mes. Conecta su propia IA,
    pregunta "¿qué tengo que hacer y cómo?", y cierra una etapa que pasa la revisión sin que nadie le
    explique nada. Al vencer el mes, pierde el acceso solo.
 3. **Otro rubro.** Un proceso de un estudio contable o jurídico se define con el mismo formato, sin
@@ -243,11 +244,11 @@ construyó:
 
 ## Orden de construcción
 
-**Fase 0 — Piloto sobre prc-operacion, con lo que ya existe.** Las entidades `proceso` (con la
+**Fase 0 — Piloto sobre una instalación real, con lo que ya existe.** Las entidades `proceso` (con la
 definición en un campo `json`), `instancia` y `evento` se agregan con `evolve-app-schema`. El único
 cambio de plataforma es que el MCP sirva **instrucciones de servidor leídas de la configuración**. Las
-transiciones se respetan por convención y por revisión, no por el motor. Proceso del piloto: el
-carrusel de P3, con Yani operando con su IA de siempre. Sirve para probar las pruebas 1 y 2 en su
+transiciones se respetan por convención y por revisión, no por el motor. Proceso del piloto: un
+carrusel para redes de un cliente real, operado por una persona con su IA de siempre. Sirve para probar las pruebas 1 y 2 en su
 versión débil, en días y no en meses.
 
 **Fase 1 — El motor en la zona de plataforma.** Procesos como datos, transiciones controladas,

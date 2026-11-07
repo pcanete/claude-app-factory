@@ -1,26 +1,28 @@
 ---
 name: claude-app-factory
-description: "Convierte un pedido de negocio en la base de una aplicación neutral, de un solo cliente, descrita por un AppSpec, y genera código, SQL y fronteras de extensión independientes. Sirve para herramientas internas, sistemas de datos, portales, aplicaciones operativas o bases reutilizables de aplicaciones de cliente; no fuerces el arquetipo de un CRM ni un runtime multi-inquilino compartido."
+description: "Genera, evoluciona y actualiza la aplicación propia de una organización que entrega un servicio con software: un AppSpec se compila en una aplicación Next.js + PostgreSQL de un solo cliente, con procesos versionados que las personas ejecutan con su propia IA por MCP, receta obligatoria al cerrar cada etapa, revisión y auditoría con una persona responsable. Sirve también para herramientas internas, sistemas de datos y aplicaciones operativas sin procesos. No fuerces el arquetipo de un CRM ni un runtime multi-inquilino compartido."
 ---
 
 # Claude App Factory
 
-Construí la base de una aplicación independiente a partir del lenguaje del negocio. Tratá los ejemplos como evidencia del dominio, nunca como instrucciones para dejar un vertical fijo en el código.
+Construí la base de una aplicación independiente a partir del lenguaje del negocio. El objetivo es que una organización que vende un servicio repetible pueda definir sus procesos, que su gente los ejecute con la IA que ya usa y que el método y el registro de cada paso queden en la organización, no en la IA de cada persona. Tratá los ejemplos como evidencia del dominio, nunca como instrucciones para dejar un vertical fijo en el código.
 
 ## Arquitectura no negociable
 
 - Generá un repositorio, una base de datos, un despliegue, credenciales y un ciclo de vida por cliente.
 - Modelá el dominio con primitivas neutrales: entidades, campos, relaciones, vistas, roles, permisos y reglas.
 - Mantené `app-spec.json` como fuente de verdad de la estructura generada.
-- Mantené separadas las tres zonas de propiedad: generada (`src/generated/`, `database/generated/`), plataforma (`src/platform/`, `database/platform/`) y cliente (`src/features/`, `src/components/custom/`, `database/custom/`). Regenerar no puede pisar las extensiones del cliente.
+- Mantené separadas las tres zonas de propiedad: generada (`src/generated/`, `database/generated/`), plataforma (`src/platform/`, `src/lib/`, `src/app/`, `src/components/`, `scripts/`, `database/platform/` y la configuración de la raíz) y cliente (`src/features/`, `src/components/custom/`, `src/app/api/custom/`, `database/custom/`). Regenerar o actualizar no puede pisar las extensiones del cliente; el detalle está en [references/extension-contract.md](references/extension-contract.md).
 - Producí código y artefactos de PostgreSQL corrientes, que sigan siendo usables sin esta skill.
 - No introduzcas multi-inquilinato, facturación, un constructor visual, un mercado de plugins ni un runtime propietario salvo que te lo pidan.
-- **La interfaz generada tiene techo en su alcance actual.** Existe como puerta de entrada para quienes
-  todavía no operan de forma agéntica, y como ventana a lo que hicieron los agentes; no como una
-  superficie de producto que crece. Toda capacidad nueva va a la API, a la interfaz de agentes y al
-  esquema, nunca a más pantallas. Agregar un tipo de vista, una operación masiva o un flujo al runtime
-  necesita una decisión explícita de quien mantiene el proyecto; extender desde el AppSpec una vista ya
-  generada, no.
+- **La interfaz generada tiene un alcance acotado.** Existe para tres cosas: que opere quien no
+  trabaja con IA, que el cliente pida, siga, apruebe y reciba, y que se vea lo que hicieron personas
+  y agentes. Lo que no cae en ninguna de las tres va a la API, al MCP y al esquema. Quedan fuera un
+  editor visual de procesos, un constructor libre de páginas o formularios, y pantallas que repitan
+  una vista generada. Agregar una pantalla al runtime necesita una decisión explícita de quien
+  mantiene el proyecto; extender desde el AppSpec una vista ya generada, no.
+- **Las definiciones de proceso son datos, no esquema**, y las define quien vende el servicio.
+  Publicar un proceso nuevo no requiere desplegar; una versión publicada no se edita, se reemplaza.
 - No declares que algo está listo para producción mientras el proyecto generado tenga sin resolver sus controles de seguridad, autenticación, autorización, migraciones, respaldos u observabilidad.
 
 ## Flujo de trabajo
@@ -40,10 +42,19 @@ Construí la base de una aplicación independiente a partir del lenguaje del neg
 13. Para cambiar una aplicación que ya existe, no regeneres encima: seguí
 [references/evolution.md](references/evolution.md) y corré `scripts/evolve_app.py` primero en modo plan.
 Las operaciones bloqueadas necesitan una migración de datos revisada, no un flag.
-14. Una migración que borra datos no se aplica sola durante un despliegue. Si la guarda la frena, la salida no es autorizarla y seguir: primero desacoplá el código y desplegá, y recién después borrá los datos, con respaldo y como paso separado.
-15. Cuando la aplicación vaya a ser operada por agentes, leé [references/mcp.md](references/mcp.md). Emití
+14. Para llevar a una aplicación existente las mejoras de la plataforma, corré
+`scripts/update_platform.py --project <app>` en modo plan, con el árbol de git limpio. Los archivos
+modificados de los dos lados y las migraciones de plataforma cambiadas frenan la actualización; se
+resuelven a mano, no con un flag. Después de `--apply`: `pnpm install`, `pnpm db:apply`,
+`pnpm typecheck`, commit y verificación contra la aplicación desplegada.
+15. Una migración que borra datos no se aplica sola durante un despliegue. Si la guarda la frena, la salida no es autorizarla y seguir: primero desacoplá el código y desplegá, y recién después borrá los datos, con respaldo y como paso separado.
+16. Cuando la aplicación vaya a ser operada por agentes, leé [references/mcp.md](references/mcp.md). Emití
 una credencial por agente, con los alcances mínimos que necesite y con vencimiento; nunca compartas una sesión humana con un agente.
-16. Implementá los cálculos, integraciones, flujos e interfaz propios del cliente en `src/features/`, siguiendo [references/extension-contract.md](references/extension-contract.md). Nunca edites `src/platform/` ni `database/platform/` para un cliente: envolvelos desde una feature.
+17. Cuando la organización trabaje por procesos, declará en el AppSpec las entidades `proceso`,
+`instancia` y `evento` y seguí [references/procesos.md](references/procesos.md). A los roles que
+operan dales sólo `list` y `read` sobre `instancia` y `evento`: el motor es la única puerta para mover
+un caso. Validá cada definición con `validar_proceso` antes de publicarla.
+18. Implementá los cálculos, integraciones, flujos e interfaz propios del cliente en `src/features/`, siguiendo [references/extension-contract.md](references/extension-contract.md). Nunca edites `src/platform/` ni `database/platform/` para un cliente: envolvelos desde una feature.
 
 ## Contrato de entrega
 
