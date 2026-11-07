@@ -12,6 +12,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from blocks import KNOWN_BLOCKS, BlockError, expand_blocks  # noqa: E402
+
 
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 FIELD_TYPES = {
@@ -219,9 +222,18 @@ def validate_spec(spec: Any) -> list[str]:
     errors: list[str] = []
     if not isinstance(spec, dict):
         return ["The AppSpec root must be an object."]
-    root_keys = {"version", "app", "roles", "entities", "views", "rules", "decisions"}
+    root_keys = {"version", "app", "roles", "entities", "views", "rules", "decisions", "blocks"}
     for key in sorted(set(spec) - root_keys):
         errors.append(f"Unknown root property: {key}.")
+    if "blocks" in spec:
+        blocks = spec["blocks"]
+        if not isinstance(blocks, list) or any(not isinstance(b, str) for b in blocks):
+            errors.append("blocks must be a list of block names.")
+        else:
+            for name in sorted(set(blocks) - set(KNOWN_BLOCKS)):
+                errors.append(f"Unknown block: {name}. Known blocks: {', '.join(KNOWN_BLOCKS)}.")
+            for name in duplicates(blocks):
+                errors.append(f"Duplicate block: {name}.")
     if spec.get("version") != "0.1":
         errors.append("version must be '0.1'.")
 
@@ -1348,6 +1360,10 @@ def manifest_document(files: dict[str, str], package: dict[str, dict[str, str]])
 
 
 def scaffold(spec: dict[str, Any], output: Path) -> list[Path]:
+    try:
+        spec, _ = expand_blocks(spec)
+    except BlockError as error:
+        raise SpecError(str(error)) from error
     ensure_safe_output(output)
     written = copy_runtime(spec, output)
     files: dict[str, str] = {
@@ -1393,6 +1409,11 @@ def main() -> int:
         print(f"Invalid JSON at line {error.lineno}, column {error.colno}: {error.msg}", file=sys.stderr)
         return 2
 
+    try:
+        spec, block_notes = expand_blocks(spec)
+    except BlockError as error:
+        print(str(error), file=sys.stderr)
+        return 2
     errors = validate_spec(spec)
     if errors:
         print("AppSpec validation failed:", file=sys.stderr)
@@ -1408,6 +1429,8 @@ def main() -> int:
         print(str(error), file=sys.stderr)
         return 2
     print(f"Generated foundation: {spec['app']['name']}")
+    for note in block_notes:
+        print(note)
     print(f"Output: {args.output.resolve()}")
     print(f"Files: {len(written)}")
     print("Status: local preview runtime; review BUILD_REPORT.md before production")

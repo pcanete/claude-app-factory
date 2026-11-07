@@ -1,0 +1,336 @@
+{
+  "key": "procesos",
+  "version": 1,
+  "description": "Las entidades sobre las que opera el motor de procesos: proceso (la definición versionada), instancia (cada caso) y evento (la bitácora de cada caso).",
+  "entities": [
+    {
+      "key": "proceso",
+      "label": "Proceso",
+      "label_plural": "Procesos",
+      "description": "Definición versionada de cómo se hace un trabajo: etapas, insumos, criterios y salidas",
+      "title_field": "nombre",
+      "fields": [
+        {
+          "key": "nombre",
+          "label": "Nombre",
+          "type": "text",
+          "required": true,
+          "searchable": true,
+          "help": "Incluí la versión en el nombre, por ejemplo «Liquidación de IVA v1»."
+        },
+        {
+          "key": "version",
+          "label": "Versión",
+          "type": "integer",
+          "required": true,
+          "default": 1
+        },
+        {
+          "key": "estado",
+          "label": "Estado",
+          "type": "enum",
+          "required": true,
+          "default": "borrador",
+          "options": [
+            {
+              "key": "borrador",
+              "label": "Borrador"
+            },
+            {
+              "key": "publicado",
+              "label": "Publicado"
+            },
+            {
+              "key": "retirado",
+              "label": "Retirado"
+            }
+          ],
+          "help": "Una versión publicada no se edita: mejorarla es publicar la siguiente."
+        },
+        {
+          "key": "descripcion",
+          "label": "Descripción",
+          "type": "long_text"
+        },
+        {
+          "key": "definicion",
+          "label": "Definición",
+          "type": "json",
+          "required": true,
+          "help": "Las etapas del proceso, en el formato de references/procesos.md de la fábrica."
+        }
+      ]
+    },
+    {
+      "key": "instancia",
+      "label": "Caso",
+      "label_plural": "Casos",
+      "description": "Un caso concreto de un proceso, por ejemplo «IVA de marzo — Estudio X»",
+      "title_field": "titulo",
+      "fields": [
+        {
+          "key": "titulo",
+          "label": "Título",
+          "type": "text",
+          "required": true,
+          "searchable": true
+        },
+        {
+          "key": "etapa",
+          "label": "Etapa",
+          "type": "integer",
+          "required": true,
+          "default": 1,
+          "help": "El orden de la etapa actual en la definición del proceso."
+        },
+        {
+          "key": "estado",
+          "label": "Estado",
+          "type": "enum",
+          "required": true,
+          "default": "en_cola",
+          "options": [
+            {
+              "key": "en_cola",
+              "label": "En cola"
+            },
+            {
+              "key": "tomada",
+              "label": "Tomada"
+            },
+            {
+              "key": "esperando",
+              "label": "Esperando"
+            },
+            {
+              "key": "en_revision",
+              "label": "En revisión"
+            },
+            {
+              "key": "devuelta",
+              "label": "Devuelta"
+            },
+            {
+              "key": "entregada",
+              "label": "Entregada"
+            },
+            {
+              "key": "cancelada",
+              "label": "Cancelada"
+            }
+          ]
+        },
+        {
+          "key": "tomada_por",
+          "label": "Tomada por",
+          "type": "person",
+          "help": "Quién la está trabajando ahora."
+        },
+        {
+          "key": "responde",
+          "label": "Responde",
+          "type": "person",
+          "help": "Quién responde por el conjunto ante el cliente."
+        },
+        {
+          "key": "insumos",
+          "label": "Insumos",
+          "type": "json",
+          "help": "Lo que entró con el pedido: las entradas de la primera etapa."
+        },
+        {
+          "key": "vence_el",
+          "label": "Vence el",
+          "type": "date",
+          "help": "La fecha comprometida con el cliente."
+        },
+        {
+          "key": "resultado",
+          "label": "Resultado",
+          "type": "url",
+          "help": "Enlace al resultado entregado, en el almacenamiento de la organización."
+        }
+      ],
+      "relationships": [
+        {
+          "key": "proceso",
+          "label": "Proceso",
+          "type": "belongs_to",
+          "target": "proceso",
+          "required": true,
+          "on_delete": "restrict"
+        }
+      ]
+    },
+    {
+      "key": "evento",
+      "label": "Evento",
+      "label_plural": "Bitácora",
+      "description": "Lo que pasó en una instancia: quién hizo qué, en qué etapa, cómo y qué dejó",
+      "title_field": "resumen",
+      "fields": [
+        {
+          "key": "resumen",
+          "label": "Resumen",
+          "type": "text",
+          "required": true,
+          "searchable": true
+        },
+        {
+          "key": "tipo",
+          "label": "Tipo",
+          "type": "enum",
+          "required": true,
+          "options": [
+            {
+              "key": "creada",
+              "label": "Creada"
+            },
+            {
+              "key": "tomada",
+              "label": "Tomada"
+            },
+            {
+              "key": "liberada",
+              "label": "Liberada"
+            },
+            {
+              "key": "insumo",
+              "label": "Insumo"
+            },
+            {
+              "key": "esperando",
+              "label": "Esperando"
+            },
+            {
+              "key": "cerrada",
+              "label": "Etapa cerrada"
+            },
+            {
+              "key": "revisada",
+              "label": "Revisada"
+            },
+            {
+              "key": "devuelta",
+              "label": "Devuelta"
+            },
+            {
+              "key": "entregada",
+              "label": "Entregada"
+            },
+            {
+              "key": "reasignada",
+              "label": "Reasignada"
+            }
+          ]
+        },
+        {
+          "key": "etapa",
+          "label": "Etapa",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "key": "autor",
+          "label": "Autor",
+          "type": "person",
+          "help": "La persona que hizo esto, o la que responde por el agente que lo hizo."
+        },
+        {
+          "key": "salidas",
+          "label": "Salidas",
+          "type": "json",
+          "help": "Lo que dejó la etapa. Es el insumo de la siguiente."
+        },
+        {
+          "key": "receta",
+          "label": "Receta",
+          "type": "json",
+          "help": "Cómo se hizo: pasos, herramientas, modelo, decisiones, fallos."
+        },
+        {
+          "key": "enlace",
+          "label": "Enlace",
+          "type": "url"
+        }
+      ],
+      "relationships": [
+        {
+          "key": "instancia",
+          "label": "Instancia",
+          "type": "belongs_to",
+          "target": "instancia",
+          "required": true,
+          "on_delete": "restrict"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "key": "casos_en_curso",
+      "label": "Casos en curso",
+      "type": "kanban",
+      "entity": "instancia",
+      "navigation": true,
+      "group_by": "estado",
+      "fields": [
+        "titulo",
+        "etapa",
+        "tomada_por",
+        "vence_el"
+      ]
+    },
+    {
+      "key": "casos",
+      "label": "Casos",
+      "type": "table",
+      "entity": "instancia",
+      "navigation": false,
+      "fields": [
+        "titulo",
+        "etapa",
+        "estado",
+        "tomada_por",
+        "responde",
+        "vence_el"
+      ],
+      "default_sort": {
+        "field": "vence_el",
+        "direction": "asc"
+      },
+      "page_size": 50
+    },
+    {
+      "key": "bitacora",
+      "label": "Bitácora",
+      "type": "table",
+      "entity": "evento",
+      "navigation": true,
+      "fields": [
+        "resumen",
+        "tipo",
+        "etapa",
+        "autor",
+        "enlace"
+      ],
+      "page_size": 50
+    },
+    {
+      "key": "procesos",
+      "label": "Procesos",
+      "type": "table",
+      "entity": "proceso",
+      "navigation": true,
+      "fields": [
+        "nombre",
+        "version",
+        "estado"
+      ],
+      "default_sort": {
+        "field": "nombre",
+        "direction": "asc"
+      }
+    }
+  ]
+}
