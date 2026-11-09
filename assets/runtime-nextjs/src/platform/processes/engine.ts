@@ -207,7 +207,14 @@ function acumulado(instancia: Record<string, unknown>, eventos: Record<string, u
     if (evento.tipo === "cerrada" && esObjeto(evento.salidas)) Object.assign(total, evento.salidas);
     // Lo que eligió una persona al revisar queda con la clave que declaró la etapa.
     const elegida = evento.tipo === "revisada" && esObjeto(evento.salidas) ? evento.salidas.elegida : null;
-    if (esObjeto(elegida) && typeof elegida.clave === "string") total[elegida.clave] = elegida.valor;
+    if (esObjeto(elegida) && typeof elegida.clave === "string") {
+      // Quien elige puede ajustar la opción («la luz, de mañana temprano»). El ajuste viaja con
+      // la elección: si quedara sólo en la bitácora, la etapa siguiente trabajaría sin él.
+      const ajustes = typeof elegida.ajustes === "string" && elegida.ajustes.trim() ? elegida.ajustes : null;
+      total[elegida.clave] = !ajustes
+        ? elegida.valor
+        : esObjeto(elegida.valor) ? { ...elegida.valor, ajustes } : { opcion: elegida.valor, ajustes };
+    }
   }
   return total;
 }
@@ -666,13 +673,18 @@ export async function revisarEtapa(agent: AgentPrincipal, id: string, revision: 
       return { estado: "devuelta", mensaje: "Volvió a quien la cerró, con el motivo. La ve en sus pendientes." };
     }
     const opciones = opcionesParaElegir(caso.etapa, cierre?.salidas);
-    let elegida: { clave: string; valor: unknown; opcion: number } | null = null;
+    let elegida: { clave: string; valor: unknown; opcion: number; ajustes?: string } | null = null;
     if (opciones) {
       const numero = revision.eleccion;
       if (!numero || !Number.isInteger(numero) || numero < 1 || numero > opciones.length) {
         throw new Error(`Esta etapa pide elegir una de sus ${opciones.length} opciones: pasá su número en «eleccion», de 1 a ${opciones.length}.`);
       }
-      elegida = { clave: caso.etapa.eleccion!.guarda, valor: opciones[numero - 1], opcion: numero };
+      elegida = {
+        clave: caso.etapa.eleccion!.guarda,
+        valor: opciones[numero - 1],
+        opcion: numero,
+        ...(revision.motivo?.trim() ? { ajustes: revision.motivo.trim() } : {}),
+      };
     }
     const titulo = (valor: unknown) => (esObjeto(valor) && typeof valor.titulo === "string" ? valor.titulo : "");
     const encabezado = elegida

@@ -143,7 +143,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     inputSchema: z.object({
       caso,
       aprobada: z.boolean(),
-      motivo: z.string().max(2_000).optional().describe("Obligatorio al devolver: qué no cumple y qué tiene que cambiar."),
+      motivo: z.string().max(2_000).optional().describe("Obligatorio al devolver: qué no cumple y qué tiene que cambiar. Al elegir una opción, los ajustes a esa opción: viajan con ella a la etapa siguiente."),
       criterios: z.array(respuestaCriterio).max(100).optional().describe("Tu juicio sobre cada criterio, si querés dejarlo escrito."),
       eleccion: z.number().int().min(1).max(100).optional()
         .describe("Si la etapa pide elegir: el número de la opción elegida, desde 1. Lo decide la persona, no la IA."),

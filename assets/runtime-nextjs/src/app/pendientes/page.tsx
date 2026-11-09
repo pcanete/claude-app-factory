@@ -121,8 +121,19 @@ export default async function PendientesPage({ searchParams }: { searchParams: P
               )}
 
               <label className="decision-comment">
-                <span>Comentario <span className="table-secondary">(obligatorio para devolver)</span></span>
-                <textarea maxLength={2000} name="motivo" placeholder="Qué cambiar, o una nota para quien sigue" rows={2} />
+                <span>
+                  {decision.opciones ? "Ajustes a la opción que elijas" : "Comentario"}
+                  {" "}
+                  <span className="table-secondary">(obligatorio para devolver)</span>
+                </span>
+                <textarea
+                  maxLength={2000}
+                  name="motivo"
+                  placeholder={decision.opciones
+                    ? "Por ejemplo: la luz, de mañana temprano. Viaja con la opción a la etapa siguiente."
+                    : "Qué cambiar, o una nota para quien sigue"}
+                  rows={2}
+                />
               </label>
               <div className="decision-actions">
                 {!decision.opciones && (
