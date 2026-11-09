@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/server";
+import { marcas } from "@/platform/mcp/annotations";
 import { z } from "zod";
 import { agentEntities, requireAgentPermission } from "@/platform/mcp/access";
 import {
@@ -154,6 +155,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "list_entities",
     {
+      annotations: marcas("list_entities"),
       description: "Lista las entidades que este agente puede consultar.",
       inputSchema: z.object({}),
     },
@@ -172,6 +174,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "describe_entity",
     {
+      annotations: marcas("describe_entity"),
       description: "Describe campos, relaciones y capacidades de una entidad.",
       inputSchema: z.object({ entityKey: entityKeySchema }),
     },
@@ -260,6 +263,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "list_settings",
     {
+      annotations: marcas("list_settings"),
       description:
         "Lista las opciones de configuración del sistema, opcionalmente acotadas a un espacio de nombres.",
       inputSchema: z.object({ namespace: settingNameSchema.optional() }),
@@ -274,6 +278,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "get_setting",
     {
+      annotations: marcas("get_setting"),
       description: "Devuelve el valor de una opción de configuración, o null si no existe.",
       inputSchema: z.object({ namespace: settingNameSchema, key: settingNameSchema }),
     },
@@ -287,6 +292,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "set_setting",
     {
+      annotations: marcas("set_setting"),
       description:
         "Crea o reemplaza una opción de configuración. El valor es JSON: admite escalares, objetos y listas. Es para configuración, no para datos de negocio.",
       inputSchema: z.object({
@@ -316,6 +322,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "delete_setting",
     {
+      annotations: marcas("delete_setting"),
       description: "Elimina una opción de configuración. Requiere confirmación explícita.",
       inputSchema: z.object({
         namespace: settingNameSchema,
@@ -343,6 +350,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "list_attachments",
     {
+      annotations: marcas("list_attachments"),
       description:
         "Lista los archivos adjuntos de un registro, con nombre, tipo, tamaño y hash. No devuelve el contenido.",
       inputSchema: z.object({
@@ -389,6 +397,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "read_attachment",
     {
+      annotations: marcas("read_attachment"),
       description:
         "Devuelve el contenido de un archivo adjunto en base64, junto con su tipo y hash para verificarlo.",
       inputSchema: z.object({
@@ -439,6 +448,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "count_records",
     {
+      annotations: marcas("count_records"),
       description: "Cuenta registros usando búsqueda textual y filtros validados por el esquema.",
       inputSchema: z.object({
         entityKey: entityKeySchema,
@@ -461,6 +471,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "query_records",
     {
+      annotations: marcas("query_records"),
       description: "Consulta registros con búsqueda, filtros, orden y paginación acotada.",
       inputSchema: z.object({
         entityKey: entityKeySchema,
@@ -514,6 +525,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "get_record",
     {
+      annotations: marcas("get_record"),
       description: "Obtiene un registro por entidad y UUID.",
       inputSchema: z.object({ entityKey: entityKeySchema, id: z.string().uuid() }),
     },
@@ -532,6 +544,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "export_snapshot",
     {
+      annotations: marcas("export_snapshot"),
       description: "Exporta una fotografía determinista y acotada de entidades autorizadas.",
       inputSchema: z.object({
         entityKeys: z.array(entityKeySchema).max(10).optional(),
@@ -578,6 +591,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "create_record",
     {
+      annotations: marcas("create_record"),
       description: "Crea un registro aplicando permisos, validaciones, reglas, idempotencia y auditoría.",
       inputSchema: z.object({
         entityKey: entityKeySchema,
@@ -632,6 +646,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "update_record",
     {
+      annotations: marcas("update_record"),
       description: "Actualiza campos de un registro aplicando permisos, reglas, idempotencia y auditoría.",
       inputSchema: z.object({
         entityKey: entityKeySchema,
@@ -688,6 +703,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
   server.registerTool(
     "delete_record",
     {
+      annotations: marcas("delete_record"),
       description: "Elimina un registro y sus adjuntos sólo con alcance de eliminación y confirmación explícita.",
       inputSchema: z.object({
         entityKey: entityKeySchema,

@@ -82,6 +82,11 @@ jobs:
       - name: MCP server instructions compose per role
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-mcp-instructions.mjs
+      # Sin marca, el cliente pide confirmación hasta para leer; con una marca equivocada, una
+      # herramienta que escribe se ejecuta sin preguntar.
+      - name: Every MCP tool declares what it does with the data
+        working-directory: /tmp/reference-app
+        run: node scripts/test-mcp-annotations.mjs
       # El motor de procesos decide con la definición si un pedido abre, si una etapa
       # cierra y adónde va el caso. Un error acá deja trabajo mal controlado sin avisar.
       - name: Process definitions validate, close and guide

@@ -23,6 +23,15 @@ Herramientas de escritura:
 
 No se ofrece SQL arbitrario, ejecución de código ni acceso directo a tablas internas.
 
+Cada herramienta declara qué hace con los datos mediante las anotaciones de MCP: si sólo lee
+(`readOnlyHint`), si pisa o borra lo que había (`destructiveHint`), si repetirla tiene efecto
+(`idempotentHint`) y si toca algo fuera de la aplicación (`openWorldHint`; ninguna lo hace). Los
+clientes usan esas marcas para decidir cuándo pedir confirmación: sin ellas, ChatGPT la pide en
+cada llamada, también para leer. Las marcas viven en un solo lugar,
+`src/platform/mcp/annotations.ts`; `scripts/test-mcp-annotations.mjs` falla si una herramienta se
+registra sin la suya o si una que modifica datos queda marcada como lectura. Son una pista para
+el cliente, no un control: los permisos siguen en el servidor.
+
 Si la AppSpec tiene las entidades `proceso`, `instancia` y `evento`, se suman las herramientas del
 motor de procesos (`mis_pendientes`, `tomar_caso`, `cerrar_etapa`, `revisar_etapa` y las demás),
 los prompts `pendientes` y `trabajar_caso`, y las instrucciones de servidor mandan a la IA a empezar
