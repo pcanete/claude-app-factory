@@ -15,6 +15,8 @@ import {
   destinoTrasCerrar,
   entradasFaltantes,
   etapaPorOrden,
+  herramientasQueFaltan,
+  opcionesParaElegir,
   puedeRevisar,
   puedeTomar,
   validarCierre,
@@ -203,6 +205,9 @@ function acumulado(instancia: Record<string, unknown>, eventos: Record<string, u
   const total: Record<string, unknown> = { insumos: esObjeto(instancia.insumos) ? instancia.insumos : {} };
   for (const evento of eventos) {
     if (evento.tipo === "cerrada" && esObjeto(evento.salidas)) Object.assign(total, evento.salidas);
+    // Lo que eligió una persona al revisar queda con la clave que declaró la etapa.
+    const elegida = evento.tipo === "revisada" && esObjeto(evento.salidas) ? evento.salidas.elegida : null;
+    if (esObjeto(elegida) && typeof elegida.clave === "string") total[elegida.clave] = elegida.valor;
   }
   return total;
 }
@@ -303,6 +308,7 @@ function resumenDeCaso(instancia: Record<string, unknown>, proceso: Record<strin
     proceso: proceso.nombre,
     etapa: etiquetaEtapa({ definicion, etapa }),
     ejecutor: etapa.ejecutor,
+    ...(etapa.requiere?.length ? { requiere: etapa.requiere } : {}),
     estado: instancia.estado,
     actualizado: instancia.updated_at,
   };
@@ -312,7 +318,12 @@ function resumenDeCaso(instancia: Record<string, unknown>, proceso: Record<strin
 // Operaciones
 // ---------------------------------------------------------------------------------------
 
-export async function misPendientes(agent: AgentPrincipal) {
+/**
+ * `herramientas` es lo que declara tener la máquina que pregunta. Una etapa con requisitos
+ * sólo aparece en disponibles si los declara todos: una IA de navegador no ve, y por lo
+ * tanto no toma, una etapa que necesita renderizar video en local.
+ */
+export async function misPendientes(agent: AgentPrincipal, opciones: { herramientas?: readonly string[] } = {}) {
   exigirAlcance(agent, "records:read");
   const quien = identidad(agent);
   const filas = (await Promise.all(ESTADOS_ACTIVOS.map((estado) => listRecords("instancia", {
@@ -351,7 +362,8 @@ export async function misPendientes(agent: AgentPrincipal) {
     if (mia && ["tomada", "esperando", "devuelta"].includes(String(instancia.estado))) seguir.push(resumen);
     else if (instancia.estado === "en_revision" && puedeRevisar(etapa, quien.roles, administradores)
       && (etapa.autorrevision || !mia)) revisar.push(resumen);
-    else if (instancia.estado === "en_cola" && puedeTomar(etapa, quien.roles)) disponibles.push(resumen);
+    else if (instancia.estado === "en_cola" && puedeTomar(etapa, quien.roles)
+      && !herramientasQueFaltan(etapa, opciones.herramientas).length) disponibles.push(resumen);
   }
 
   return {
@@ -473,7 +485,12 @@ export async function guiaDeEtapa(agent: AgentPrincipal, id: string) {
   return { caso: id, estado: caso.instancia.estado, etapa: etiquetaEtapa(caso), guia: await guiaDe(caso, quien) };
 }
 
-export async function tomarCaso(agent: AgentPrincipal, id: string, agentEventId?: string) {
+export async function tomarCaso(
+  agent: AgentPrincipal,
+  id: string,
+  agentEventId?: string,
+  herramientas: readonly string[] = [],
+) {
   exigirAlcance(agent, "records:write");
   const quien = identidad(agent);
   const resultado = await withTransaction(async (client) => {
@@ -483,6 +500,13 @@ export async function tomarCaso(agent: AgentPrincipal, id: string, agentEventId?
     if (estado === "en_cola") {
       if (!puedeTomar(caso.etapa, quien.roles)) {
         throw new Error(`Esta etapa (${caso.etapa.nombre}) la toman: ${caso.etapa.grupo.join(", ")}. No es de tu grupo.`);
+      }
+      const faltan = herramientasQueFaltan(caso.etapa, herramientas);
+      if (faltan.length) {
+        throw new Error(
+          `Esta etapa (${caso.etapa.nombre}) se trabaja en una máquina con: ${caso.etapa.requiere!.join(", ")}. `
+          + `No declaraste ${faltan.join(", ")}. Si la tenés, pasala en «herramientas»; si no, dejala para otra máquina.`,
+        );
       }
     } else if (["tomada", "esperando", "devuelta"].includes(estado)) {
       if (!propia) throw new Error("Este caso lo tiene otra persona. Si quedó abandonado, quien administra puede liberarlo.");
@@ -605,6 +629,8 @@ export async function revisarEtapa(agent: AgentPrincipal, id: string, revision: 
   aprobada: boolean;
   motivo?: string;
   criterios?: RespuestaCriterio[];
+  /** En una etapa que pide elegir: el número de la opción elegida, desde 1. */
+  eleccion?: number;
 }, agentEventId?: string) {
   exigirAlcance(agent, "records:write");
   const quien = identidad(agent);
@@ -639,12 +665,30 @@ export async function revisarEtapa(agent: AgentPrincipal, id: string, revision: 
       });
       return { estado: "devuelta", mensaje: "Volvió a quien la cerró, con el motivo. La ve en sus pendientes." };
     }
+    const opciones = opcionesParaElegir(caso.etapa, cierre?.salidas);
+    let elegida: { clave: string; valor: unknown; opcion: number } | null = null;
+    if (opciones) {
+      const numero = revision.eleccion;
+      if (!numero || !Number.isInteger(numero) || numero < 1 || numero > opciones.length) {
+        throw new Error(`Esta etapa pide elegir una de sus ${opciones.length} opciones: pasá su número en «eleccion», de 1 a ${opciones.length}.`);
+      }
+      elegida = { clave: caso.etapa.eleccion!.guarda, valor: opciones[numero - 1], opcion: numero };
+    }
+    const titulo = (valor: unknown) => (esObjeto(valor) && typeof valor.titulo === "string" ? valor.titulo : "");
+    const encabezado = elegida
+      ? `Eligió la opción ${elegida.opcion}${titulo(elegida.valor) ? ` — ${titulo(elegida.valor)}` : ""}`
+      : "Aprobada";
     await registrarEvento(escritura, {
-      resumen: revision.motivo?.trim() ? `Aprobada: ${revision.motivo}`.slice(0, 500) : "Aprobada",
+      resumen: (revision.motivo?.trim() ? `${encabezado}: ${revision.motivo}` : encabezado).slice(0, 500),
       tipo: "revisada",
       etapa: caso.etapa.orden,
       autor: quien.persona,
-      salidas: { aprobada: true, ...(revision.motivo ? { motivo: revision.motivo } : {}), criterios: revision.criterios ?? [] },
+      salidas: {
+        aprobada: true,
+        ...(elegida ? { elegida } : {}),
+        ...(revision.motivo ? { motivo: revision.motivo } : {}),
+        criterios: revision.criterios ?? [],
+      },
       instancia: id,
     });
     const enlace = typeof cierre?.enlace === "string" ? cierre.enlace : null;
@@ -696,6 +740,39 @@ export async function verCaso(agent: AgentPrincipal, id: string) {
       ...(evento.receta ? { receta: evento.receta } : {}),
     })),
   };
+}
+
+/**
+ * Lo que una persona tiene para decidir, con lo necesario para decidirlo sin abrir
+ * carpetas ni saber de IA: qué se pidió, qué dejó la etapa, contra qué juzgarlo y, si la
+ * etapa pide elegir, las opciones.
+ */
+export async function decisionesPendientes(agent: AgentPrincipal) {
+  const pendientes = await misPendientes(agent);
+  const quien = identidad(agent);
+  const decisiones = [];
+  for (const resumen of pendientes.para_revisar as Array<{ caso: string }>) {
+    const caso = await cargarCaso(resumen.caso, quien);
+    const eventos = await eventosDe(resumen.caso, quien);
+    const cierre = ultimo(eventos, "cerrada", caso.etapa.orden);
+    const salidas = esObjeto(cierre?.salidas) ? cierre.salidas : {};
+    const opciones = opcionesParaElegir(caso.etapa, salidas);
+    decisiones.push({
+      caso: resumen.caso,
+      titulo: String(caso.instancia.titulo),
+      proceso: String(caso.proceso.nombre),
+      etapa: etiquetaEtapa(caso),
+      insumos: esObjeto(caso.instancia.insumos) ? caso.instancia.insumos : {},
+      resumen: typeof cierre?.resumen === "string" ? cierre.resumen : "",
+      enlace: typeof cierre?.enlace === "string" ? cierre.enlace : null,
+      cerrada: cierre?.created_at ?? null,
+      juzgar: (caso.etapa.criterios ?? []).filter((criterio) => criterio.tipo === "juicio").map((criterio) => criterio.texto),
+      opciones,
+      // Lo demás que dejó la etapa, sin repetir las opciones.
+      salidas: Object.fromEntries(Object.entries(salidas).filter(([clave]) => clave !== caso.etapa.eleccion?.opciones)),
+    });
+  }
+  return decisiones;
 }
 
 export function validarProceso(definicion: unknown) {

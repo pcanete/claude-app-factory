@@ -10,10 +10,14 @@ export function comoSeguirEnElPanel(pendientes: {
   disponibles: unknown[];
   con_problemas?: unknown[];
 }) {
-  if (pendientes.para_seguir.length) return "Empezá por lo que ya tenés tomado.";
+  // En el panel, decidir va primero: es lo único que no puede hacer la IA, y lo que frena al resto.
   if (pendientes.para_revisar.length) {
-    return "Hay trabajo de otras personas esperando tu revisión: mientras no lo revises, no avanza.";
+    const n = pendientes.para_revisar.length;
+    return n === 1
+      ? "Tenés una decisión pendiente: mientras no decidas, ese caso no avanza."
+      : `Tenés ${n} decisiones pendientes: mientras no decidas, esos casos no avanzan.`;
   }
+  if (pendientes.para_seguir.length) return "Seguí con lo que ya tenés tomado.";
   if (pendientes.disponibles.length) return "Elegí uno de los disponibles para tomarlo.";
   if (pendientes.con_problemas?.length) {
     return "Lo único pendiente son casos trabados por la definición de su proceso: empezá por corregirla.";

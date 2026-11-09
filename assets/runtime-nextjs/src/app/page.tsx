@@ -63,14 +63,14 @@ export default async function HomePage() {
           <p className="subtitle">{comoSeguirEnElPanel(pendientes)}</p>
           <div className="grid">
             <article className="card">
+              <div className="card-label">Para decidir</div>
+              <div className="metric">{pendientes.para_revisar.length}</div>
+              <div className="table-secondary">Elegir o aprobar: el caso no avanza hasta que decidas</div>
+            </article>
+            <article className="card">
               <div className="card-label">Para seguir</div>
               <div className="metric">{pendientes.para_seguir.length}</div>
               <div className="table-secondary">Tomados, esperando algo o devueltos</div>
-            </article>
-            <article className="card">
-              <div className="card-label">Para revisar</div>
-              <div className="metric">{pendientes.para_revisar.length}</div>
-              <div className="table-secondary">Frenan a otras personas hasta que los revises</div>
             </article>
             <article className="card">
               <div className="card-label">Disponibles</div>

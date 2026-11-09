@@ -48,6 +48,18 @@ export type Etapa = {
   revisores?: string[];
   /** Si quien cerró puede aprobar su propio trabajo. Por defecto, no. */
   autorrevision?: boolean;
+  /**
+   * Lo que tiene que tener la máquina que la ejecuta, por ejemplo `["hyperframes"]` o
+   * `["higgsfield"]`. Una etapa con requisitos sólo se le ofrece a quien declara tenerlos:
+   * así una IA de navegador no toma una etapa que necesita renderizar video en local.
+   */
+  requiere?: string[];
+  /**
+   * Una etapa que deja opciones para que una persona elija. `opciones` es la clave de la
+   * salida que trae la lista; `guarda` es la clave con la que la opción elegida queda
+   * disponible para las etapas siguientes.
+   */
+  eleccion?: { opciones: string; guarda: string };
 };
 
 export type Definicion = {
@@ -74,6 +86,8 @@ export type Receta = {
 };
 
 const EJECUTORES = new Set(["humano", "agente", "cualquiera"]);
+/** Un requisito o una clave: minúsculas, números, guiones. Lo comparan máquinas, no personas. */
+const CLAVE = /^[a-z][a-z0-9_-]{0,47}$/;
 const REVISIONES = new Set(["ninguna", "agente", "humana", "ambas"]);
 
 function esObjeto(valor: unknown): valor is Record<string, unknown> {
@@ -172,6 +186,28 @@ export function validarDefinicion(
         errores.push(`${donde}: salidas tiene que ser un objeto clave → descripción.`);
       }
     }
+    if (etapa.requiere !== undefined) {
+      if (!Array.isArray(etapa.requiere) || !etapa.requiere.every((r) => typeof r === "string" && CLAVE.test(r))) {
+        errores.push(`${donde}: requiere tiene que ser una lista de nombres en minúsculas, por ejemplo ["hyperframes"].`);
+      }
+    }
+    if (etapa.eleccion !== undefined) {
+      const eleccion = etapa.eleccion;
+      if (!esObjeto(eleccion) || !textoNoVacio(eleccion.opciones) || !textoNoVacio(eleccion.guarda)) {
+        errores.push(`${donde}: eleccion necesita «opciones» (la salida con la lista) y «guarda» (dónde queda la elegida).`);
+      } else {
+        const salidas = esObjeto(etapa.salidas) ? etapa.salidas : {};
+        if (!(eleccion.opciones in salidas)) {
+          errores.push(`${donde}: eleccion.opciones dice «${eleccion.opciones}», que no es una de sus salidas.`);
+        }
+        if (!CLAVE.test(eleccion.guarda) || eleccion.guarda === "insumos" || eleccion.guarda in salidas) {
+          errores.push(`${donde}: eleccion.guarda tiene que ser una clave nueva en minúsculas, distinta de sus salidas.`);
+        }
+        if (etapa.revision !== "humana" && etapa.revision !== "ambas") {
+          errores.push(`${donde}: una etapa con eleccion necesita revision humana: elegir es de una persona.`);
+        }
+      }
+    }
   });
 
   // Lo que una etapa dice ver tiene que haberlo dejado alguien antes.
@@ -184,9 +220,23 @@ export function validarDefinicion(
       }
     }
     if (esObjeto(etapa.salidas)) for (const clave of Object.keys(etapa.salidas)) disponibles.add(clave);
+    if (esObjeto(etapa.eleccion) && textoNoVacio(etapa.eleccion.guarda)) disponibles.add(etapa.eleccion.guarda);
   });
 
   return errores.length ? { ok: false, errores } : { ok: true, definicion: valor as unknown as Definicion };
+}
+
+/** Lo que pide la etapa y quien la quiere tomar no declaró tener. Vacía: la puede tomar. */
+export function herramientasQueFaltan(etapa: Etapa, declaradas: readonly string[] = []) {
+  const tiene = new Set(declaradas.map((herramienta) => herramienta.trim().toLowerCase()));
+  return (etapa.requiere ?? []).filter((requisito) => !tiene.has(requisito));
+}
+
+/** Las opciones que dejó un cierre para elegir, o null si la etapa no pide elegir. */
+export function opcionesParaElegir(etapa: Etapa, salidas: unknown): unknown[] | null {
+  if (!etapa.eleccion) return null;
+  const valor = esObjeto(salidas) ? salidas[etapa.eleccion.opciones] : undefined;
+  return Array.isArray(valor) ? valor : [];
 }
 
 export function etapaPorOrden(definicion: Definicion, orden: number) {
@@ -263,6 +313,12 @@ export function validarCierre(etapa: Etapa, cierre: {
   const salidas = esObjeto(cierre.salidas) ? cierre.salidas : {};
   for (const [clave, que] of Object.entries(etapa.salidas ?? {})) {
     if (vacio(salidas[clave])) faltas.push(`salidas.${clave}: ${que}.`);
+  }
+  if (etapa.eleccion) {
+    const opciones = salidas[etapa.eleccion.opciones];
+    if (!vacio(opciones) && (!Array.isArray(opciones) || opciones.length < 2)) {
+      faltas.push(`salidas.${etapa.eleccion.opciones}: tiene que ser una lista de al menos dos opciones, para que quien revisa elija.`);
+    }
   }
 
   const receta = esObjeto(cierre.receta) ? cierre.receta : {};
@@ -368,6 +424,15 @@ export function componerGuia(contexto: ContextoGuia) {
     ? "```json\n" + JSON.stringify(contexto.visibles, null, 2) + "\n```"
     : "Esta etapa no recibe nada de las anteriores.");
 
+  if (etapa.requiere?.length) {
+    partes.push(
+      "",
+      "## Qué necesita la máquina",
+      "",
+      `Esta etapa se trabaja en una máquina que tenga: ${etapa.requiere.join(", ")}. Si no lo tenés, no la tomes: liberala con liberar_caso diciendo qué te falta.`,
+    );
+  }
+
   const herramientas = etapa.herramientas ?? [];
   if (herramientas.length) {
     partes.push("", "## Herramientas", "", "Antes de empezar, comprobá que tenés disponible cada una. No la reemplaces por otra parecida.", "");
@@ -417,12 +482,20 @@ export function componerGuia(contexto: ContextoGuia) {
       ? "criterios: uno por cada criterio de arriba, con su número, cumplido y la evidencia."
       : "criterios: [] (esta etapa no tiene criterios).",
   ]));
+  if (etapa.eleccion) {
+    partes.push(
+      "",
+      `Esta etapa termina en una elección. En «${etapa.eleccion.opciones}» dejá una lista de opciones, cada una como objeto con «titulo» y «descripcion», y «vista_previa» con la dirección de una imagen si la hay. Quien revisa elige una desde el panel, sin abrir carpetas: escribí cada opción para que se entienda sola. La elegida queda como «${etapa.eleccion.guarda}» para las etapas siguientes.`,
+    );
+  }
   if (definicion.donde_vive_el_resultado) partes.push("", `Dónde va el resultado: ${definicion.donde_vive_el_resultado}`);
 
   const revision = {
     ninguna: "Sin revisión: al cerrar pasa directo a la etapa siguiente.",
     agente: "La revisión es de un agente: los criterios mecánicos con evidencia son la revisión. Al cerrar pasa a la siguiente.",
-    humana: "Al cerrar queda en revisión de una persona, que la aprueba o te la devuelve con el motivo.",
+    humana: etapa.eleccion
+      ? "Al cerrar queda en revisión de una persona, que elige una de las opciones o te la devuelve con el motivo."
+      : "Al cerrar queda en revisión de una persona, que la aprueba o te la devuelve con el motivo.",
     ambas: "Al cerrar queda en revisión de una persona, que además mira la evidencia de los criterios mecánicos.",
   }[etapa.revision];
   partes.push("", "## Después", "", revision);
