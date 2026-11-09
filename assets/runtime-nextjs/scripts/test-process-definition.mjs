@@ -10,13 +10,18 @@
  *   - una etapa no cierra sin enlace, salidas, receta y evidencia de cada criterio;
  *   - lo que juzga quien revisa no se le exige a quien cierra;
  *   - la guía dice qué herramienta usar y qué hacer si no está, y no muestra lo que la
- *     etapa no declara ver.
+ *     etapa no declara ver;
+ *   - una etapa con requisitos sólo la toma quien declara tenerlos;
+ *   - una etapa que pide elegir deja al menos dos opciones, y la elegida queda a la vista
+ *     de las etapas siguientes.
  */
 import {
   componerGuia,
   destinoTrasAprobar,
   destinoTrasCerrar,
   entradasFaltantes,
+  herramientasQueFaltan,
+  opcionesParaElegir,
   puedeRevisar,
   puedeTomar,
   validarCierre,
@@ -169,6 +174,47 @@ const guiaHumana = componerGuia({
   etapa: { ...control, ejecutor: "humano" },
 });
 comprobar("en una etapa humana le dice a la IA que no decida", guiaHumana.includes("No decidas por ella"));
+
+// --- Requisitos de máquina y elección ---------------------------------------------------
+const conEleccion = {
+  etapas: [
+    {
+      orden: 1, nombre: "Temas", ejecutor: "agente", grupo: ["colaborador"], instrucciones: "Proponer tres temas.",
+      salidas: { temas: "las opciones" }, revision: "humana", eleccion: { opciones: "temas", guarda: "tema_elegido" },
+    },
+    {
+      orden: 2, nombre: "Video", ejecutor: "agente", grupo: ["colaborador"], instrucciones: "Editar el video.",
+      entradas_visibles: ["tema_elegido"], requiere: ["hyperframes"], salidas: { video: "el render" }, revision: "humana",
+    },
+  ],
+};
+const eleccionValida = validarDefinicion(conEleccion, roles);
+comprobar("una etapa con eleccion y otra con requiere validan, y la elegida se puede ver después",
+  eleccionValida.ok, JSON.stringify(eleccionValida.errores ?? []));
+const sinPersona = validarDefinicion({ etapas: [{ ...conEleccion.etapas[0], revision: "agente" }] }, roles);
+comprobar("elegir sin revisión humana se rechaza", !sinPersona.ok && sinPersona.errores.some((e) => e.includes("revision humana")));
+const opcionesAjenas = validarDefinicion({ etapas: [{ ...conEleccion.etapas[0], eleccion: { opciones: "otra", guarda: "x" } }] }, roles);
+comprobar("las opciones tienen que ser una salida de la etapa", !opcionesAjenas.ok && opcionesAjenas.errores.some((e) => e.includes("«otra»")));
+const requisitoRaro = validarDefinicion({ etapas: [{ ...conEleccion.etapas[1], orden: 1, entradas_visibles: [], requiere: ["Hyper Frames"] }] }, roles);
+comprobar("un requisito con espacios o mayúsculas se rechaza", !requisitoRaro.ok && requisitoRaro.errores.some((e) => e.includes("requiere")));
+
+const [temas, video] = eleccionValida.definicion.etapas;
+comprobar("sin declarar nada, falta lo que pide la etapa", herramientasQueFaltan(video).join() === "hyperframes");
+comprobar("declarándolo, no falta nada (sin importar mayúsculas)", herramientasQueFaltan(video, ["HyperFrames", "ffmpeg"]).length === 0);
+comprobar("una etapa sin requisitos la toma cualquiera", herramientasQueFaltan(temas).length === 0);
+
+const unaSola = validarCierre(temas, { enlace: "https://x.y", salidas: { temas: [{ titulo: "A" }] }, receta: recetaBuena, criterios: [] });
+comprobar("una sola opción no alcanza para elegir", unaSola.some((f) => f.includes("al menos dos")), unaSola.join(" | "));
+const dos = validarCierre(temas, { enlace: "https://x.y", salidas: { temas: [{ titulo: "A" }, { titulo: "B" }] }, receta: recetaBuena, criterios: [] });
+comprobar("dos opciones cierran", dos.length === 0, dos.join(" | "));
+comprobar("las opciones se leen del cierre", opcionesParaElegir(temas, { temas: ["a", "b"] }).length === 2);
+comprobar("una etapa sin elección no tiene opciones", opcionesParaElegir(video, { video: "x" }) === null);
+
+const guiaEleccion = componerGuia({ titulo: "x", proceso: "y", definicion: eleccionValida.definicion, estado: "tomada", visibles: {}, etapa: temas });
+comprobar("la guía explica cómo dejar las opciones y dónde queda la elegida",
+  guiaEleccion.includes("«temas»") && guiaEleccion.includes("«tema_elegido»") && guiaEleccion.includes("elige una"));
+const guiaVideo = componerGuia({ titulo: "x", proceso: "y", definicion: eleccionValida.definicion, estado: "tomada", visibles: {}, etapa: video });
+comprobar("la guía dice qué necesita la máquina", guiaVideo.includes("Qué necesita la máquina") && guiaVideo.includes("hyperframes"));
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);

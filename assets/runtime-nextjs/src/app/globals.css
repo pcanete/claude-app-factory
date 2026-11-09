@@ -268,6 +268,30 @@ tbody tr:hover { background: #1a1d25; }
 .work-section { margin-top: 30px; }
 .work-section h2 { margin-bottom: 6px; }
 .work-section .table-wrap { margin-top: 14px; }
+.notice.error { border-color: color-mix(in srgb, var(--danger) 48%, var(--border)); background: color-mix(in srgb, var(--danger) 10%, transparent); color: #ffc2c2; }
+
+/* Una decisión: lo que dejó la etapa y los botones para resolverla, sin abrir carpetas. */
+.decision { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 18px; margin-top: 16px; display: grid; gap: 14px; }
+.decision-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.decision-head h3 { margin: 4px 0 0; font-size: 17px; }
+.decision-summary { margin: 0; color: var(--text); }
+.decision-judge ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+.decision-options { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.decision-option { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); padding: 14px; display: grid; gap: 10px; align-content: start; }
+.decision-option .button { justify-self: start; }
+.decision-comment { display: grid; gap: 6px; font-size: 13px; }
+.decision-comment textarea { width: 100%; box-sizing: border-box; background: var(--field); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font: inherit; resize: vertical; }
+.decision-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.output-object { display: grid; gap: 6px; }
+.output-title { font-weight: 700; }
+.output-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.output-list { display: grid; gap: 8px; }
+.output-gallery { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.output-image { display: block; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: var(--field); }
+.output-image img { display: block; width: 100%; height: auto; max-height: 320px; object-fit: cover; }
+.output-fields { display: grid; gap: 10px; margin: 0; }
+.output-fields dt { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.output-fields dd { margin: 0; }
 .attachment-panel { max-width: 920px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
 .attachment-count { background: var(--primary-soft); border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--border)); border-radius: 999px; color: #d8d5ff; font-size: 12px; padding: 5px 9px; }
 .attachment-upload { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin: 20px 0; }

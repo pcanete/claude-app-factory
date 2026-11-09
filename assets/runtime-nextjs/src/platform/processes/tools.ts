@@ -38,6 +38,8 @@ const respuestaCriterio = z.object({
   evidencia: z.string().max(2_000).optional().describe("Cómo lo verificaste: qué miraste y qué encontraste."),
 });
 const textos = z.array(z.string().max(2_000)).max(100);
+const herramientas = z.array(z.string().max(48)).max(50).optional()
+  .describe("Lo que tiene instalado la máquina desde la que trabajás, por ejemplo [\"hyperframes\", \"higgsfield\"]. Una IA de navegador no declara nada.");
 
 function acotado(valor: unknown, limite: number, etiqueta: string) {
   if (JSON.stringify(valor ?? null).length > limite) throw new Error(`${etiqueta} supera ${Math.round(limite / 1024)} KB.`);
@@ -56,20 +58,20 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("mis_pendientes", {
     annotations: marcas("mis_pendientes"),
     description:
-      "Por dónde empezar. Devuelve los casos que tenés para seguir, los que esperan tu revisión y los que podés tomar, según tu rol.",
-    inputSchema: z.object({}),
-  }, async () => rastreo("mis_pendientes", {}, async () => {
-    const value = await misPendientes(agent);
+      "Por dónde empezar. Devuelve los casos que tenés para seguir, los que esperan tu revisión y los que podés tomar, según tu rol. Si trabajás desde una máquina con skills instaladas, declaralas en «herramientas»: las etapas que las requieren sólo aparecen para quien las tiene.",
+    inputSchema: z.object({ herramientas }),
+  }, async (entrada) => rastreo("mis_pendientes", entrada, async () => {
+    const value = await misPendientes(agent, { herramientas: entrada.herramientas });
     return { value, resultCount: value.para_seguir.length + value.para_revisar.length + value.disponibles.length };
   }));
 
   server.registerTool("tomar_caso", {
     annotations: marcas("tomar_caso"),
     description:
-      "Toma la etapa actual de un caso (o la retoma si ya era tuya) y devuelve su guía: qué tenés para trabajar, qué herramientas usar, cómo se hace, qué se controla y cómo cerrar.",
-    inputSchema: z.object({ caso }),
+      "Toma la etapa actual de un caso (o la retoma si ya era tuya) y devuelve su guía: qué tenés para trabajar, qué herramientas usar, cómo se hace, qué se controla y cómo cerrar. Si la etapa requiere herramientas de la máquina, declaralas en «herramientas».",
+    inputSchema: z.object({ caso, herramientas }),
   }, async (entrada) => rastreo("tomar_caso", entrada, async (eventId) => ({
-    value: await tomarCaso(agent, entrada.caso, eventId),
+    value: await tomarCaso(agent, entrada.caso, eventId, entrada.herramientas),
     resultCount: 1,
   })));
 
@@ -141,14 +143,17 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     inputSchema: z.object({
       caso,
       aprobada: z.boolean(),
-      motivo: z.string().max(2_000).optional().describe("Obligatorio al devolver: qué no cumple y qué tiene que cambiar."),
+      motivo: z.string().max(2_000).optional().describe("Obligatorio al devolver: qué no cumple y qué tiene que cambiar. Al elegir una opción, los ajustes a esa opción: viajan con ella a la etapa siguiente."),
       criterios: z.array(respuestaCriterio).max(100).optional().describe("Tu juicio sobre cada criterio, si querés dejarlo escrito."),
+      eleccion: z.number().int().min(1).max(100).optional()
+        .describe("Si la etapa pide elegir: el número de la opción elegida, desde 1. Lo decide la persona, no la IA."),
     }),
   }, async (entrada) => rastreo("revisar_etapa", entrada, async (eventId) => ({
     value: await revisarEtapa(agent, entrada.caso, {
       aprobada: entrada.aprobada,
       motivo: entrada.motivo,
       criterios: entrada.criterios,
+      eleccion: entrada.eleccion,
     }, eventId),
     resultCount: 1,
   })));

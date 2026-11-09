@@ -101,6 +101,8 @@ siguiente, y cada caso sigue con la versión con la que nació.
 | `revision` | `ninguna` y `agente` pasan directo a la siguiente; `humana` y `ambas` quedan en revisión |
 | `revisores` | Sin declarar, revisan los roles con `manage_users` |
 | `autorrevision` | Por defecto nadie aprueba su propio trabajo |
+| `requiere` | Lo que tiene que tener la máquina que la trabaja, por ejemplo `["hyperframes"]` o `["higgsfield"]`. Sólo la ve en `mis_pendientes`, y sólo la puede tomar, quien lo declara en `herramientas`. Una IA de navegador no declara nada, así que no toma una etapa que necesita renderizar en local |
+| `eleccion` | `{ "opciones": "<salida>", "guarda": "<clave>" }`: la etapa deja una lista de opciones y una persona elige una. La elegida queda como `guarda` para las etapas siguientes. Exige revisión `humana` o `ambas` y al menos dos opciones al cerrar |
 
 `validar_proceso` revisa una definición contra estas reglas y contra los roles de la aplicación,
 sin guardar nada.
@@ -125,14 +127,14 @@ con el enlace del último cierre como resultado.
 
 | Herramienta | Quién | Hace |
 |---|---|---|
-| `mis_pendientes` | cualquiera | Lo que tenés para seguir, para revisar y lo que podés tomar |
+| `mis_pendientes` | cualquiera | Lo que tenés para seguir, para revisar y lo que podés tomar. Con `herramientas`, suma las etapas que las requieren |
 | `crear_caso` | grupo de la etapa 1, o quien administra | Abre un caso si el pedido está completo. Si no, dice qué pedir |
-| `tomar_caso` | grupo de la etapa | Toma o retoma, con el caso bloqueado, y devuelve la guía |
+| `tomar_caso` | grupo de la etapa, con las `herramientas` que pida | Toma o retoma, con el caso bloqueado, y devuelve la guía |
 | `guia_de_etapa` | grupo, revisores, quien la tiene | La guía sin tomar |
 | `esperar_caso` | quien la tiene | Deja el caso en espera con lo que falta |
 | `liberar_caso` | quien la tiene, o quien administra | Devuelve a la cola |
 | `cerrar_etapa` | quien la tiene | Exige enlace, salidas, receta y cada criterio con evidencia |
-| `revisar_etapa` | revisores, nunca quien cerró | Aprueba, o devuelve con motivo |
+| `revisar_etapa` | revisores, nunca quien cerró | Aprueba, elige una opción (`eleccion`) o devuelve con motivo |
 | `ver_caso` | roles que leen `evento` | El recorrido completo: quién, cuándo, con qué receta y dónde quedó |
 | `validar_proceso` | cualquiera | Revisa una definición |
 | `tablero_de_trabajo` | roles con `view_audit` | Cómo rinde cada proceso. Ver [El tablero del trabajo](#el-tablero-del-trabajo) |
@@ -183,6 +185,28 @@ incluye la devolución por persona, y medir el trabajo no tiene que volverse un 
 vista de quien opera. Por la misma razón la herramienta ni siquiera se registra para los demás
 roles. No muestra conversaciones: sólo lo que quedó en la bitácora.
 
+## Decidir desde el panel
+
+El trabajo de las etapas lo hace una IA; decidir es de una persona, y esa persona no tiene por
+qué saber de IA. En **Mis pendientes**, «Para decidir» va primero: cada caso en revisión muestra
+lo que dejó la etapa —el resumen, las imágenes como imágenes, los enlaces, lo que hay que juzgar—
+y se resuelve con un botón: **Elegir esta** en cada opción si la etapa pide elegir, **Aprobar** si
+no, y **Devolver** con el motivo. Es la misma operación que `revisar_etapa`, con la persona como
+identidad: el motor comprueba que le toque y que no sea su propio trabajo.
+
+Una salida que trae una dirección de imagen —o una clave como `vista_previa`, `fotos` o
+`imagen`— se ve como imagen. Un enlace compartido de Dropbox se muestra con `raw=1`, que devuelve
+el archivo en vez de la página de vista previa.
+
+## Dónde corre el trabajo
+
+La plataforma no ejecuta nada: guarda el proceso, la cola, las decisiones y la bitácora. El
+trabajo pesado —renderizar un video, generar fotos con una cuenta paga— corre en una máquina que
+tiene las skills y las credenciales, con una IA que pide sus pendientes declarando qué tiene
+(`mis_pendientes` con `herramientas`), toma la etapa, escribe el resultado en la carpeta
+compartida que esa máquina sincroniza y cierra con el enlace y una vista previa liviana. Las
+credenciales no salen de esa máquina y los archivos pesados no pasan por la plataforma.
+
 ## Verificado
 
 - `scripts/test-process-definition.mjs`: validación, pedido, cierre, destino y guía.
@@ -203,8 +227,8 @@ roles. No muestra conversaciones: sólo lo que quedó en la bitácora.
 
 ## Lo que no hace todavía
 
-- **Interfaz.** Las personas sin IA ven los casos en las vistas pero no pueden tomarlos ni
-  cerrarlos desde el panel.
+- **Trabajar una etapa desde el panel.** Decidir sí; tomar y cerrar una etapa de trabajo sigue
+  siendo de una IA conectada.
 - **Plazo de toma y membresía con vencimiento.** Un caso abandonado lo libera quien administra a
   mano.
 - **Casos recurrentes**, como el IVA de cada mes.
