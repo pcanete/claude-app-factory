@@ -1,3 +1,4 @@
+import { marcas } from "@/platform/mcp/annotations";
 import "server-only";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -53,6 +54,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   if (!motorDisponible()) return;
 
   server.registerTool("mis_pendientes", {
+    annotations: marcas("mis_pendientes"),
     description:
       "Por dónde empezar. Devuelve los casos que tenés para seguir, los que esperan tu revisión y los que podés tomar, según tu rol.",
     inputSchema: z.object({}),
@@ -62,6 +64,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   }));
 
   server.registerTool("tomar_caso", {
+    annotations: marcas("tomar_caso"),
     description:
       "Toma la etapa actual de un caso (o la retoma si ya era tuya) y devuelve su guía: qué tenés para trabajar, qué herramientas usar, cómo se hace, qué se controla y cómo cerrar.",
     inputSchema: z.object({ caso }),
@@ -71,6 +74,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   })));
 
   server.registerTool("guia_de_etapa", {
+    annotations: marcas("guia_de_etapa"),
     description: "La guía de la etapa actual de un caso, sin tomarlo. Sirve para ver de qué se trata antes de tomarlo o para releerla.",
     inputSchema: z.object({ caso }),
   }, async (entrada) => rastreo("guia_de_etapa", entrada, async () => ({
@@ -79,6 +83,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   })));
 
   server.registerTool("esperar_caso", {
+    annotations: marcas("esperar_caso"),
     description:
       "Deja el caso en espera porque falta algo que no podés conseguir vos: un archivo, un dato, una decisión, una herramienta. Lo sigue teniendo quien lo tomó.",
     inputSchema: z.object({ caso, falta: z.string().min(3).max(1_000).describe("Qué falta y a quién se le pidió.") }),
@@ -88,6 +93,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   })));
 
   server.registerTool("liberar_caso", {
+    annotations: marcas("liberar_caso"),
     description: "Devuelve la etapa a la cola para que la tome otra persona. Usalo si no la vas a poder terminar.",
     inputSchema: z.object({ caso, motivo: z.string().min(3).max(1_000) }),
   }, async (entrada) => rastreo("liberar_caso", entrada, async (eventId) => ({
@@ -96,6 +102,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   })));
 
   server.registerTool("cerrar_etapa", {
+    annotations: marcas("cerrar_etapa"),
     description:
       "Cierra la etapa que tenés tomada. Exige el enlace al resultado, las salidas que pide la etapa, la receta de cómo lo hiciste y la respuesta a cada criterio con su evidencia. Si algo falta, no cierra y dice qué.",
     inputSchema: z.object({
@@ -128,6 +135,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   }));
 
   server.registerTool("revisar_etapa", {
+    annotations: marcas("revisar_etapa"),
     description:
       "Aprueba o devuelve una etapa en revisión. Aprobar la pasa a la siguiente (o la entrega si era la última). Devolver exige el motivo: vuelve a quien la cerró. Antes, mirá el trabajo con ver_caso.",
     inputSchema: z.object({
@@ -146,6 +154,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   })));
 
   server.registerTool("crear_caso", {
+    annotations: marcas("crear_caso"),
     description:
       "Abre un caso nuevo de un proceso publicado. El pedido tiene que traer todos los insumos que el proceso exige: si falta alguno, no se abre y la respuesta dice cuáles pedir.",
     inputSchema: z.object({
@@ -161,6 +170,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   }));
 
   server.registerTool("ver_caso", {
+    annotations: marcas("ver_caso"),
     description:
       "Todo lo que pasó en un caso: cada etapa, quién la hizo, cuándo, con qué receta y dónde quedó el resultado. Es la vista para revisar o para responder por el trabajo.",
     inputSchema: z.object({ caso }),
@@ -170,6 +180,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   }));
 
   server.registerTool("validar_proceso", {
+    annotations: marcas("validar_proceso"),
     description:
       "Revisa una definición de proceso antes de guardarla o publicarla: etapas numeradas, grupos con roles que existen, instrucciones, criterios y salidas. No guarda nada.",
     inputSchema: z.object({ definicion: z.record(z.string(), z.unknown()) }),
@@ -182,6 +193,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   const roles = agent.kind === "user" ? [agent.roleKey] : [...new Set([agent.roleKey, agent.ownerRoleKey ?? agent.roleKey])];
   if (agent.scopes.includes("records:read") && rolesVenTablero(roles)) {
     server.registerTool("tablero_de_trabajo", {
+      annotations: marcas("tablero_de_trabajo"),
       description:
         "Cómo rinde el trabajo, según la bitácora. Sin proceso, un resumen de todos: casos, entregados, tiempo de ciclo y dónde se traba cada uno. Con proceso, el detalle por etapa: tiempo en cola, trabajando, esperando y en revisión; tasa de devolución; qué modelo de IA declaró cada cierre y cómo le fue; los últimos motivos de espera y devolución; los casos detenidos y la tasa por persona. Usalo para decidir qué mejorar en la próxima versión de un proceso.",
       inputSchema: z.object({
