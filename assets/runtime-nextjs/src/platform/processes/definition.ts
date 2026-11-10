@@ -446,7 +446,13 @@ export function guiaDeProceso(entrada: {
   nombre: string;
   version: unknown;
   definicion: Definicion;
-  recientes: Array<{ titulo: string; fecha: unknown; receta: unknown; resultado: unknown }>;
+  recientes: Array<{
+    titulo: string;
+    fecha: unknown;
+    receta: unknown;
+    resultado: unknown;
+    imagenes?: Array<{ id: string; nombre: string }>;
+  }>;
 }) {
   const { definicion } = entrada;
   const partes = [`# ${entrada.nombre}`, `Versión vigente: ${String(entrada.version)}.`];
@@ -469,6 +475,12 @@ export function guiaDeProceso(entrada: {
         partes.push("Prompts:", ...(receta.prompts as string[]).map((prompt) => `> ${prompt.replace(/\n/g, "\n> ")}`));
       }
       if (typeof reciente.resultado === "string") partes.push(`Resultado: ${reciente.resultado}`);
+      if (reciente.imagenes?.length) {
+        partes.push(
+          `Imágenes del resultado (${reciente.imagenes.length}): miralas con read_attachment antes de empezar, en este orden.`,
+          ...reciente.imagenes.map((imagen, indice) => `${indice + 1}. ${imagen.nombre} — ${imagen.id}`),
+        );
+      }
     }
   }
   partes.push(

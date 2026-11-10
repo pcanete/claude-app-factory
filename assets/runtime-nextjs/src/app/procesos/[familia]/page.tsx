@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Receta } from "@/components/process-output";
+import { SubirLaminas } from "@/components/subir-laminas";
 import { canViewAudit, hasPermission, requireUser } from "@/lib/auth";
 import { USER_SCOPES } from "@/platform/mcp/store";
 import { tableroDeProceso } from "@/platform/processes/dashboard";
@@ -121,6 +122,19 @@ export default async function ProcesoPage({ params }: { params: Promise<{ famili
                 : <span className="table-secondary">Sin conversación registrada</span>}
               <Link className="record-link" href={`/records/instancia/${it.iteracion}`}>Ver el caso</Link>
             </div>
+            {it.imagenes.length > 0 && (
+              <div className="iteration-gallery">
+                {it.imagenes.map((imagen) => (
+                  <a href={`/attachments/${imagen.id}?ver=1`} key={imagen.id} rel="noreferrer" target="_blank" title={imagen.nombre}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos */}
+                    <img alt={imagen.nombre} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
+                  </a>
+                ))}
+              </div>
+            )}
+            {(administra || it.persona === user.id) && it.imagenes.length < 20 && (
+              <SubirLaminas caso={it.iteracion} />
+            )}
             {it.receta && (
               <details className="iteration-recipe">
                 <summary>Cómo se hizo{typeof it.receta.modelo === "string" ? ` · ${it.receta.modelo}` : ""}</summary>

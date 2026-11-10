@@ -24,7 +24,7 @@ function fallbackFileName(value: string) {
  * 3. **Todo lo que no se puede entregar responde 404.** Distinguir "no existe" de "no es
  *    tuyo" confirmaría que existe, que es justo lo que el alcance oculta.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [user, attachment] = await Promise.all([getCurrentUser(), getAttachmentMetadata(id)]);
   if (!user) return new Response("Autenticación requerida", { status: 401 });
@@ -46,10 +46,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!content) return new Response("Archivo no encontrado", { status: 404 });
 
   const encodedName = encodeURIComponent(content.original_name);
+  // `?ver=1` muestra una imagen en la página (una galería de láminas) en vez de descargarla.
+  // Sólo imágenes: un PDF o un HTML mostrados en línea abren otra superficie de ataque.
+  const enLinea = new URL(request.url).searchParams.get("ver") === "1" && /^image\/(jpeg|png|webp|gif)$/.test(content.content_type);
   return new Response(new Uint8Array(content.content), {
     headers: {
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `attachment; filename="${fallbackFileName(content.original_name)}"; filename*=UTF-8''${encodedName}`,
+      "Content-Disposition": `${enLinea ? "inline" : "attachment"}; filename="${fallbackFileName(content.original_name)}"; filename*=UTF-8''${encodedName}`,
       "Content-Length": String(content.size_bytes),
       "Content-Type": content.content_type,
       "X-Content-Type-Options": "nosniff",

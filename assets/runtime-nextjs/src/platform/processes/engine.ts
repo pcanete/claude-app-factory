@@ -1,6 +1,15 @@
 import "server-only";
 import type { PoolClient } from "pg";
 import { generatedCapabilities, generatedPermissions } from "@/generated/permissions";
+import { createHash } from "node:crypto";
+import {
+  contentTypeAllowed,
+  countAttachments,
+  insertAttachment,
+  listAttachments,
+  lockAttachmentSet,
+  resolveAttachmentPolicy,
+} from "@/lib/attachments";
 import { recordAuditEvent } from "@/lib/audit";
 import { sql, withTransaction } from "@/lib/db";
 import { recordAccessForAgent, type RecordAccessContext } from "@/lib/record-access";
@@ -1020,6 +1029,86 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   };
 }
 
+type Imagen = { id: string; nombre: string; tipo: string };
+
+/** Las imágenes adjuntas a un caso, en el orden en que se subieron. */
+async function imagenesDe(caso: string): Promise<Imagen[]> {
+  const adjuntos = await listAttachments("instancia", caso).catch(() => []);
+  return adjuntos
+    .filter((adjunto) => adjunto.content_type.startsWith("image/"))
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.original_name.localeCompare(b.original_name))
+    .map((adjunto) => ({ id: adjunto.id, nombre: adjunto.original_name, tipo: adjunto.content_type }));
+}
+
+/**
+ * Adjunta archivos a un caso —las láminas de un carrusel, la portada de un video— para que
+ * el resultado se vea en Operación y otra IA lo pueda mirar con read_attachment.
+ *
+ * Lo pesado sigue en la carpeta compartida: esto es para lo liviano que hace falta ver. No
+ * pasa por el permiso de editar casos, que es del motor: adjunta quien lo hizo, quien
+ * responde por él o quien administra.
+ */
+export async function adjuntarACaso(agent: AgentPrincipal, caso: string, archivos: Array<{
+  nombre: string;
+  tipo: string;
+  contenido: Buffer;
+}>) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  const entidad = requireEntity("instancia");
+  const politica = resolveAttachmentPolicy(entidad);
+  if (!politica) throw new Error("Esta aplicación no admite archivos en los casos. Hay que habilitarlos en la AppSpec.");
+  if (!archivos.length) throw new Error("No llegó ningún archivo.");
+  for (const archivo of archivos) {
+    const nombre = archivo.nombre.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+    if (!nombre || nombre.length > 255) throw new Error("Cada archivo necesita un nombre de hasta 255 caracteres.");
+    if (!archivo.contenido.length) throw new Error(`«${nombre}» está vacío.`);
+    if (archivo.contenido.length > politica.maxSizeBytes) {
+      throw new Error(`«${nombre}» supera el máximo de ${Math.floor(politica.maxSizeBytes / 1024 / 1024)} MB por archivo.`);
+    }
+    if (!contentTypeAllowed(archivo.tipo.toLowerCase(), politica.allowedTypes)) {
+      throw new Error(`«${nombre}» es ${archivo.tipo}, y en los casos se admite: ${politica.allowedTypes.join(", ")}.`);
+    }
+    archivo.nombre = nombre;
+  }
+  const ids = await withTransaction(async (client) => {
+    const instancia = await getRecord("instancia", caso, client, true, quien.access);
+    if (!instancia) throw new Error("Ese caso no existe o no está a tu alcance.");
+    const propio = instancia.tomada_por === quien.persona || instancia.responde === quien.persona;
+    if (!propio && !quien.administra) throw new Error("Adjunta quien hizo el caso, quien responde por él o quien administra.");
+    await lockAttachmentSet(client, "instancia", caso);
+    const actuales = await countAttachments(client, "instancia", caso);
+    if (actuales + archivos.length > politica.maxFiles) {
+      throw new Error(`Un caso admite hasta ${politica.maxFiles} archivos y este ya tiene ${actuales}.`);
+    }
+    const escritura: Escritura = { agent, quien, client };
+    const nuevos: string[] = [];
+    for (const archivo of archivos) {
+      const sha256 = createHash("sha256").update(archivo.contenido).digest("hex");
+      const id = await insertAttachment(client, {
+        entityKey: "instancia",
+        recordId: caso,
+        originalName: archivo.nombre,
+        contentType: archivo.tipo.toLowerCase(),
+        content: archivo.contenido,
+        sha256,
+        actorId: quien.persona,
+      });
+      await recordAuditEvent(client, {
+        ...autoria(escritura),
+        entityKey: "instancia",
+        recordId: caso,
+        action: "attachment_create",
+        changes: { attachment: { id, originalName: archivo.nombre, contentType: archivo.tipo, sizeBytes: archivo.contenido.length, sha256 }, source: "mcp:procesos" },
+      });
+      nuevos.push(id);
+    }
+    return nuevos;
+  });
+  revalidar(caso);
+  return { caso, adjuntados: ids.length, archivos: ids, mensaje: `Quedaron ${ids.length} archivo${ids.length === 1 ? "" : "s"} en el caso.` };
+}
+
 type Iteracion = {
   iteracion: string;
   titulo: string;
@@ -1027,6 +1116,8 @@ type Iteracion = {
   estado: string;
   fecha: unknown;
   quien: string | null;
+  persona: string | null;
+  imagenes: Imagen[];
   origen: string;
   resultado: string | null;
   conversacion: string | null;
@@ -1083,6 +1174,8 @@ async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: 
       estado: String(caso.estado),
       fecha: caso.created_at,
       quien: persona ? nombres.get(persona) ?? persona : null,
+      persona: persona ?? null,
+      imagenes: await imagenesDe(String(caso.id)),
       origen: typeof insumos.origen === "string" ? insumos.origen : "caso",
       resultado: typeof caso.resultado === "string" ? caso.resultado : typeof cierre?.enlace === "string" ? cierre.enlace : null,
       conversacion: typeof insumos.conversacion === "string" ? insumos.conversacion : null,
@@ -1177,8 +1270,12 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
       nombre: nombreDeFamilia(actual.nombre),
       version: versionDe(actual),
       definicion,
-      recientes: buenas.map((it) => ({ titulo: it.titulo, fecha: it.fecha, receta: it.receta, resultado: it.resultado })),
+      recientes: buenas.map((it) => ({ titulo: it.titulo, fecha: it.fecha, receta: it.receta, resultado: it.resultado, imagenes: it.imagenes })),
     }),
+    // Lo que la IA tiene que mirar: las imágenes de las últimas veces que salió bien.
+    referencias: buenas
+      .filter((it) => it.imagenes.length)
+      .map((it) => ({ iteracion: it.iteracion, titulo: it.titulo, imagenes: it.imagenes.map(({ id, nombre }) => ({ id, nombre })) })),
   };
 }
 

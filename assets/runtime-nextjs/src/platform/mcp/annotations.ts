@@ -55,6 +55,7 @@ export const MARCAS = {
   como_se_hace: LEE,
   iteraciones_de_proceso: LEE,
   registrar_iteracion: AGREGA,
+  adjuntar_a_caso: AGREGA,
   crear_caso: AGREGA,
   tomar_caso: AGREGA,
   esperar_caso: AGREGA,
