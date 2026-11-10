@@ -46,6 +46,7 @@ export default async function ProcesosPage() {
               {familia.proposito && <p className="subtitle process-purpose">{familia.proposito}</p>}
               <div className="table-secondary">
                 {familia.iteraciones === 1 ? "1 iteración" : `${familia.iteraciones} iteraciones`}
+                {familia.en_curso ? ` · ${familia.en_curso} en curso` : ""}
                 {familia.ultima ? ` · la última, ${fecha(familia.ultima)}` : ""}
               </div>
               <Link className="card-link" href={`/procesos/${familia.familia}`}>Ver iteraciones →</Link>

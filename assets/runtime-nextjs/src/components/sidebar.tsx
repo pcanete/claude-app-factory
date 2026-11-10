@@ -7,7 +7,7 @@ import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { runtimeSpec } from "@/lib/spec";
 import { motorDisponible } from "@/platform/processes/engine";
 
-/** Las entidades del motor de procesos: tienen su propia sección. */
+/** Las entidades del motor de procesos: se ven desde la página de cada proceso, no desde el menú. */
 const ENTIDADES_DE_PROCESO = new Set(["proceso", "instancia", "evento"]);
 
 type Enlace = { key: string; label: string; href: string };
@@ -18,9 +18,8 @@ type Enlace = { key: string; label: string; href: string };
  * Antes eran tres listas —entidades, vistas, sistema— y lo mismo aparecía dos veces con
  * otro nombre: «Instancias» y «Procesos en curso» llevaban a los mismos casos. Ahora:
  *
- *   Mi trabajo   lo que la persona tiene para hacer, si la aplicación opera procesos
+ *   Trabajo      lo que la persona tiene que decidir, y los procesos, si la aplicación los opera
  *   Operación    las vistas del dominio
- *   Procesos     definiciones, casos, bitácora y el tablero del trabajo
  *   Datos        las entidades sin vista propia, plegadas: para cargar o buscar
  *   Sistema      administración
  *
@@ -42,16 +41,16 @@ export async function Sidebar() {
     .filter((entity) => !entidadesConVista.has(entity.key));
   const enlaceDeEntidad = (entity: (typeof entidades)[number]): Enlace => ({ key: `entity:${entity.key}`, label: entity.label_plural, href: `/records/${entity.key}` });
 
-  const miTrabajo: Enlace[] = motor && user && hasPermission(user, "instancia", "read")
-    ? [{ key: "pendientes", label: "Mis pendientes", href: "/pendientes" }]
-    : [];
-  const operacion = vistas.filter((view) => !deProceso(view.entity)).map(enlaceDeVista);
-  const procesos: Enlace[] = [
-    ...(user && motor && hasPermission(user, "proceso", "list") ? [{ key: "familias", label: "Lo que sabemos hacer", href: "/procesos" }] : []),
-    ...vistas.filter((view) => deProceso(view.entity)).map(enlaceDeVista),
-    ...entidades.filter((entity) => deProceso(entity.key)).map(enlaceDeEntidad),
-    ...(user && motor && canViewAudit(user) ? [{ key: "trabajo", label: "Trabajo", href: "/trabajo" }] : []),
+  // Con motor de procesos, todo lo del motor se reduce a dos entradas: lo que la persona
+  // tiene que decidir, y los procesos. Las vistas técnicas del motor —casos en curso,
+  // bitácora, definiciones, tablero— no salen del menú por estar mal, sino porque son
+  // cómo se guarda el trabajo, no lo que alguien viene a hacer: cada proceso las muestra
+  // en su página, y siguen abriéndose por su dirección.
+  const miTrabajo: Enlace[] = [
+    ...(motor && user && hasPermission(user, "instancia", "read") ? [{ key: "pendientes", label: "Mis pendientes", href: "/pendientes" }] : []),
+    ...(motor && user && hasPermission(user, "proceso", "list") ? [{ key: "familias", label: "Procesos", href: "/procesos" }] : []),
   ];
+  const operacion = vistas.filter((view) => !deProceso(view.entity)).map(enlaceDeVista);
   const datos = entidades.filter((entity) => !deProceso(entity.key)).map(enlaceDeEntidad);
   const sistema: Enlace[] = [
     ...(user && canManageUsers(user) ? [{ key: "users", label: "Usuarios", href: "/users" }] : []),
@@ -96,14 +95,12 @@ export async function Sidebar() {
       <nav className="nav" aria-label="Navegación principal">
         <Link className="nav-link home" href="/">Por dónde empezar</Link>
 
-        {miTrabajo.length > 0 && <div className="nav-section">Mi trabajo</div>}
+        {miTrabajo.length > 0 && <div className="nav-section">Trabajo</div>}
         {lista(miTrabajo)}
 
         {operacion.length > 0 && <div className="nav-section">Operación</div>}
         {lista(operacion)}
 
-        {procesos.length > 0 && <div className="nav-section">Procesos</div>}
-        {lista(procesos)}
 
         {datos.length > 0 && (
           <div className="nav-group">

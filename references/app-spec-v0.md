@@ -191,11 +191,14 @@ El menú del panel se arma solo, por lo que la persona viene a hacer:
 
 | Sección | Qué lleva |
 |---|---|
-| Mi trabajo | «Mis pendientes», si la aplicación opera procesos |
+| Trabajo | «Mis pendientes» y «Procesos», si la aplicación opera procesos |
 | Operación | Las vistas con `navigation: true`, salvo las de procesos |
-| Procesos | Las vistas y entidades del [bloque de procesos](#bloques) y el tablero del trabajo |
 | Datos | Las entidades que no tienen una vista en el menú, plegadas |
 | Sistema | Usuarios, Agentes, Actividad, Reglas y Configuración, según las capacidades del rol |
+
+Las vistas y entidades del [bloque de procesos](#bloques) no van al menú: casos en curso,
+bitácora y definiciones se ven en la página de cada proceso, que también muestra cómo rinde a
+quien administra. Siguen abriéndose por su dirección.
 
 Una entidad con una vista en el menú no se repite en Datos: se llega por su vista, que tiene
 «Abrir listado base». Para que una entidad aparezca en Operación, dale una vista con
