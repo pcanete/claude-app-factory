@@ -40,7 +40,21 @@ function esImagen(url: URL, claveDeImagen: boolean) {
   return claveDeImagen || IMAGEN.test(url.pathname);
 }
 
+/** Las claves se escriben sin tildes; para leerlas, se les devuelven. */
+const CON_TILDE: Record<string, string> = {
+  conversacion: "Conversación",
+  descripcion: "Descripción",
+  situacion: "Situación",
+  angulo: "Ángulo",
+  version: "Versión",
+  reproduccion: "Reproducción",
+  eleccion: "Elección",
+  que_falto: "Qué faltó",
+  salio_igual: "Salió igual",
+};
+
 function etiqueta(clave: string) {
+  if (CON_TILDE[clave]) return CON_TILDE[clave];
   const texto = clave.replace(/_/g, " ");
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
@@ -106,6 +120,54 @@ function Objeto({ valor }: { valor: Record<string, unknown> }) {
 /** Una opción para elegir: su contenido, sin repetir el número que ya lleva el botón. */
 export function Opcion({ valor }: { valor: unknown }) {
   return <Valor valor={valor} />;
+}
+
+function textos(valor: unknown) {
+  return Array.isArray(valor) ? valor.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+/**
+ * Cómo se hizo algo: la receta de un cierre o de una iteración registrada. Los prompts
+ * se muestran tal cual, que es lo que otra persona necesita para repetirlo.
+ */
+export function Receta({ receta }: { receta: Record<string, unknown> }) {
+  const pasos = textos(receta.pasos);
+  const prompts = textos(receta.prompts);
+  const herramientas = textos(receta.herramientas);
+  const decisiones = textos(receta.decisiones);
+  const descartes = [...textos(receta.descartes), ...textos(receta.fallos)];
+  return (
+    <div className="recipe">
+      {typeof receta.modelo === "string" && <p><span className="table-secondary">Con</span> {receta.modelo}</p>}
+      {pasos.length > 0 && (
+        <div>
+          <div className="card-label">Pasos</div>
+          <ol>{pasos.map((paso, indice) => <li key={indice}>{paso}</li>)}</ol>
+        </div>
+      )}
+      {prompts.length > 0 && (
+        <div>
+          <div className="card-label">Prompts que funcionaron</div>
+          {prompts.map((prompt, indice) => <blockquote className="recipe-prompt" key={indice}>{prompt}</blockquote>)}
+        </div>
+      )}
+      {herramientas.length > 0 && (
+        <p><span className="table-secondary">Herramientas:</span> {herramientas.join(", ")}</p>
+      )}
+      {decisiones.length > 0 && (
+        <div>
+          <div className="card-label">Decisiones</div>
+          <ul>{decisiones.map((decision, indice) => <li key={indice}>{decision}</li>)}</ul>
+        </div>
+      )}
+      {descartes.length > 0 && (
+        <div>
+          <div className="card-label">Lo que no funcionó</div>
+          <ul>{descartes.map((descarte, indice) => <li key={indice}>{descarte}</li>)}</ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Todas las salidas de una etapa, clave por clave. */

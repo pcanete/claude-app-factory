@@ -137,9 +137,12 @@ con el enlace del último cierre como resultado.
 | `revisar_etapa` | revisores, nunca quien cerró | Aprueba, elige una opción (`eleccion`) o devuelve con motivo |
 | `ver_caso` | roles que leen `evento` | El recorrido completo: quién, cuándo, con qué receta y dónde quedó |
 | `validar_proceso` | cualquiera | Revisa una definición |
+| `registrar_iteracion` | cualquiera | Guarda algo que salió bien —resultado, receta y conversación— como iteración de un proceso; si el proceso no existe, lo crea como v1 |
+| `como_se_hace` | cualquiera | La versión vigente de un proceso y la receta de las últimas veces que salió bien, sin abrir un caso |
+| `iteraciones_de_proceso` | cualquiera | Las veces que se hizo un proceso, en todas sus versiones, con su receta y su conversación |
 | `tablero_de_trabajo` | roles con `view_audit` | Cómo rinde cada proceso. Ver [El tablero del trabajo](#el-tablero-del-trabajo) |
 
-Prompts: `pendientes` y `trabajar_caso`. En los clientes que los muestran como comandos, la
+Prompts: `pendientes`, `trabajar_caso`, `registrar`, `reproducir` y `mejorar_proceso`. En los clientes que los muestran como comandos, la
 persona no necesita saber qué pedirle a su IA.
 
 Toda operación exige que la credencial tenga una persona responsable: una credencial de agente
@@ -184,6 +187,42 @@ bitácora aunque haya empezado antes.
 incluye la devolución por persona, y medir el trabajo no tiene que volverse un ranking a la
 vista de quien opera. Por la misma razón la herramienta ni siquiera se registra para los demás
 roles. No muestra conversaciones: sólo lo que quedó en la bitácora.
+
+## La memoria del método
+
+El problema que resuelve: alguien del equipo hace algo con IA, queda bien, y no queda registro
+de cómo. Las conversaciones quedan sueltas, en Claude o en ChatGPT, y la próxima vez se empieza
+de cero. El orden de trabajo real es el inverso al de un proceso definido de antemano: primero
+se hace, después se decide que está bien, y recién ahí se quiere guardar cómo.
+
+- **Registrar.** Al terminar algo que quedó bien, la persona le dice a su IA «registrá esto». La
+  IA arma la receta de la conversación —pasos, prompts textuales, herramientas, modelo,
+  decisiones y lo que se descartó—, pide el enlace al resultado y el de la conversación, se la
+  muestra a la persona y llama `registrar_iteracion`. Si el proceso no existe, ese registro lo
+  crea como v1, con la receta como instrucciones de una sola etapa.
+- **Reproducir.** Otra persona, en otra máquina o con otra IA, pide «hacé X». Su IA trae la
+  receta con `como_se_hace`, la sigue y al terminar registra una **reproducción**: si salió
+  igual, y si no, qué faltó. Una reproducción fallida es la señal más clara de qué le falta a la
+  receta.
+- **Mejorar.** «Mirá las iteraciones y proponé la versión siguiente»: la IA lee
+  `iteraciones_de_proceso`, propone qué cambia y por qué, y quien administra publica.
+
+Quién aprueba: lo que registra quien administra queda entregado; lo que registra otra persona
+queda para que lo apruebe quien administra, con la receta a la vista, y si creó un proceso, el
+proceso nace en borrador y se publica con esa aprobación. Una reproducción no se aprueba: es una
+prueba de la receta.
+
+La conversación de origen la tiene que pasar la persona: una IA no conoce la dirección de su
+propia conversación. El enlace compartido lo abre cualquiera del equipo; el de la barra del
+navegador, sólo su dueño. Y la receta es lo que la IA reporta de la conversación, no la
+conversación misma: por eso se le muestra a la persona antes de guardarla.
+
+En el panel, **Lo que sabemos hacer** lista cada proceso con su versión vigente y sus
+iteraciones; cada iteración muestra el resultado, la conversación, la receta y, en las
+reproducciones, si salió igual.
+
+La familia de un proceso —todas sus versiones— la da la clave `proceso` de la definición; si no
+la declara, sale del nombre sin el « vN» del final.
 
 ## Decidir desde el panel
 

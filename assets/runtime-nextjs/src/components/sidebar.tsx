@@ -47,6 +47,7 @@ export async function Sidebar() {
     : [];
   const operacion = vistas.filter((view) => !deProceso(view.entity)).map(enlaceDeVista);
   const procesos: Enlace[] = [
+    ...(user && motor && hasPermission(user, "proceso", "list") ? [{ key: "familias", label: "Lo que sabemos hacer", href: "/procesos" }] : []),
     ...vistas.filter((view) => deProceso(view.entity)).map(enlaceDeVista),
     ...entidades.filter((entity) => deProceso(entity.key)).map(enlaceDeEntidad),
     ...(user && motor && canViewAudit(user) ? [{ key: "trabajo", label: "Trabajo", href: "/trabajo" }] : []),

@@ -58,6 +58,7 @@ export function componerInstrucciones(contexto: ContextoInstrucciones, valor: un
       "- A la persona pedile sólo lo que la guía dice que le toca: insumos, decisiones y su criterio sobre el resultado.",
       "- Si falta algo que no podés conseguir, esperar_caso. Para terminar, cerrar_etapa con la receta y la evidencia de cada criterio. Para revisar, revisar_etapa.",
       "- No muevas casos editando registros con update_record o create_record: las herramientas del motor son las que registran y controlan cada paso.",
+      "- Si te piden algo que el equipo ya sabe hacer, traé la receta con como_se_hace y seguila. Cuando algo quede bien y la persona quiera guardarlo, registrar_iteracion: guarda cómo se hizo y en qué conversación, para que otra persona lo repita.",
     );
   }
 

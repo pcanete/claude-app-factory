@@ -77,14 +77,6 @@ export type RespuestaCriterio = {
   evidencia?: string;
 };
 
-export type Receta = {
-  pasos: string[];
-  herramientas: string[];
-  modelo: string;
-  decisiones: string[];
-  fallos?: string[];
-};
-
 const EJECUTORES = new Set(["humano", "agente", "cualquiera"]);
 /** Un requisito o una clave: minúsculas, números, guiones. Lo comparan máquinas, no personas. */
 const CLAVE = /^[a-z][a-z0-9_-]{0,47}$/;
@@ -321,7 +313,25 @@ export function validarCierre(etapa: Etapa, cierre: {
     }
   }
 
-  const receta = esObjeto(cierre.receta) ? cierre.receta : {};
+  faltas.push(...faltasDeReceta(cierre.receta));
+
+  const respuestas = Array.isArray(cierre.criterios) ? cierre.criterios as RespuestaCriterio[] : [];
+  const paraRevision = juicioQuedaParaRevision(etapa);
+  (etapa.criterios ?? []).forEach((criterio, posicion) => {
+    if (criterio.tipo === "juicio" && paraRevision) return;
+    const respuesta = buscarRespuesta(criterio, posicion, respuestas);
+    const etiqueta = `criterio ${posicion + 1} («${criterio.texto}»)`;
+    if (!respuesta) faltas.push(`${etiqueta}: falta responderlo.`);
+    else if (respuesta.cumplido !== true) faltas.push(`${etiqueta}: no está cumplido. La etapa no cierra hasta que lo esté.`);
+    else if (!textoNoVacio(respuesta.evidencia)) faltas.push(`${etiqueta}: falta la evidencia de cómo lo verificaste.`);
+  });
+  return faltas;
+}
+
+/** Lo que le falta a una receta para que otra persona la pueda seguir. Vacía: está completa. */
+export function faltasDeReceta(valor: unknown) {
+  const faltas: string[] = [];
+  const receta = esObjeto(valor) ? valor : {};
   if (!listaDeTextos(receta.pasos) || !(receta.pasos as string[]).length) {
     faltas.push("receta.pasos: qué hiciste, en orden, como lista de textos.");
   }
@@ -335,18 +345,139 @@ export function validarCierre(etapa: Etapa, cierre: {
   if (receta.fallos !== undefined && !listaDeTextos(receta.fallos)) {
     faltas.push("receta.fallos: tiene que ser una lista de textos.");
   }
-
-  const respuestas = Array.isArray(cierre.criterios) ? cierre.criterios as RespuestaCriterio[] : [];
-  const paraRevision = juicioQuedaParaRevision(etapa);
-  (etapa.criterios ?? []).forEach((criterio, posicion) => {
-    if (criterio.tipo === "juicio" && paraRevision) return;
-    const respuesta = buscarRespuesta(criterio, posicion, respuestas);
-    const etiqueta = `criterio ${posicion + 1} («${criterio.texto}»)`;
-    if (!respuesta) faltas.push(`${etiqueta}: falta responderlo.`);
-    else if (respuesta.cumplido !== true) faltas.push(`${etiqueta}: no está cumplido. La etapa no cierra hasta que lo esté.`);
-    else if (!textoNoVacio(respuesta.evidencia)) faltas.push(`${etiqueta}: falta la evidencia de cómo lo verificaste.`);
-  });
+  if (receta.prompts !== undefined && !listaDeTextos(receta.prompts)) {
+    faltas.push("receta.prompts: tiene que ser una lista con los prompts textuales que funcionaron.");
+  }
+  if (receta.descartes !== undefined && !listaDeTextos(receta.descartes)) {
+    faltas.push("receta.descartes: tiene que ser una lista de lo que se probó y no funcionó.");
+  }
   return faltas;
+}
+
+// ---------------------------------------------------------------------------------------
+// Procesos que nacen de lo que salió bien
+// ---------------------------------------------------------------------------------------
+
+/** Una clave estable a partir de un nombre: «Carrusel P3 · estilo X» → «carrusel-p3-estilo-x». */
+export function claveDeNombre(nombre: string) {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "proceso";
+}
+
+/**
+ * La familia de un proceso: todas sus versiones comparten la clave. La declara la
+ * definición (`proceso`); si no la declara, sale del nombre sin el « vN» del final.
+ */
+export function familiaDe(proceso: { nombre?: unknown; definicion?: unknown }) {
+  const definicion = esObjeto(proceso.definicion) ? proceso.definicion : {};
+  if (typeof definicion.proceso === "string" && definicion.proceso.trim()) return claveDeNombre(definicion.proceso);
+  return claveDeNombre(String(proceso.nombre ?? "").replace(/\s+v\d+\s*$/i, ""));
+}
+
+/** El nombre de una familia para mostrar: el de la versión, sin el « vN». */
+export function nombreDeFamilia(nombre: unknown) {
+  return String(nombre ?? "").replace(/\s+v\d+\s*$/i, "").trim();
+}
+
+export type Receta = {
+  pasos: string[];
+  herramientas: string[];
+  modelo: string;
+  decisiones: string[];
+  prompts?: string[];
+  descartes?: string[];
+  fallos?: string[];
+};
+
+/**
+ * La definición de un proceso que nace de una receta: alguien hizo algo, le quedó bien,
+ * y lo registró. Es una sola etapa —hacerlo— cuyas instrucciones son cómo se hizo. La
+ * versión siguiente la mejora con lo que muestren las iteraciones.
+ */
+export function definicionDesdeReceta(entrada: {
+  nombre: string;
+  proposito: string;
+  receta: Receta;
+  roles: readonly string[];
+  revisores: readonly string[];
+  donde?: string;
+}): Definicion & { proceso: string; nacio_de_registro: true } {
+  const { receta } = entrada;
+  const prompts = receta.prompts?.length
+    ? ["", "Los prompts que funcionaron, tal cual:", ...receta.prompts.map((prompt) => `\n> ${prompt.replace(/\n/g, "\n> ")}`)]
+    : [];
+  const decisiones = receta.decisiones.length ? ["", "Decisiones que se tomaron:", ...receta.decisiones.map((d) => `- ${d}`)] : [];
+  return {
+    proceso: claveDeNombre(entrada.nombre),
+    nacio_de_registro: true,
+    proposito: entrada.proposito,
+    ...(entrada.donde ? { donde_vive_el_resultado: entrada.donde } : {}),
+    etapas: [{
+      orden: 1,
+      clave: "hacerlo",
+      nombre: "Hacerlo",
+      ejecutor: "cualquiera",
+      grupo: [...new Set(entrada.roles)],
+      instrucciones: [
+        `Así se hizo la vez que salió bien, con ${receta.modelo}. Seguilo en ese orden; si algo no funciona igual, anotalo: es lo que mejora la versión siguiente.`,
+        ...prompts,
+        ...decisiones,
+      ].join("\n"),
+      pasos: receta.pasos,
+      herramientas: receta.herramientas.map((nombre) => ({ nombre })),
+      ...(receta.descartes?.length ? { errores_frecuentes: receta.descartes } : {}),
+      revision: "humana",
+      revisores: [...new Set(entrada.revisores)],
+    }],
+  };
+}
+
+/**
+ * Cómo se hace un proceso, para quien lo va a hacer sin abrir un caso: por ejemplo, para
+ * reproducirlo en otra máquina o con otra IA. Es la definición vigente más la receta de
+ * las últimas veces que salió bien.
+ */
+export function guiaDeProceso(entrada: {
+  nombre: string;
+  version: unknown;
+  definicion: Definicion;
+  recientes: Array<{ titulo: string; fecha: unknown; receta: unknown; resultado: unknown }>;
+}) {
+  const { definicion } = entrada;
+  const partes = [`# ${entrada.nombre}`, `Versión vigente: ${String(entrada.version)}.`];
+  if (definicion.proposito) partes.push("", `Para qué: ${definicion.proposito}`);
+  for (const etapa of definicion.etapas) {
+    partes.push("", definicion.etapas.length > 1 ? `## Etapa ${etapa.orden}: ${etapa.nombre}` : "## Cómo se hace", "", etapa.instrucciones.trim());
+    if (etapa.pasos?.length) partes.push("", lista(etapa.pasos, true));
+    if (etapa.herramientas?.length) partes.push("", `Herramientas: ${etapa.herramientas.map((h) => h.nombre).join(", ")}.`);
+    if (etapa.errores_frecuentes?.length) partes.push("", "Lo que no funcionó:", lista(etapa.errores_frecuentes));
+  }
+  if (definicion.donde_vive_el_resultado) partes.push("", `Dónde va el resultado: ${definicion.donde_vive_el_resultado}`);
+  if (entrada.recientes.length) {
+    partes.push("", "## Las últimas veces que salió bien");
+    for (const reciente of entrada.recientes) {
+      const receta = esObjeto(reciente.receta) ? reciente.receta : {};
+      partes.push("", `### ${reciente.titulo}`);
+      if (typeof receta.modelo === "string") partes.push(`Con ${receta.modelo}.`);
+      if (listaDeTextos(receta.pasos)) partes.push(lista(receta.pasos as string[], true));
+      if (listaDeTextos(receta.prompts) && (receta.prompts as string[]).length) {
+        partes.push("Prompts:", ...(receta.prompts as string[]).map((prompt) => `> ${prompt.replace(/\n/g, "\n> ")}`));
+      }
+      if (typeof reciente.resultado === "string") partes.push(`Resultado: ${reciente.resultado}`);
+    }
+  }
+  partes.push(
+    "",
+    "## Al terminar",
+    "",
+    "Si salió bien, registralo con registrar_iteracion como reproducción de esta versión, diciendo si salió igual y, si no, qué faltó en la receta. Eso es lo que permite mejorar el proceso.",
+  );
+  return partes.join("\n");
 }
 
 export type Destino =

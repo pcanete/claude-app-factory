@@ -49,7 +49,7 @@ for (const nombre of declaradas.keys()) {
 ok(`${declaradas.size} entradas en MARCAS`);
 
 // 3. Lo que por nombre sólo consulta está marcado como lectura, y lo que borra, como destructivo.
-const lectura = /^(list_|get_|count_|query_|read_|describe_|export_|ver_|guia_|mis_|validar_|tablero_)/;
+const lectura = /^(list_|get_|count_|query_|read_|describe_|export_|ver_|guia_|mis_|validar_|tablero_|como_|iteraciones_)/;
 for (const [nombre, tipo] of declaradas) {
   if (lectura.test(nombre) && tipo !== "LEE") fallas.push(`${nombre} sólo consulta pero está marcada ${tipo}`);
   if (!lectura.test(nombre) && tipo === "LEE") fallas.push(`${nombre} modifica datos pero está marcada como lectura`);

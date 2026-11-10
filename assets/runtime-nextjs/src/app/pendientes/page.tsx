@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Opcion, Salidas } from "@/components/process-output";
+import { Opcion, Receta, Salidas } from "@/components/process-output";
 import { canViewAudit, requireUser } from "@/lib/auth";
 import { runtimeSpec } from "@/lib/spec";
 import { USER_SCOPES } from "@/platform/mcp/store";
@@ -116,6 +116,12 @@ export default async function PendientesPage({ searchParams }: { searchParams: P
               ) : null}
 
               <Salidas salidas={decision.salidas} />
+              {decision.receta && (
+                <details className="iteration-recipe">
+                  <summary>Cómo se hizo{typeof decision.receta.modelo === "string" ? ` · ${decision.receta.modelo}` : ""}</summary>
+                  <Receta receta={decision.receta} />
+                </details>
+              )}
               {decision.enlace && (
                 <p><a className="record-link" href={decision.enlace} rel="noreferrer" target="_blank">Abrir el resultado completo</a></p>
               )}

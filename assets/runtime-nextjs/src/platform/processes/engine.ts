@@ -10,12 +10,18 @@ import { applyRules } from "@/lib/rules";
 import { getEntity, relationFields, requireEntity, runtimeSpec } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
+  claveDeNombre,
   componerGuia,
+  definicionDesdeReceta,
   destinoTrasAprobar,
   destinoTrasCerrar,
   entradasFaltantes,
   etapaPorOrden,
+  faltasDeReceta,
+  familiaDe,
+  guiaDeProceso,
   herramientasQueFaltan,
+  nombreDeFamilia,
   opcionesParaElegir,
   puedeRevisar,
   puedeTomar,
@@ -25,6 +31,7 @@ import {
   type Definicion,
   type Destino,
   type Etapa,
+  type Receta,
   type RespuestaCriterio,
 } from "@/platform/processes/definition";
 
@@ -266,6 +273,33 @@ async function moverCaso(escritura: Escritura, antes: Record<string, unknown>, v
     changes: { before: antes, after: despues, rules: evaluados.applied, source: "mcp:procesos" },
   });
   return despues;
+}
+
+async function actualizarProceso(escritura: Escritura, antes: Record<string, unknown>, valores: Record<string, unknown>) {
+  const entidad = requireEntity("proceso");
+  const id = String(antes.id);
+  const normalizados = recordInputFromObject(entidad, valores, "update");
+  const evaluados = applyRules({ entityKey: "proceso", event: "before_update", values: normalizados, before: antes });
+  await updateRecord("proceso", id, evaluados.values, escritura.client, escritura.quien.access);
+  const despues = await getRecord("proceso", id, escritura.client, false, escritura.quien.access);
+  await recordAuditEvent(escritura.client, {
+    ...autoria(escritura),
+    entityKey: "proceso",
+    recordId: id,
+    action: "update",
+    changes: { before: antes, after: despues, rules: evaluados.applied, source: "mcp:procesos" },
+  });
+  revalidateAfterWrite("proceso", id);
+}
+
+async function nombresDePersonas(ids: unknown[]) {
+  const validos = [...new Set(ids.filter((v): v is string => typeof v === "string"))];
+  if (!validos.length) return new Map<string, string>();
+  const filas = await sql<{ id: string; display_name: string | null; email: string | null }>(
+    "SELECT id, display_name, email FROM app_user WHERE id = ANY($1::uuid[])",
+    [validos],
+  );
+  return new Map(filas.map((fila) => [fila.id, fila.display_name || fila.email || fila.id]));
 }
 
 function revalidar(id?: string) {
@@ -704,7 +738,15 @@ export async function revisarEtapa(agent: AgentPrincipal, id: string, revision: 
       instancia: id,
     });
     const enlace = typeof cierre?.enlace === "string" ? cierre.enlace : null;
-    return aplicarDestino(escritura, caso, destinoTrasAprobar(caso.definicion, caso.etapa), enlace);
+    const destino = await aplicarDestino(escritura, caso, destinoTrasAprobar(caso.definicion, caso.etapa), enlace);
+    // Lo que registró alguien que no administra nace en borrador: aprobar su primera
+    // iteración es aprobar también el proceso que propuso.
+    const definicion = caso.proceso.definicion as Record<string, unknown>;
+    if (caso.proceso.estado === "borrador" && definicion?.nacio_de_registro === true) {
+      await actualizarProceso(escritura, caso.proceso, { estado: "publicado" });
+      return { ...destino, mensaje: `${destino.mensaje} El proceso «${String(caso.proceso.nombre)}» quedó publicado.` };
+    }
+    return destino;
   });
   revalidar(id);
   return { caso: id, ...resultado };
@@ -770,6 +812,7 @@ export async function decisionesPendientes(agent: AgentPrincipal) {
     const salidas = esObjeto(cierre?.salidas) ? cierre.salidas : {};
     const opciones = opcionesParaElegir(caso.etapa, salidas);
     decisiones.push({
+      receta: esObjeto(cierre?.receta) ? cierre.receta : null,
       caso: resumen.caso,
       titulo: String(caso.instancia.titulo),
       proceso: String(caso.proceso.nombre),
@@ -781,10 +824,328 @@ export async function decisionesPendientes(agent: AgentPrincipal) {
       juzgar: (caso.etapa.criterios ?? []).filter((criterio) => criterio.tipo === "juicio").map((criterio) => criterio.texto),
       opciones,
       // Lo demás que dejó la etapa, sin repetir las opciones.
-      salidas: Object.fromEntries(Object.entries(salidas).filter(([clave]) => clave !== caso.etapa.eleccion?.opciones)),
+      // «origen» es interno: dice si la iteración se registró o se reprodujo, no es algo a juzgar.
+      salidas: Object.fromEntries(Object.entries(salidas).filter(([clave]) => clave !== caso.etapa.eleccion?.opciones && clave !== "origen")),
     });
   }
   return decisiones;
+}
+
+// ---------------------------------------------------------------------------------------
+// Iteraciones: lo que salió bien, y cómo se hizo
+// ---------------------------------------------------------------------------------------
+
+function esUrlWeb(valor: unknown) {
+  if (typeof valor !== "string") return false;
+  try {
+    const url = new URL(valor);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+async function procesosDeLaFamilia(familia: string, quien: Identidad) {
+  const todos = await listRecords("proceso", { sort: "updated_at", direction: "desc", limit: 500, access: quien.access });
+  return todos.filter((proceso) => familiaDe(proceso) === familia);
+}
+
+function versionDe(proceso: Record<string, unknown>) {
+  const numero = Number(proceso.version);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+/** La versión publicada más alta de una familia, o null si no hay ninguna publicada. */
+function vigente(procesos: Record<string, unknown>[]) {
+  return procesos
+    .filter((proceso) => proceso.estado === "publicado")
+    .sort((a, b) => versionDe(b) - versionDe(a))[0] ?? null;
+}
+
+async function familiaPedida(proceso: string, quien: Identidad) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(proceso)) {
+    const registro = await getRecord("proceso", proceso, undefined, false, quien.access);
+    if (!registro) throw new Error("Ese proceso no existe o no está a tu alcance.");
+    return familiaDe(registro);
+  }
+  return claveDeNombre(proceso);
+}
+
+export type Reproduccion = { salio_igual: boolean; que_falto?: string };
+
+/**
+ * Registra algo que salió bien —o la prueba de reproducir una receta— como iteración de
+ * un proceso, con cómo se hizo y la conversación donde se hizo.
+ *
+ * Si el proceso no existe, este registro lo crea como v1, con la receta como
+ * instrucciones. Lo que registra quien administra queda entregado; lo que registra otra
+ * persona queda para que lo apruebe quien administra (y, si creó un proceso, el proceso
+ * nace en borrador y se publica con esa aprobación). Una reproducción no se aprueba: es una
+ * prueba de la receta, y vale tanto si salió igual como si no.
+ */
+export async function registrarIteracion(agent: AgentPrincipal, entrada: {
+  proceso?: string;
+  nuevo_proceso?: { nombre: string; proposito: string; donde?: string };
+  titulo: string;
+  resultado: string;
+  conversacion?: string;
+  receta: Receta;
+  reproduccion?: Reproduccion;
+}, agentEventId?: string) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  const faltas = faltasDeReceta(entrada.receta);
+  if (!esUrlWeb(entrada.resultado)) faltas.unshift("resultado: la dirección (https://…) de lo que quedó bien, en la carpeta compartida.");
+  if (entrada.conversacion !== undefined && entrada.conversacion !== "" && !esUrlWeb(entrada.conversacion)) {
+    faltas.push("conversacion: tiene que ser la dirección de la conversación (https://…).");
+  }
+  if (entrada.reproduccion && !entrada.reproduccion.salio_igual && !entrada.reproduccion.que_falto?.trim()) {
+    faltas.push("reproduccion.que_falto: si no salió igual, qué faltó o qué cambió respecto de la receta.");
+  }
+  if (!entrada.proceso && !entrada.nuevo_proceso) faltas.push("proceso: el id del proceso, o nuevo_proceso si es la primera vez.");
+  if (entrada.proceso && entrada.nuevo_proceso) faltas.push("proceso y nuevo_proceso: es uno u otro.");
+  if (entrada.reproduccion && entrada.nuevo_proceso) faltas.push("reproduccion: sólo se reproduce un proceso que ya existe.");
+  if (faltas.length) throw new Error(["No se registró. Falta:", ...faltas.map((falta) => `- ${falta}`)].join("\n"));
+
+  const administradores = rolesQueAdministran();
+  let proceso: Record<string, unknown> | null = null;
+  let definicionNueva: ReturnType<typeof definicionDesdeReceta> | null = null;
+  if (entrada.proceso) {
+    proceso = await getRecord("proceso", entrada.proceso, undefined, false, quien.access);
+    if (!proceso) throw new Error("Ese proceso no existe o no está a tu alcance.");
+  } else {
+    const nuevo = entrada.nuevo_proceso!;
+    const familia = claveDeNombre(nuevo.nombre);
+    const existentes = await procesosDeLaFamilia(familia, quien);
+    if (existentes.length) {
+      const ultimo = existentes.sort((a, b) => versionDe(b) - versionDe(a))[0];
+      throw new Error(`Ya existe «${nombreDeFamilia(ultimo.nombre)}» (id ${String(ultimo.id)}): registralo como iteración de ese proceso, con «proceso».`);
+    }
+    definicionNueva = definicionDesdeReceta({
+      nombre: nuevo.nombre,
+      proposito: nuevo.proposito,
+      receta: entrada.receta,
+      roles: [...quien.roles, ...administradores],
+      revisores: administradores.length ? administradores : quien.roles,
+      donde: nuevo.donde,
+    });
+    const validacion = validarDefinicion(definicionNueva, rolesDeLaAplicacion());
+    if (!validacion.ok) throw new Error(`La receta no forma un proceso válido: ${validacion.errores.join(" ")}`);
+  }
+
+  const directo = quien.administra || Boolean(entrada.reproduccion);
+  const resultado = await withTransaction(async (client) => {
+    const escritura: Escritura = { agent, agentEventId, quien, client };
+    if (definicionNueva) {
+      const valores = recordInputFromObject(requireEntity("proceso"), {
+        nombre: `${entrada.nuevo_proceso!.nombre.trim()} v1`,
+        version: 1,
+        estado: quien.administra ? "publicado" : "borrador",
+        descripcion: entrada.nuevo_proceso!.proposito,
+        definicion: definicionNueva,
+      }, "create");
+      const evaluados = applyRules({ entityKey: "proceso", event: "before_create", values: valores });
+      const nuevoId = await insertRecord("proceso", evaluados.values, client, quien.access);
+      proceso = await getRecord("proceso", nuevoId, client, false, quien.access);
+      await recordAuditEvent(client, {
+        ...autoria(escritura),
+        entityKey: "proceso",
+        recordId: nuevoId,
+        action: "create",
+        changes: { after: proceso, rules: evaluados.applied, source: "mcp:procesos" },
+      });
+    }
+    const definicion = definicionValida(proceso!);
+    const ultima = definicion.etapas[definicion.etapas.length - 1];
+    const origen = entrada.reproduccion ? "reproduccion" : "descubrimiento";
+    const insumos = {
+      origen,
+      ...(entrada.conversacion ? { conversacion: entrada.conversacion } : {}),
+      ...(entrada.reproduccion ? { reproduccion: entrada.reproduccion } : {}),
+    };
+    const valores = recordInputFromObject(requireEntity("instancia"), {
+      titulo: entrada.titulo,
+      proceso: String(proceso!.id),
+      insumos,
+      etapa: ultima.orden,
+      estado: "en_revision",
+      tomada_por: quien.persona,
+      responde: quien.persona,
+    }, "create");
+    const evaluados = applyRules({ entityKey: "instancia", event: "before_create", values: valores });
+    const id = await insertRecord("instancia", evaluados.values, client, quien.access);
+    const instancia = await getRecord("instancia", id, client, false, quien.access);
+    await recordAuditEvent(client, {
+      ...autoria(escritura),
+      entityKey: "instancia",
+      recordId: id,
+      action: "create",
+      changes: { after: instancia, rules: evaluados.applied, source: "mcp:procesos" },
+    });
+    await registrarEvento(escritura, {
+      resumen: `${origen === "reproduccion" ? "Reproducción" : "Registrada"}: ${entrada.titulo}`.slice(0, 500),
+      tipo: "creada",
+      etapa: ultima.orden,
+      autor: quien.persona,
+      instancia: id,
+    });
+    const reproduccion = entrada.reproduccion;
+    const resumen = !reproduccion
+      ? `Así se hizo: ${entrada.titulo}`
+      : reproduccion.salio_igual
+        ? `Se reprodujo y salió igual: ${entrada.titulo}`
+        : `Se reprodujo y no salió igual: ${reproduccion.que_falto}`;
+    await registrarEvento(escritura, {
+      resumen: resumen.slice(0, 500),
+      tipo: "cerrada",
+      etapa: ultima.orden,
+      autor: quien.persona,
+      enlace: entrada.resultado,
+      salidas: insumos,
+      receta: entrada.receta,
+      instancia: id,
+    });
+    if (!directo) {
+      return { iteracion: id, proceso: String(proceso!.id), estado: "en_revision", mensaje: "Quedó registrada, para que la apruebe quien administra." };
+    }
+    const caso: Caso = { instancia: instancia!, proceso: proceso!, definicion, etapa: ultima };
+    await aplicarDestino(escritura, caso, { tipo: "entrega" }, entrada.resultado);
+    return { iteracion: id, proceso: String(proceso!.id), estado: "entregada", mensaje: "Quedó registrada." };
+  });
+  revalidar(resultado.iteracion);
+  revalidateAfterWrite("proceso", resultado.proceso);
+  return {
+    ...resultado,
+    ...(definicionNueva ? { proceso_nuevo: true, mensaje: `${resultado.mensaje} El proceso nació como v1${quien.administra ? "" : ", en borrador hasta esa aprobación"}.` } : {}),
+  };
+}
+
+type Iteracion = {
+  iteracion: string;
+  titulo: string;
+  version: number;
+  estado: string;
+  fecha: unknown;
+  quien: string | null;
+  origen: string;
+  resultado: string | null;
+  conversacion: string | null;
+  reproduccion: Reproduccion | null;
+  receta: Record<string, unknown> | null;
+};
+
+/** Las iteraciones de toda la familia de un proceso, de la más reciente a la más vieja. */
+async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: Identidad, limite = 100): Promise<Iteracion[]> {
+  const version = new Map(procesos.map((proceso) => [String(proceso.id), versionDe(proceso)]));
+  const casos = (await Promise.all(procesos.map((proceso) => listRecords("instancia", {
+    filters: { proceso_id: String(proceso.id) },
+    sort: "created_at",
+    direction: "desc",
+    limit: limite,
+    access: quien.access,
+  })))).flat()
+    .filter((caso) => caso.estado === "entregada" || caso.estado === "en_revision")
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .slice(0, limite);
+  const nombres = await nombresDePersonas(casos.map((caso) => caso.tomada_por ?? caso.responde));
+  const iteraciones: Iteracion[] = [];
+  for (const caso of casos) {
+    const eventos = await eventosDe(String(caso.id), quien);
+    const cierre = ultimo(eventos, "cerrada");
+    const insumos = esObjeto(caso.insumos) ? caso.insumos : {};
+    const persona = (caso.tomada_por ?? caso.responde) as string | undefined;
+    iteraciones.push({
+      iteracion: String(caso.id),
+      titulo: String(caso.titulo),
+      version: version.get(String(caso.proceso_id)) ?? 0,
+      estado: String(caso.estado),
+      fecha: caso.created_at,
+      quien: persona ? nombres.get(persona) ?? persona : null,
+      origen: typeof insumos.origen === "string" ? insumos.origen : "caso",
+      resultado: typeof caso.resultado === "string" ? caso.resultado : typeof cierre?.enlace === "string" ? cierre.enlace : null,
+      conversacion: typeof insumos.conversacion === "string" ? insumos.conversacion : null,
+      reproduccion: esObjeto(insumos.reproduccion) ? insumos.reproduccion as Reproduccion : null,
+      receta: esObjeto(cierre?.receta) ? cierre.receta : null,
+    });
+  }
+  return iteraciones;
+}
+
+export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: string, limite = 50) {
+  exigirAlcance(agent, "records:read");
+  const quien = identidad(agent);
+  const familia = await familiaPedida(proceso, quien);
+  const procesos = await procesosDeLaFamilia(familia, quien);
+  if (!procesos.length) throw new Error(`No hay ningún proceso «${proceso}».`);
+  const actual = vigente(procesos) ?? procesos[0];
+  return {
+    familia,
+    nombre: nombreDeFamilia(actual.nombre),
+    vigente: { id: actual.id, version: versionDe(actual), estado: actual.estado },
+    versiones: procesos.map((p) => ({ id: p.id, version: versionDe(p), estado: p.estado })).sort((a, b) => b.version - a.version),
+    iteraciones: await iteracionesDeFamilia(procesos, quien, limite),
+  };
+}
+
+/**
+ * Cómo se hace un proceso, sin abrir un caso: la versión vigente y la receta de las
+ * últimas veces que salió bien. Es lo que lee la IA de otra persona, en otra máquina,
+ * para hacerlo igual.
+ */
+export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
+  exigirAlcance(agent, "records:read");
+  const quien = identidad(agent);
+  const familia = await familiaPedida(proceso, quien);
+  const procesos = await procesosDeLaFamilia(familia, quien);
+  const actual = vigente(procesos);
+  if (!actual) {
+    throw new Error(procesos.length
+      ? `«${nombreDeFamilia(procesos[0].nombre)}» todavía no tiene una versión publicada.`
+      : `No hay ningún proceso «${proceso}».`);
+  }
+  const definicion = definicionValida(actual);
+  const buenas = (await iteracionesDeFamilia(procesos, quien, 20))
+    .filter((it) => it.estado === "entregada" && it.reproduccion?.salio_igual !== false && it.receta)
+    .slice(0, 3);
+  return {
+    proceso: actual.id,
+    nombre: nombreDeFamilia(actual.nombre),
+    version: versionDe(actual),
+    guia: guiaDeProceso({
+      nombre: nombreDeFamilia(actual.nombre),
+      version: versionDe(actual),
+      definicion,
+      recientes: buenas.map((it) => ({ titulo: it.titulo, fecha: it.fecha, receta: it.receta, resultado: it.resultado })),
+    }),
+  };
+}
+
+/** Las familias de procesos, para el panel: versión vigente, cuántas iteraciones y la última. */
+export async function familiasDeProcesos(agent: AgentPrincipal) {
+  exigirAlcance(agent, "records:read");
+  const quien = identidad(agent);
+  const procesos = await listRecords("proceso", { sort: "updated_at", direction: "desc", limit: 500, access: quien.access });
+  const casos = await listRecords("instancia", { sort: "created_at", direction: "desc", limit: 500, access: quien.access });
+  const familias = new Map<string, Record<string, unknown>[]>();
+  for (const proceso of procesos) {
+    const clave = familiaDe(proceso);
+    familias.set(clave, [...(familias.get(clave) ?? []), proceso]);
+  }
+  return [...familias.entries()].map(([clave, versiones]) => {
+    const ids = new Set(versiones.map((v) => String(v.id)));
+    const propios = casos.filter((caso) => ids.has(String(caso.proceso_id)) && (caso.estado === "entregada" || caso.estado === "en_revision"));
+    const actual = vigente(versiones) ?? versiones.sort((a, b) => versionDe(b) - versionDe(a))[0];
+    const definicion = esObjeto(actual.definicion) ? actual.definicion : {};
+    return {
+      familia: clave,
+      nombre: nombreDeFamilia(actual.nombre),
+      proposito: typeof definicion.proposito === "string" ? definicion.proposito : typeof actual.descripcion === "string" ? actual.descripcion : "",
+      version: versionDe(actual),
+      estado: String(actual.estado),
+      iteraciones: propios.length,
+      ultima: propios[0]?.created_at ?? null,
+    };
+  }).sort((a, b) => String(b.ultima ?? "").localeCompare(String(a.ultima ?? "")));
 }
 
 export function validarProceso(definicion: unknown) {
