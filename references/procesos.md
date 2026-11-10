@@ -139,7 +139,8 @@ con el enlace del último cierre como resultado.
 | `validar_proceso` | cualquiera | Revisa una definición |
 | `registrar_iteracion` | cualquiera | Guarda algo que salió bien —resultado, receta y conversación— como iteración de un proceso; si el proceso no existe, lo crea como v1 |
 | `como_se_hace` | cualquiera | La versión vigente de un proceso y la receta de las últimas veces que salió bien, sin abrir un caso |
-| `iteraciones_de_proceso` | cualquiera | Las veces que se hizo un proceso, en todas sus versiones, con su receta y su conversación |
+| `iteraciones_de_proceso` | cualquiera | Las veces que se hizo un proceso, en todas sus versiones, con su receta, su conversación y sus imágenes |
+| `adjuntar_a_caso` | quien lo hizo, quien responde o quien administra | Adjunta archivos livianos (las láminas de un carrusel) a un caso o a una iteración |
 | `tablero_de_trabajo` | roles con `view_audit` | Cómo rinde cada proceso. Ver [El tablero del trabajo](#el-tablero-del-trabajo) |
 
 Prompts: `pendientes`, `trabajar_caso`, `registrar`, `reproducir` y `mejorar_proceso`. En los clientes que los muestran como comandos, la
@@ -226,6 +227,16 @@ siguen abriéndose por su dirección.
 
 La familia de un proceso —todas sus versiones— la da la clave `proceso` de la definición; si no
 la declara, sale del nombre sin el « vN» del final.
+
+**El resultado se ve, no sólo se enlaza.** Lo liviano que hace falta mirar —las láminas de un
+carrusel, la portada de un video— se adjunta a la iteración: desde el panel, eligiendo todas las
+imágenes juntas (viajan de a una, porque Vercel corta los pedidos de más de 4,5 MB), o por MCP con
+`adjuntar_a_caso`. La página del proceso las muestra como galería, y `como_se_hace` las lista en
+`referencias` para que la IA que va a repetir el trabajo las mire con `read_attachment` antes de
+empezar. Lo pesado —video, originales, paquetes— sigue en la carpeta compartida, con un enlace.
+
+Los casos admiten hasta 20 archivos de 3 MB: JPG, PNG, WebP o PDF. Adjunta quien hizo el caso,
+quien responde por él o quien administra, sin necesitar permiso para editar casos a mano.
 
 ## Decidir desde el panel
 

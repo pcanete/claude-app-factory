@@ -5,6 +5,7 @@ import { z } from "zod";
 import { runtimeSpec } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
+  adjuntarACaso,
   cerrarEtapa,
   comoSeHace,
   iteracionesDeProceso,
@@ -23,7 +24,7 @@ import {
 import { DIAS_POR_DEFECTO, listarProcesos, rolesVenTablero, tableroDeProceso } from "@/platform/processes/dashboard";
 
 type ResultadoMcp = {
-  content: { type: "text"; text: string }[];
+  content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
   structuredContent: Record<string, unknown>;
 };
 
@@ -220,6 +221,28 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     return { value: await registrarIteracion(agent, entrada, eventId), resultCount: 1 };
   }));
 
+  server.registerTool("adjuntar_a_caso", {
+    annotations: marcas("adjuntar_a_caso"),
+    description:
+      "Adjunta archivos livianos a un caso o a una iteración registrada —las láminas de un carrusel, la portada de un video—, para que el resultado se vea en Operación y otra IA lo pueda mirar. Lo pesado (video, originales, paquetes) va a la carpeta compartida, con un enlace. Adjunta quien hizo el caso, quien responde por él o quien administra.",
+    inputSchema: z.object({
+      caso: z.string().uuid().describe("El id del caso o de la iteración (registrar_iteracion lo devuelve como «iteracion»)."),
+      archivos: z.array(z.object({
+        nombre: z.string().min(1).max(255).describe("Nombre del archivo, con el orden si importa: «slide-01.jpg»."),
+        tipo: z.string().max(100).describe("Tipo MIME, por ejemplo image/jpeg o image/png."),
+        contenido: z.string().max(4_500_000).describe("El archivo en base64."),
+      })).min(1).max(10),
+    }),
+  }, async (entrada) => rastreo("adjuntar_a_caso", { caso: entrada.caso, archivos: entrada.archivos.map((a) => a.nombre) }, async () => {
+    const archivos = entrada.archivos.map((archivo) => ({
+      nombre: archivo.nombre,
+      tipo: archivo.tipo,
+      contenido: Buffer.from(archivo.contenido, "base64"),
+    }));
+    const value = await adjuntarACaso(agent, entrada.caso, archivos);
+    return { value, resultCount: value.adjuntados };
+  }));
+
   server.registerTool("como_se_hace", {
     annotations: marcas("como_se_hace"),
     description:
@@ -323,6 +346,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
           "2. Buscá con query_records sobre proceso si ya existe el proceso al que pertenece. Si no existe, proponeme un nombre y un propósito.",
           "3. Pedime el enlace al resultado en la carpeta compartida y el enlace de esta conversación (mejor el compartido).",
           "4. Mostrame todo antes de guardarlo, y cuando lo apruebe llamá registrar_iteracion.",
+          "5. Si el resultado son imágenes livianas (las láminas de un carrusel) y las tenés, adjuntalas con adjuntar_a_caso a la iteración que devolvió, en orden. Si no las tenés, decime que las suba yo desde el panel.",
         ].join("\n"),
       },
     }],
@@ -338,7 +362,8 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
       content: {
         type: "text" as const,
         text: [
-          `Quiero hacer «${proceso}». Traé la receta con como_se_hace y seguila paso a paso, usando sus prompts tal cual.`,
+          `Quiero hacer «${proceso}». Traé la receta con como_se_hace y, si trae imágenes de referencia, miralas con read_attachment antes de empezar.`,
+          "Lo que no se negocia es la calidad del resultado; el camino podés adaptarlo, pero usá sus prompts como punto de partida.",
           "Cuando algo no funcione como dice la receta, anotalo.",
           "Al terminar, mostrame el resultado y preguntame si salió igual. Después registralo con registrar_iteracion como reproducción, con lo que faltó si no salió igual.",
         ].join(" "),

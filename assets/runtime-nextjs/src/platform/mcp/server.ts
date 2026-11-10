@@ -54,9 +54,19 @@ const mutationValuesSchema = z.record(z.string(), z.unknown()).superRefine((valu
   if (JSON.stringify(value).length > 65_536) context.addIssue({ code: "custom", message: "La mutación supera 64 KB." });
 });
 
-function result(value: Record<string, unknown>) {
+type ImagenDeResultado = { data: string; mimeType: string };
+
+/**
+ * La respuesta de una herramienta. Si trae una imagen, va como bloque de imagen además del
+ * JSON: una imagen en base64 adentro de un texto es, para la IA que la recibe, un bloque de
+ * letras; como imagen, la puede mirar.
+ */
+function result(value: Record<string, unknown>, imagen?: ImagenDeResultado) {
   return {
-    content: [{ type: "text" as const, text: JSON.stringify(value) }],
+    content: [
+      ...(imagen ? [{ type: "image" as const, data: imagen.data, mimeType: imagen.mimeType }] : []),
+      { type: "text" as const, text: JSON.stringify(value) },
+    ],
     structuredContent: value,
   };
 }
@@ -93,7 +103,7 @@ async function traced(
   agent: AgentPrincipal,
   toolName: string,
   input: Record<string, unknown>,
-  execute: (eventId?: string) => Promise<{ value: Record<string, unknown>; resultCount?: number }>,
+  execute: (eventId?: string) => Promise<{ value: Record<string, unknown>; resultCount?: number; imagen?: ImagenDeResultado }>,
 ) {
   // La actividad por herramienta se registra contra la credencial que la ejecutó, así
   // que sólo aplica a agentes. Una persona que opera por MCP ya deja rastro donde
@@ -102,7 +112,7 @@ async function traced(
     // Sin evento de agente que referenciar. Antes viajaba una cadena vacía y terminaba
     // en una columna uuid: la escritura moría con "invalid input syntax for type uuid".
     const executed = await execute(undefined);
-    return result(executed.value);
+    return result(executed.value, executed.imagen);
   }
 
   const event = await startAgentToolEvent({
@@ -118,7 +128,7 @@ async function traced(
       status: "completed",
       resultCount: executed.resultCount,
     });
-    return result(executed.value);
+    return result(executed.value, executed.imagen);
   } catch (error) {
     await finishAgentToolEvent({
       ...event,
@@ -399,7 +409,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
     {
       annotations: marcas("read_attachment"),
       description:
-        "Devuelve el contenido de un archivo adjunto en base64, junto con su tipo y hash para verificarlo.",
+        "Devuelve un archivo adjunto con su tipo y su hash. Si es una imagen, vuelve como imagen, para mirarla; si no, su contenido en base64.",
       inputSchema: z.object({
         attachmentId: z.string().uuid(),
       }),
@@ -426,19 +436,27 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
         if (digest !== file.sha256) {
           throw new Error("El contenido del archivo no coincide con su hash registrado.");
         }
+        const metadatosDeSalida = {
+          id: file.id,
+          found: true,
+          entityKey: entity.key,
+          recordId: file.record_id,
+          name: file.original_name,
+          contentType: file.content_type,
+          sizeBytes: file.size_bytes,
+          sha256: file.sha256,
+        };
+        // Una imagen va una sola vez, como imagen: repetirla en base64 dentro del JSON
+        // duplicaría el tamaño de la respuesta sin que la IA pueda verla mejor.
+        if (file.content_type.startsWith("image/")) {
+          return {
+            value: { ...metadatosDeSalida, encoding: "image" },
+            resultCount: 1,
+            imagen: { data: content.toString("base64"), mimeType: file.content_type },
+          };
+        }
         return {
-          value: {
-            id: file.id,
-            found: true,
-            entityKey: entity.key,
-            recordId: file.record_id,
-            name: file.original_name,
-            contentType: file.content_type,
-            sizeBytes: file.size_bytes,
-            sha256: file.sha256,
-            encoding: "base64",
-            content: content.toString("base64"),
-          },
+          value: { ...metadatosDeSalida, encoding: "base64", content: content.toString("base64") },
           resultCount: 1,
         };
       },

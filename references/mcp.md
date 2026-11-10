@@ -15,6 +15,10 @@ Herramientas de lectura:
 - `get_record`: obtiene un registro por UUID;
 - `export_snapshot`: exporta hasta 10 entidades y 100 registros por entidad con huella de contenido.
 
+`read_attachment` devuelve una imagen como bloque de imagen de MCP, no como texto en base64: una
+imagen dentro de un JSON es, para la IA que la recibe, un bloque de letras; como imagen, la puede
+mirar. Los demás archivos vuelven en base64, como siempre.
+
 Herramientas de escritura:
 
 - `create_record`: crea un registro;

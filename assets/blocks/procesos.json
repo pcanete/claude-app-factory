@@ -67,6 +67,17 @@
       "label_plural": "Casos",
       "description": "Un caso concreto de un proceso, por ejemplo «IVA de marzo — Estudio X»",
       "title_field": "titulo",
+      "attachments": {
+        "enabled": true,
+        "max_files": 20,
+        "max_size_mb": 3,
+        "allowed_types": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "application/pdf"
+        ]
+      },
       "fields": [
         {
           "key": "titulo",
