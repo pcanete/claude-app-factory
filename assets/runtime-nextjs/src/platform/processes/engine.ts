@@ -1034,9 +1034,31 @@ type Iteracion = {
   receta: Record<string, unknown> | null;
 };
 
+/**
+ * Si un caso cuenta como iteración: terminó, o espera la aprobación que lo termina.
+ *
+ * Un caso en revisión a mitad del proceso —la etapa 4 de 6— todavía no es una vez que se
+ * hizo: es trabajo en curso. Cuenta si se registró (trae «origen») o si la revisión que
+ * espera es la de su última etapa.
+ */
+function esIteracion(caso: Record<string, unknown>, ultimaEtapa: number | undefined) {
+  if (caso.estado === "entregada") return true;
+  if (caso.estado !== "en_revision") return false;
+  const insumos = esObjeto(caso.insumos) ? caso.insumos : {};
+  return typeof insumos.origen === "string" || (ultimaEtapa !== undefined && Number(caso.etapa) === ultimaEtapa);
+}
+
+function ultimaEtapaDe(proceso: Record<string, unknown>) {
+  const definicion = esObjeto(proceso.definicion) ? proceso.definicion : {};
+  const etapas = Array.isArray(definicion.etapas) ? definicion.etapas : [];
+  const ordenes = etapas.map((etapa) => Number((etapa as Record<string, unknown>)?.orden)).filter(Number.isFinite);
+  return ordenes.length ? Math.max(...ordenes) : undefined;
+}
+
 /** Las iteraciones de toda la familia de un proceso, de la más reciente a la más vieja. */
 async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: Identidad, limite = 100): Promise<Iteracion[]> {
   const version = new Map(procesos.map((proceso) => [String(proceso.id), versionDe(proceso)]));
+  const ultima = new Map(procesos.map((proceso) => [String(proceso.id), ultimaEtapaDe(proceso)]));
   const casos = (await Promise.all(procesos.map((proceso) => listRecords("instancia", {
     filters: { proceso_id: String(proceso.id) },
     sort: "created_at",
@@ -1044,7 +1066,7 @@ async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: 
     limit: limite,
     access: quien.access,
   })))).flat()
-    .filter((caso) => caso.estado === "entregada" || caso.estado === "en_revision")
+    .filter((caso) => esIteracion(caso, ultima.get(String(caso.proceso_id))))
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
     .slice(0, limite);
   const nombres = await nombresDePersonas(casos.map((caso) => caso.tomada_por ?? caso.responde));
@@ -1132,8 +1154,8 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
     familias.set(clave, [...(familias.get(clave) ?? []), proceso]);
   }
   return [...familias.entries()].map(([clave, versiones]) => {
-    const ids = new Set(versiones.map((v) => String(v.id)));
-    const propios = casos.filter((caso) => ids.has(String(caso.proceso_id)) && (caso.estado === "entregada" || caso.estado === "en_revision"));
+    const ultima = new Map(versiones.map((v) => [String(v.id), ultimaEtapaDe(v)]));
+    const propios = casos.filter((caso) => ultima.has(String(caso.proceso_id)) && esIteracion(caso, ultima.get(String(caso.proceso_id))));
     const actual = vigente(versiones) ?? versiones.sort((a, b) => versionDe(b) - versionDe(a))[0];
     const definicion = esObjeto(actual.definicion) ? actual.definicion : {};
     return {
