@@ -13,10 +13,17 @@
  *     etapa no declara ver;
  *   - una etapa con requisitos sólo la toma quien declara tenerlos;
  *   - una etapa que pide elegir deja al menos dos opciones, y la elegida queda a la vista
- *     de las etapas siguientes.
+ *     de las etapas siguientes;
+ *   - una receta registrada forma un proceso válido, y su guía trae los prompts tal cual.
  */
 import {
+  claveDeNombre,
   componerGuia,
+  definicionDesdeReceta,
+  faltasDeReceta,
+  familiaDe,
+  guiaDeProceso,
+  nombreDeFamilia,
   destinoTrasAprobar,
   destinoTrasCerrar,
   entradasFaltantes,
@@ -215,6 +222,52 @@ comprobar("la guía explica cómo dejar las opciones y dónde queda la elegida",
   guiaEleccion.includes("«temas»") && guiaEleccion.includes("«tema_elegido»") && guiaEleccion.includes("elige una"));
 const guiaVideo = componerGuia({ titulo: "x", proceso: "y", definicion: eleccionValida.definicion, estado: "tomada", visibles: {}, etapa: video });
 comprobar("la guía dice qué necesita la máquina", guiaVideo.includes("Qué necesita la máquina") && guiaVideo.includes("hyperframes"));
+
+// --- Recetas registradas -----------------------------------------------------------------
+comprobar("la clave de un nombre no tiene tildes ni signos", claveDeNombre("Carrusel P3 · Estilo Concepción") === "carrusel-p3-estilo-concepcion");
+comprobar("la familia sale de la definición si la declara", familiaDe({ nombre: "Otra cosa v4", definicion: { proceso: "post-valentina" } }) === "post-valentina");
+comprobar("si no la declara, sale del nombre sin la versión",
+  familiaDe({ nombre: "Carrusel P3 v2", definicion: {} }) === familiaDe({ nombre: "Carrusel P3 v1", definicion: {} }));
+comprobar("el nombre de la familia no lleva la versión", nombreDeFamilia("Carrusel P3 v12") === "Carrusel P3");
+
+const recetaRegistrada = {
+  pasos: ["Elegir la nota", "Escribir los textos de 6 slides", "Renderizar con carousel-builder"],
+  prompts: ["Escribí 6 slides sobre esta nota,\nuno por idea"],
+  herramientas: ["carousel-builder"],
+  modelo: "Claude Opus",
+  decisiones: ["6 slides y no 8: la nota no daba para más"],
+  descartes: ["Fondo oscuro: no se leía en el teléfono"],
+};
+comprobar("una receta completa no tiene faltas", faltasDeReceta(recetaRegistrada).length === 0);
+comprobar("una receta sin pasos ni modelo dice qué falta",
+  faltasDeReceta({ herramientas: [], decisiones: [] }).some((f) => f.startsWith("receta.pasos"))
+  && faltasDeReceta({ herramientas: [], decisiones: [] }).some((f) => f.startsWith("receta.modelo")));
+comprobar("los prompts tienen que ser textos", faltasDeReceta({ ...recetaRegistrada, prompts: [3] }).some((f) => f.startsWith("receta.prompts")));
+
+const nacida = definicionDesdeReceta({
+  nombre: "Carrusel P3 · concepto + historia",
+  proposito: "Un carrusel de P3 a partir de una nota.",
+  receta: recetaRegistrada,
+  roles: ["colaborador", "director"],
+  revisores: ["director"],
+});
+const nacidaValida = validarDefinicion(nacida, roles);
+comprobar("la receta forma un proceso válido de una etapa", nacidaValida.ok && nacida.etapas.length === 1, JSON.stringify(nacidaValida.errores ?? []));
+comprobar("el proceso nacido declara su familia y que vino de un registro",
+  nacida.proceso === "carrusel-p3-concepto-historia" && nacida.nacio_de_registro === true);
+comprobar("los descartes quedan como errores frecuentes", nacida.etapas[0].errores_frecuentes?.[0]?.includes("Fondo oscuro"));
+
+const guiaReceta = guiaDeProceso({
+  nombre: "Carrusel P3 · concepto + historia",
+  version: 1,
+  definicion: nacida,
+  recientes: [{ titulo: "La frustración de Russell", fecha: "2026-11-04", receta: recetaRegistrada, resultado: "https://x.y/z" }],
+});
+comprobar("la guía trae los prompts tal cual, también los de varias líneas",
+  guiaReceta.includes("> Escribí 6 slides sobre esta nota,") && guiaReceta.includes("> uno por idea"));
+comprobar("la guía trae los pasos y la última vez que salió bien",
+  guiaReceta.includes("1. Elegir la nota") && guiaReceta.includes("La frustración de Russell") && guiaReceta.includes("https://x.y/z"));
+comprobar("la guía dice cómo registrar la reproducción", guiaReceta.includes("registrar_iteracion") && guiaReceta.includes("reproducción"));
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);

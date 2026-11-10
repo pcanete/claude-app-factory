@@ -76,6 +76,7 @@ comprobar("un rol sin texto propio recibe sólo lo general", sinTexto.includes("
 
 const conMotor = componerInstrucciones({ ...persona, motorDeProcesos: true }, null);
 comprobar("con motor de procesos, manda a mis_pendientes", conMotor.includes("mis_pendientes") && conMotor.includes("tomar_caso"));
+comprobar("con motor de procesos, dice cómo reutilizar y registrar lo que salió bien", conMotor.includes("como_se_hace") && conMotor.includes("registrar_iteracion"));
 comprobar("sin motor, no nombra herramientas que no existen", !componerInstrucciones(persona, null).includes("mis_pendientes"));
 
 const largo = componerInstrucciones(persona, "x".repeat(LIMITE_INSTRUCCIONES * 2));

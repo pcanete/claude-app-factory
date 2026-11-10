@@ -34,11 +34,11 @@ export async function decidirAction(formData: FormData) {
       hecho = "Lo devolviste con el motivo. Vuelve a quien lo trabajó.";
     } else if (accion.startsWith("elegir:")) {
       const opcion = Number(accion.slice("elegir:".length));
-      await revisarEtapa(persona, caso, { aprobada: true, eleccion: opcion, ...(motivo ? { motivo } : {}) });
-      hecho = `Elegiste la opción ${opcion}. El caso sigue con la etapa siguiente.`;
+      const resultado = await revisarEtapa(persona, caso, { aprobada: true, eleccion: opcion, ...(motivo ? { motivo } : {}) });
+      hecho = `Elegiste la opción ${opcion}. ${resultado.mensaje}`;
     } else if (accion === "aprobar") {
-      await revisarEtapa(persona, caso, { aprobada: true, ...(motivo ? { motivo } : {}) });
-      hecho = "Aprobado. El caso sigue con la etapa siguiente.";
+      const resultado = await revisarEtapa(persona, caso, { aprobada: true, ...(motivo ? { motivo } : {}) });
+      hecho = `Aprobado. ${resultado.mensaje}`;
     } else {
       error = "No se entendió la decisión. Volvé a intentarlo.";
     }

@@ -6,6 +6,9 @@ import { runtimeSpec } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
   cerrarEtapa,
+  comoSeHace,
+  iteracionesDeProceso,
+  registrarIteracion,
   crearCaso,
   esperarCaso,
   guiaDeEtapa,
@@ -184,6 +187,64 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     return { value, resultCount: value.bitacora.length };
   }));
 
+  server.registerTool("registrar_iteracion", {
+    annotations: marcas("registrar_iteracion"),
+    description:
+      "Registra algo que salió bien como iteración de un proceso: el resultado, cómo se hizo (receta con los prompts textuales) y la conversación donde se hizo. Si el proceso no existe, lo crea como v1 con la receta como instrucciones. Usalo cuando la persona diga que algo quedó bien y quiera guardarlo, o al terminar una reproducción. Antes de llamarlo, mostrale la receta a la persona para que la corrija.",
+    inputSchema: z.object({
+      proceso: z.string().uuid().optional().describe("El id del proceso al que pertenece (como_se_hace o query_records sobre proceso). Si es la primera vez, usá nuevo_proceso."),
+      nuevo_proceso: z.object({
+        nombre: z.string().min(3).max(120).describe("Cómo se llama, por ejemplo «Carrusel P3 · estilo concepto + historia»."),
+        proposito: z.string().min(10).max(2_000).describe("Qué produce y para quién, en una o dos oraciones."),
+        donde: z.string().max(1_000).optional().describe("Dónde queda el resultado, si siempre es el mismo lugar."),
+      }).optional(),
+      titulo: z.string().min(3).max(200).describe("Qué se hizo esta vez, por ejemplo «Carrusel P3 · la frustración de Russell»."),
+      resultado: z.string().max(2_000).describe("Dirección (https://…) de lo que quedó bien, en la carpeta compartida."),
+      conversacion: z.string().max(2_000).optional()
+        .describe("Dirección de la conversación donde se hizo. Pedísela a la persona: vos no la conocés. Mejor el enlace compartido, que lo abre cualquiera del equipo."),
+      receta: z.object({
+        pasos: textos.min(1).describe("Qué se hizo, en orden, para que otra persona con otra IA lo pueda repetir."),
+        prompts: textos.optional().describe("Los prompts que funcionaron, textuales, en el orden en que se usaron."),
+        herramientas: textos.describe("Qué skills, conectores o programas se usaron. Vacía si ninguno."),
+        modelo: z.string().max(200).describe("Qué IA se usó."),
+        decisiones: textos.describe("Qué se eligió y por qué, cuando había opciones."),
+        descartes: textos.optional().describe("Lo que se probó y no funcionó: le ahorra el camino a quien lo repita."),
+      }),
+      reproduccion: z.object({
+        salio_igual: z.boolean().describe("Si siguiendo la receta salió lo mismo, en calidad y en estilo."),
+        que_falto: z.string().max(2_000).optional().describe("Si no salió igual: qué faltó en la receta o qué hubo que cambiar."),
+      }).optional().describe("Sólo si esto fue reproducir un proceso que ya existe siguiendo como_se_hace."),
+    }),
+  }, async (entrada) => rastreo("registrar_iteracion", { ...entrada, receta: "(omitida)" }, async (eventId) => {
+    acotado(entrada.receta, 32_768, "receta");
+    return { value: await registrarIteracion(agent, entrada, eventId), resultCount: 1 };
+  }));
+
+  server.registerTool("como_se_hace", {
+    annotations: marcas("como_se_hace"),
+    description:
+      "Cómo se hace un proceso, sin abrir un caso: la versión vigente y la receta de las últimas veces que salió bien, con sus prompts. Usalo cuando la persona pida hacer algo que el equipo ya sabe hacer («hacé un carrusel estilo X para P3»), y seguilo.",
+    inputSchema: z.object({
+      proceso: z.string().min(2).max(200).describe("El id del proceso o su nombre, por ejemplo «Carrusel P3»."),
+    }),
+  }, async (entrada) => rastreo("como_se_hace", entrada, async () => ({
+    value: await comoSeHace(agent, entrada.proceso),
+    resultCount: 1,
+  })));
+
+  server.registerTool("iteraciones_de_proceso", {
+    annotations: marcas("iteraciones_de_proceso"),
+    description:
+      "Las veces que se hizo un proceso, en todas sus versiones: quién, cuándo, el resultado, la conversación, la receta y, en las reproducciones, si salió igual y qué faltó. Es lo que se mira para proponer la versión siguiente.",
+    inputSchema: z.object({
+      proceso: z.string().min(2).max(200).describe("El id del proceso o su nombre."),
+      limite: z.number().int().min(1).max(100).optional(),
+    }),
+  }, async (entrada) => rastreo("iteraciones_de_proceso", entrada, async () => {
+    const value = await iteracionesDeProceso(agent, entrada.proceso, entrada.limite);
+    return { value, resultCount: value.iteraciones.length };
+  }));
+
   server.registerTool("validar_proceso", {
     annotations: marcas("validar_proceso"),
     description:
@@ -244,6 +305,62 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
       content: {
         type: "text" as const,
         text: `Fijate con mis_pendientes qué tengo en «${aplicacion}». Mostrámelo corto, ordenado por lo que más urge, y proponé por cuál empezar.`,
+      },
+    }],
+  }));
+
+  server.registerPrompt("registrar", {
+    title: "Registrar lo que salió bien",
+    description: "Guarda cómo se hizo esto, en esta conversación, como iteración de un proceso.",
+  }, () => ({
+    messages: [{
+      role: "user" as const,
+      content: {
+        type: "text" as const,
+        text: [
+          `Esto quedó bien y quiero registrarlo en «${aplicacion}».`,
+          "1. Armá la receta de lo que hicimos en esta conversación: los pasos en orden, los prompts que funcionaron copiados textualmente, las herramientas, qué IA usamos, las decisiones y lo que descartamos. Que otra persona con otra IA lo pueda repetir sin hablar conmigo.",
+          "2. Buscá con query_records sobre proceso si ya existe el proceso al que pertenece. Si no existe, proponeme un nombre y un propósito.",
+          "3. Pedime el enlace al resultado en la carpeta compartida y el enlace de esta conversación (mejor el compartido).",
+          "4. Mostrame todo antes de guardarlo, y cuando lo apruebe llamá registrar_iteracion.",
+        ].join("\n"),
+      },
+    }],
+  }));
+
+  server.registerPrompt("reproducir", {
+    title: "Hacer algo que el equipo ya sabe hacer",
+    description: "Sigue la receta vigente de un proceso y, al terminar, registra si salió igual.",
+    argsSchema: z.object({ proceso: z.string().describe("El nombre del proceso, por ejemplo «Carrusel P3»") }),
+  }, ({ proceso }) => ({
+    messages: [{
+      role: "user" as const,
+      content: {
+        type: "text" as const,
+        text: [
+          `Quiero hacer «${proceso}». Traé la receta con como_se_hace y seguila paso a paso, usando sus prompts tal cual.`,
+          "Cuando algo no funcione como dice la receta, anotalo.",
+          "Al terminar, mostrame el resultado y preguntame si salió igual. Después registralo con registrar_iteracion como reproducción, con lo que faltó si no salió igual.",
+        ].join(" "),
+      },
+    }],
+  }));
+
+  server.registerPrompt("mejorar_proceso", {
+    title: "Mejorar un proceso",
+    description: "Mira las iteraciones de un proceso y propone la versión siguiente.",
+    argsSchema: z.object({ proceso: z.string().describe("El nombre del proceso") }),
+  }, ({ proceso }) => ({
+    messages: [{
+      role: "user" as const,
+      content: {
+        type: "text" as const,
+        text: [
+          `Mirá con iteraciones_de_proceso las veces que se hizo «${proceso}» y con como_se_hace la versión vigente.`,
+          "Fijate qué se repite en las recetas que salieron bien, qué faltó en las reproducciones que no salieron igual y qué prompts cambiaron.",
+          "Proponeme la versión siguiente: mostrame qué cambia respecto de la vigente y por qué, con la iteración que lo justifica.",
+          "Si la apruebo, validala con validar_proceso y guardala como un proceso nuevo con la versión siguiente, el mismo nombre con su « vN» y la misma clave en «proceso», en borrador: la publico yo.",
+        ].join(" "),
       },
     }],
   }));
