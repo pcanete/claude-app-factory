@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Receta } from "@/components/process-output";
-import { hasPermission, requireUser } from "@/lib/auth";
+import { canViewAudit, hasPermission, requireUser } from "@/lib/auth";
 import { USER_SCOPES } from "@/platform/mcp/store";
+import { tableroDeProceso } from "@/platform/processes/dashboard";
 import { comoSeHace, iteracionesDeProceso, motorDisponible } from "@/platform/processes/engine";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +22,17 @@ function Origen({ origen, reproduccion }: { origen: string; reproduccion: { sali
   return <span className="badge">Caso</span>;
 }
 
+const horas = (valor: number | null) => {
+  if (valor === null) return "—";
+  if (valor < 24) return `${Math.round(valor)} h`;
+  return `${Math.round(valor / 24)} días`;
+};
+
 /**
- * Un proceso y sus iteraciones: la versión vigente arriba, y abajo cada vez que se hizo,
- * con el resultado, la conversación donde se hizo y la receta. Las reproducciones que no
- * salieron igual dicen qué faltó: es lo que mejora la versión siguiente.
+ * Todo lo de un proceso en un solo lugar: cómo se hace, los casos que están en curso, las
+ * veces que se hizo y, para quien administra, cómo rinde y su definición. Antes eran cuatro
+ * entradas del menú —casos en curso, bitácora, definiciones, tablero— que mostraban cómo
+ * está guardado el trabajo y no lo que alguien viene a hacer.
  */
 export default async function ProcesoPage({ params }: { params: Promise<{ familia: string }> }) {
   const user = await requireUser();
@@ -39,6 +47,8 @@ export default async function ProcesoPage({ params }: { params: Promise<{ famili
     notFound();
   }
   const guia = await comoSeHace(persona, familia).catch(() => null);
+  const administra = canViewAudit(user);
+  const rendimiento = administra ? await tableroDeProceso(String(datos.vigente.id)).catch(() => null) : null;
   const reproducciones = datos.iteraciones.filter((it) => it.origen === "reproduccion");
   const fallidas = reproducciones.filter((it) => it.reproduccion?.salio_igual === false).length;
 
@@ -68,6 +78,22 @@ export default async function ProcesoPage({ params }: { params: Promise<{ famili
           <summary>Cómo se hace · versión {guia.version}</summary>
           <pre>{guia.guia}</pre>
         </details>
+      )}
+
+      {datos.en_curso.length > 0 && (
+        <section className="work-section">
+          <h2>En curso · {datos.en_curso.length}</h2>
+          <ul className="case-list">
+            {datos.en_curso.map((caso) => (
+              <li key={caso.caso}>
+                <Link className="record-link" href={`/records/instancia/${caso.caso}`}>{caso.titulo}</Link>
+                <span className="table-secondary">
+                  Etapa {caso.etapa} · {caso.estado}{caso.quien ? ` · lo tiene ${caso.quien}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section className="work-section">
@@ -104,6 +130,41 @@ export default async function ProcesoPage({ params }: { params: Promise<{ famili
           </article>
         ))}
       </section>
+
+      {administra && (
+        <section className="work-section">
+          <h2>Cómo rinde</h2>
+          {rendimiento && rendimiento.tablero.casos > 0 ? (
+            <>
+              <div className="grid">
+                <article className="card">
+                  <div className="card-label">Casos</div>
+                  <div className="metric">{rendimiento.tablero.casos}</div>
+                  <div className="table-secondary">{rendimiento.tablero.entregados} entregados, en los últimos {rendimiento.dias} días</div>
+                </article>
+                <article className="card">
+                  <div className="card-label">De punta a punta</div>
+                  <div className="metric">{horas(rendimiento.tablero.ciclo.mediana_horas)}</div>
+                  <div className="table-secondary">la mitad de los casos tarda menos que esto</div>
+                </article>
+                <article className="card">
+                  <div className="card-label">Dónde se traba</div>
+                  <div className="metric small">{rendimiento.tablero.traba ? rendimiento.tablero.traba.nombre : "—"}</div>
+                  <div className="table-secondary">{rendimiento.tablero.traba ? `por ${rendimiento.tablero.traba.motivo}` : "Todavía no hay datos"}</div>
+                </article>
+              </div>
+              <p className="iteration-links">
+                <Link className="record-link" href={`/trabajo?proceso=${String(datos.vigente.id)}`}>Ver el detalle por etapa y por persona</Link>
+              </p>
+            </>
+          ) : (
+            <div className="empty compact">Todavía no hay casos de la versión vigente para medir.</div>
+          )}
+          <p className="iteration-links">
+            <Link className="record-link" href={`/records/proceso/${String(datos.vigente.id)}`}>Ver la definición de la versión {datos.vigente.version}</Link>
+          </p>
+        </section>
+      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { recordAccessForUser } from "@/lib/record-access";
 import Link from "next/link";
-import { canViewAudit, hasPermission, hasViewAccess, requireUser } from "@/lib/auth";
+import { hasPermission, hasViewAccess, requireUser } from "@/lib/auth";
 import { countRecords } from "@/lib/repository";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { getEntity, runtimeSpec } from "@/lib/spec";
@@ -82,13 +82,13 @@ export default async function HomePage() {
         </section>
       )}
 
-      {motor && canViewAudit(user) && (
+      {motor && hasPermission(user, "proceso", "list") && (
         <section className="work-section">
-          <h2>Cómo viene el trabajo</h2>
+          <h2>Procesos</h2>
           <p className="subtitle">
-            Cuánto tarda cada etapa, cuánto vuelve en la revisión y dónde se frena cada proceso.
+            Lo que sabemos hacer: cada proceso con cómo se hace, lo que está en curso y las veces que se hizo.
           </p>
-          <p><Link className="card-link" href="/trabajo">Abrir el tablero del trabajo →</Link></p>
+          <p><Link className="card-link" href="/procesos">Ver los procesos →</Link></p>
         </section>
       )}
 

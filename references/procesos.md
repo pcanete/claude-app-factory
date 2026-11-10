@@ -217,9 +217,12 @@ propia conversación. El enlace compartido lo abre cualquiera del equipo; el de 
 navegador, sólo su dueño. Y la receta es lo que la IA reporta de la conversación, no la
 conversación misma: por eso se le muestra a la persona antes de guardarla.
 
-En el panel, **Lo que sabemos hacer** lista cada proceso con su versión vigente y sus
-iteraciones; cada iteración muestra el resultado, la conversación, la receta y, en las
-reproducciones, si salió igual.
+En el panel, **Procesos** lista cada proceso con su versión vigente, sus iteraciones y los
+casos en curso. La página de cada uno junta todo lo suyo: cómo se hace, lo que está en curso, las
+iteraciones —con el resultado, la conversación, la receta y, en las reproducciones, si salió
+igual— y, para quien administra, cómo rinde y el enlace a la definición. Las vistas técnicas del
+motor (casos en curso de todos los procesos, bitácora, definiciones, tablero) salieron del menú y
+siguen abriéndose por su dirección.
 
 La familia de un proceso —todas sus versiones— la da la clave `proceso` de la definición; si no
 la declara, sale del nombre sin el « vN» del final.

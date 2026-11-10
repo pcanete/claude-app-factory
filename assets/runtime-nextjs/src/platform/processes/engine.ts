@@ -1093,6 +1093,45 @@ async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: 
   return iteraciones;
 }
 
+const ESTADO_LEGIBLE: Record<string, string> = {
+  en_cola: "En cola",
+  tomada: "Tomado",
+  esperando: "Esperando",
+  en_revision: "En revisión",
+  devuelta: "Devuelto",
+};
+
+/** Los casos abiertos de una familia que todavía no son una iteración: trabajo en curso. */
+async function enCursoDeFamilia(procesos: Record<string, unknown>[], quien: Identidad) {
+  const porId = new Map(procesos.map((proceso) => [String(proceso.id), proceso]));
+  const casos = (await Promise.all(procesos.flatMap((proceso) => ESTADOS_ACTIVOS.map((estado) => listRecords("instancia", {
+    filters: { proceso_id: String(proceso.id), estado },
+    sort: "updated_at",
+    direction: "desc",
+    limit: 100,
+    access: quien.access,
+  }))))).flat();
+  const abiertos = casos.filter((caso) => !esIteracion(caso, ultimaEtapaDe(porId.get(String(caso.proceso_id)) ?? {})));
+  const nombres = await nombresDePersonas(abiertos.map((caso) => caso.tomada_por));
+  return abiertos
+    .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))
+    .map((caso) => {
+      const proceso = porId.get(String(caso.proceso_id)) ?? {};
+      const validacion = validarDefinicion(proceso.definicion, rolesDeLaAplicacion());
+      const etapa = validacion.ok ? etapaPorOrden(validacion.definicion, Number(caso.etapa)) : null;
+      const total = validacion.ok ? validacion.definicion.etapas.length : null;
+      return {
+        caso: String(caso.id),
+        titulo: String(caso.titulo),
+        version: versionDe(proceso),
+        etapa: etapa ? `${etapa.orden}${total ? ` de ${total}` : ""} · ${etapa.nombre}` : `Etapa ${String(caso.etapa)}`,
+        estado: ESTADO_LEGIBLE[String(caso.estado)] ?? String(caso.estado),
+        quien: typeof caso.tomada_por === "string" ? nombres.get(caso.tomada_por) ?? null : null,
+        actualizado: caso.updated_at,
+      };
+    });
+}
+
 export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: string, limite = 50) {
   exigirAlcance(agent, "records:read");
   const quien = identidad(agent);
@@ -1106,6 +1145,7 @@ export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: strin
     vigente: { id: actual.id, version: versionDe(actual), estado: actual.estado },
     versiones: procesos.map((p) => ({ id: p.id, version: versionDe(p), estado: p.estado })).sort((a, b) => b.version - a.version),
     iteraciones: await iteracionesDeFamilia(procesos, quien, limite),
+    en_curso: await enCursoDeFamilia(procesos, quien),
   };
 }
 
@@ -1156,6 +1196,9 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
   return [...familias.entries()].map(([clave, versiones]) => {
     const ultima = new Map(versiones.map((v) => [String(v.id), ultimaEtapaDe(v)]));
     const propios = casos.filter((caso) => ultima.has(String(caso.proceso_id)) && esIteracion(caso, ultima.get(String(caso.proceso_id))));
+    const enCurso = casos.filter((caso) => ultima.has(String(caso.proceso_id))
+      && (ESTADOS_ACTIVOS as readonly string[]).includes(String(caso.estado))
+      && !esIteracion(caso, ultima.get(String(caso.proceso_id)))).length;
     const actual = vigente(versiones) ?? versiones.sort((a, b) => versionDe(b) - versionDe(a))[0];
     const definicion = esObjeto(actual.definicion) ? actual.definicion : {};
     return {
@@ -1165,6 +1208,7 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
       version: versionDe(actual),
       estado: String(actual.estado),
       iteraciones: propios.length,
+      en_curso: enCurso,
       ultima: propios[0]?.created_at ?? null,
     };
   }).sort((a, b) => String(b.ultima ?? "").localeCompare(String(a.ultima ?? "")));
