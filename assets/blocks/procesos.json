@@ -232,6 +232,10 @@
             {
               "key": "reasignada",
               "label": "Reasignada"
+            },
+            {
+              "key": "cancelada",
+              "label": "Cancelada"
             }
           ]
         },

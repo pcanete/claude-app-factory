@@ -806,6 +806,42 @@ export async function verCaso(agent: AgentPrincipal, id: string) {
 }
 
 /**
+ * Cancela un caso que ya no se va a hacer: una prueba que quedó colgada, un pedido que se
+ * cayó. Lo decide quien administra y con un motivo, que queda en la bitácora. No borra
+ * nada: el caso y lo que se hizo siguen a la vista, sólo que nadie lo toma ni lo revisa.
+ *
+ * Existe porque «Devolver» no alcanza: devolver es «corregí esto», y la máquina que recibe
+ * «descartar» como motivo de devolución hace bien en preguntar qué corregir.
+ */
+export async function cancelarCaso(agent: AgentPrincipal, id: string, motivo: string, agentEventId?: string) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  if (!quien.administra) throw new Error("Cancelar un caso lo decide quien administra.");
+  if (!motivo.trim()) throw new Error("Para cancelar hay que decir el motivo: queda en la bitácora.");
+  const tipos = getEntity("evento")?.fields.find((campo) => campo.key === "tipo")?.options?.map((opcion) => opcion.key) ?? [];
+  if (!tipos.includes("cancelada")) {
+    throw new Error("Esta aplicación todavía no registra cancelaciones: hay que sumar «cancelada» a los tipos de evento en la AppSpec.");
+  }
+  await withTransaction(async (client) => {
+    const caso = await cargarCaso(id, quien, client, true);
+    const estado = String(caso.instancia.estado);
+    if (estado === "entregada" || estado === "cancelada") throw new Error(`El caso ya está ${estado}: no hay nada que cancelar.`);
+    const escritura: Escritura = { agent, agentEventId, quien, client };
+    await moverCaso(escritura, caso.instancia, { estado: "cancelada", tomada_por: null });
+    await registrarEvento(escritura, {
+      resumen: `Cancelado: ${motivo}`.slice(0, 500),
+      tipo: "cancelada",
+      etapa: caso.etapa.orden,
+      autor: quien.persona,
+      salidas: { motivo, estado_anterior: estado },
+      instancia: id,
+    });
+  });
+  revalidar(id);
+  return { caso: id, estado: "cancelada", mensaje: "Quedó cancelado. Lo que se hizo sigue en la bitácora." };
+}
+
+/**
  * Lo que una persona tiene para decidir, con lo necesario para decidirlo sin abrir
  * carpetas ni saber de IA: qué se pidió, qué dejó la etapa, contra qué juzgarlo y, si la
  * etapa pide elegir, las opciones.

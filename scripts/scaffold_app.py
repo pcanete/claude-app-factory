@@ -43,7 +43,7 @@ RULE_VALUE_OPERATORS = {"eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in", "
 RULE_STATE_OPERATORS = {"is_empty", "is_not_empty", "changed", "not_changed"}
 # Capacidades administrativas: se declaran por rol en vez de inferirse de que un
 # rol tenga todos los permisos sobre todas las entidades.
-PLATFORM_VERSION = "1.8.0"
+PLATFORM_VERSION = "1.9.0"
 
 CAPABILITIES = {"manage_users", "view_audit", "view_rules"}
 SYSTEM_FIELDS = {"id", "created_at", "updated_at"}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Receta } from "@/components/process-output";
 import { SubirLaminas } from "@/components/subir-laminas";
+import { cancelarCasoAction } from "../actions";
 import { canViewAudit, hasPermission, requireUser } from "@/lib/auth";
 import { USER_SCOPES } from "@/platform/mcp/store";
 import { tableroDeProceso } from "@/platform/processes/dashboard";
@@ -35,10 +36,19 @@ const horas = (valor: number | null) => {
  * entradas del menú —casos en curso, bitácora, definiciones, tablero— que mostraban cómo
  * está guardado el trabajo y no lo que alguien viene a hacer.
  */
-export default async function ProcesoPage({ params }: { params: Promise<{ familia: string }> }) {
+export default async function ProcesoPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ familia: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireUser();
   if (!motorDisponible() || !hasPermission(user, "proceso", "list")) notFound();
   const { familia } = await params;
+  const consulta = await searchParams;
+  const aviso = typeof consulta.hecho === "string" ? consulta.hecho : null;
+  const fallo = typeof consulta.error === "string" ? consulta.error : null;
   const persona = { id: user.id, name: user.displayName, roleKey: user.roleKey, scopes: [...USER_SCOPES], kind: "user" as const };
 
   let datos: Awaited<ReturnType<typeof iteracionesDeProceso>>;
@@ -69,6 +79,9 @@ export default async function ProcesoPage({ params }: { params: Promise<{ famili
         </div>
       </div>
 
+      {aviso && <div className="notice success">{aviso}</div>}
+      {fallo && <div className="notice error">{fallo}</div>}
+
       <div className="notice">
         Para hacerlo desde cualquier IA conectada a esta aplicación, pedile «hacé {datos.nombre}»: recibe esta receta.
         Para mejorarlo: «mirá las iteraciones de {datos.nombre} y proponé la versión siguiente».
@@ -91,6 +104,17 @@ export default async function ProcesoPage({ params }: { params: Promise<{ famili
                 <span className="table-secondary">
                   Etapa {caso.etapa} · {caso.estado}{caso.quien ? ` · lo tiene ${caso.quien}` : ""}
                 </span>
+                {administra && (
+                  <details className="case-cancel">
+                    <summary>Cancelar</summary>
+                    <form action={cancelarCasoAction}>
+                      <input name="caso" type="hidden" value={caso.caso} />
+                      <input name="familia" type="hidden" value={familia} />
+                      <input className="control" maxLength={1000} name="motivo" placeholder="Por qué ya no se hace" required />
+                      <button className="button danger" type="submit">Cancelar el caso</button>
+                    </form>
+                  </details>
+                )}
               </li>
             ))}
           </ul>
