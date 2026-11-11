@@ -62,7 +62,27 @@ export type Etapa = {
   eleccion?: { opciones: string; guarda: string };
 };
 
+/**
+ * La ficha de un proceso, escrita para personas: lo que un compañero necesita saber para
+ * entender cómo se hace algo sin leer la guía, que está escrita para la IA.
+ */
+export type Ficha = {
+  /** Qué hace, en una línea. Es lo que muestra la tarjeta del proceso. */
+  resumen?: string;
+  /** Qué hay que darle para empezar. */
+  entrada?: string;
+  /** Qué entrega. */
+  entrega?: string;
+  /** Qué tiene que tener la máquina donde se hace. */
+  necesita?: string[];
+  /** La frase para pedírselo a una IA. */
+  pedido_ejemplo?: string;
+  /** La skill con la que se hace: nombre, versión y, si está publicada, su repositorio. */
+  skill?: { nombre: string; version?: string; repo?: string };
+};
+
 export type Definicion = {
+  ficha?: Ficha;
   proposito?: string;
   donde_vive_el_resultado?: string;
   /** El formulario del pedido: lo que tiene que estar antes de que el caso exista. */
@@ -122,6 +142,28 @@ export function validarDefinicion(
     if (!esObjeto(valor.pedido)) errores.push("pedido tiene que ser un objeto.");
     else if (valor.pedido.entradas !== undefined && !esObjeto(valor.pedido.entradas)) {
       errores.push("pedido.entradas tiene que ser un objeto: clave → descripción.");
+    }
+  }
+
+  if (valor.ficha !== undefined) {
+    const ficha = valor.ficha;
+    if (!esObjeto(ficha)) errores.push("ficha tiene que ser un objeto.");
+    else {
+      for (const campo of ["resumen", "entrada", "entrega", "pedido_ejemplo"] as const) {
+        if (ficha[campo] !== undefined && !textoNoVacio(ficha[campo])) errores.push(`ficha.${campo} tiene que ser un texto.`);
+      }
+      if (textoNoVacio(ficha.resumen) && ficha.resumen.length > 200) {
+        errores.push("ficha.resumen es lo que se lee en la tarjeta del proceso: una línea, hasta 200 caracteres.");
+      }
+      if (ficha.necesita !== undefined && !listaDeTextos(ficha.necesita)) errores.push("ficha.necesita tiene que ser una lista de textos.");
+      if (ficha.skill !== undefined) {
+        const skill = ficha.skill;
+        if (!esObjeto(skill) || !textoNoVacio(skill.nombre)) errores.push("ficha.skill necesita nombre.");
+        else {
+          if (skill.version !== undefined && !textoNoVacio(skill.version)) errores.push("ficha.skill.version tiene que ser un texto, por ejemplo «2».");
+          if (skill.repo !== undefined && !esUrl(skill.repo)) errores.push("ficha.skill.repo tiene que ser la dirección (https://…) del repositorio.");
+        }
+      }
     }
   }
 
@@ -328,6 +370,41 @@ export function validarCierre(etapa: Etapa, cierre: {
   return faltas;
 }
 
+/**
+ * Una línea para la tarjeta de un proceso que no tiene ficha: la primera oración de su
+ * propósito, recortada. El propósito está escrito para la IA y puede ocupar una pantalla.
+ */
+export function resumenCorto(texto: unknown, maximo = 140) {
+  if (typeof texto !== "string") return "";
+  const limpio = texto.replace(/\s+/g, " ").trim();
+  const oracion = limpio.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? limpio;
+  if (oracion.length <= maximo) return oracion;
+  const corte = oracion.slice(0, maximo);
+  return `${corte.slice(0, Math.max(corte.lastIndexOf(" "), maximo - 30)).replace(/[\s,;:—-]+$/, "")}…`;
+}
+
+/** Con qué skill se hizo una iteración: lo dice la receta, o una herramienta «skill … vN». */
+export function skillDeReceta(receta: unknown) {
+  if (!esObjeto(receta)) return null;
+  if (textoNoVacio(receta.skill)) return receta.skill.trim();
+  const herramientas = Array.isArray(receta.herramientas) ? receta.herramientas : [];
+  const encontrada = herramientas.find((h): h is string => typeof h === "string" && /^skill\s+\S/i.test(h.trim()));
+  return encontrada ? encontrada.trim().replace(/^skill\s+/i, "") : null;
+}
+
+/**
+ * Si una dirección sirve como enlace a la conversación donde se hizo algo. Además de la web,
+ * vale `claude://`: es el enlace que da la app de Claude a una sesión de la propia máquina.
+ */
+export function esEnlaceDeConversacion(valor: unknown) {
+  if (typeof valor !== "string") return false;
+  try {
+    return ["https:", "http:", "claude:"].includes(new URL(valor).protocol);
+  } catch {
+    return false;
+  }
+}
+
 /** Lo que le falta a una receta para que otra persona la pueda seguir. Vacía: está completa. */
 export function faltasDeReceta(valor: unknown) {
   const faltas: string[] = [];
@@ -347,6 +424,9 @@ export function faltasDeReceta(valor: unknown) {
   }
   if (receta.prompts !== undefined && !listaDeTextos(receta.prompts)) {
     faltas.push("receta.prompts: tiene que ser una lista con los prompts textuales que funcionaron.");
+  }
+  if (receta.skill !== undefined && !textoNoVacio(receta.skill)) {
+    faltas.push("receta.skill: con qué skill y versión se hizo, por ejemplo «carrusel-p3-negocios v2».");
   }
   if (receta.descartes !== undefined && !listaDeTextos(receta.descartes)) {
     faltas.push("receta.descartes: tiene que ser una lista de lo que se probó y no funcionó.");
@@ -390,6 +470,8 @@ export type Receta = {
   modelo: string;
   decisiones: string[];
   prompts?: string[];
+  /** Con qué skill y versión se hizo, si se hizo con una. */
+  skill?: string;
   descartes?: string[];
   fallos?: string[];
 };

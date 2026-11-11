@@ -286,7 +286,7 @@ tbody tr:hover { background: #1a1d25; }
 .badge { display: inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .badge.ok { border-color: color-mix(in srgb, #22c58b 50%, var(--border)); color: #9ce8ca; }
 .badge.warn { border-color: color-mix(in srgb, #f0b34a 55%, var(--border)); color: #f5d48f; }
-.process-name { margin: 6px 0; font-size: 17px; }
+.process-name { margin: 0; font-size: 17px; }
 .process-purpose { margin: 0 0 8px; }
 .process-guide { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 12px 16px; }
 .process-guide summary { cursor: pointer; font-weight: 700; }
@@ -302,8 +302,31 @@ tbody tr:hover { background: #1a1d25; }
 .iteration-gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .upload-slides { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 13px; }
 .upload-slides .control { max-width: 320px; }
-.iteration { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px 18px; margin-top: 12px; display: grid; gap: 10px; }
-.iteration h3 { margin: 4px 0 0; font-size: 16px; }
+/* Procesos: tarjetas que se leen de un vistazo, con lo último que salió como portada. */
+.process-grid, .iteration-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); align-items: start; }
+.process-card, .iteration { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; display: block; color: inherit; text-decoration: none; }
+.process-card:hover { border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); }
+.process-cover { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 170px; background: var(--field); }
+.process-cover img { width: 100%; height: 170px; object-fit: cover; display: block; }
+.process-cover.empty-cover { place-items: center; color: var(--muted); font-size: 13px; height: 90px; }
+.process-card-body, .iteration-body { padding: 14px 16px 16px; display: grid; gap: 8px; }
+.process-summary { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.process-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; color: var(--muted); font-size: 12px; }
+.badge.accent { border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); color: var(--primary); }
+.button.small { padding: 5px 10px; font-size: 12px; min-height: 0; }
+.process-sheet { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 18px; display: grid; gap: 14px; }
+.sheet-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.sheet-item { background: var(--surface-raised); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; align-content: start; font-size: 13px; }
+.sheet-value { font-size: 14px; color: var(--text); line-height: 1.4; }
+.sheet-ask { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+.sheet-ask code { color: var(--text); }
+.sheet-foot { margin: 0; color: var(--muted); font-size: 12px; }
+.process-sheet .process-guide { border: 0; padding: 0; background: transparent; }
+.process-sheet .process-guide summary { font-weight: 400; font-size: 13px; color: var(--primary); }
+.iteration-grid .iteration:has(details[open]) { grid-column: 1 / -1; }
+.iteration:has(details[open]) .process-cover { display: none; }
+.iteration-recipe .iteration-gallery, .iteration-recipe .upload-slides { margin-top: 12px; }
+.iteration h3 { margin: 0; font-size: 15px; line-height: 1.35; }
 .iteration-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .iteration-links { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
 .iteration-missing { margin: 0; color: #f5d48f; }

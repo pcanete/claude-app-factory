@@ -104,6 +104,28 @@ siguiente, y cada caso sigue con la versión con la que nació.
 | `requiere` | Lo que tiene que tener la máquina que la trabaja, por ejemplo `["hyperframes"]` o `["higgsfield"]`. Sólo la ve en `mis_pendientes`, y sólo la puede tomar, quien lo declara en `herramientas`. Una IA de navegador no declara nada, así que no toma una etapa que necesita renderizar en local |
 | `eleccion` | `{ "opciones": "<salida>", "guarda": "<clave>" }`: la etapa deja una lista de opciones y una persona elige una. La elegida queda como `guarda` para las etapas siguientes. Exige revisión `humana` o `ambas` y al menos dos opciones al cerrar |
 
+### La ficha
+
+La guía de un proceso está escrita para la IA. La `ficha` es lo mismo dicho para personas: lo
+que un compañero necesita para entender cómo se hace algo. Es opcional y va en la raíz de la
+definición:
+
+```json
+"ficha": {
+  "resumen": "El negocio de un deportista contado en 7 a 9 láminas, con fotos reales.",
+  "entrada": "Un deportista o una historia de negocios.",
+  "entrega": "9 láminas de 1080×1350, caption y texto alternativo.",
+  "necesita": ["carousel-builder", "Dropbox sincronizado"],
+  "pedido_ejemplo": "Hacé un carrusel de P3 Negocios sobre …",
+  "skill": { "nombre": "carrusel-p3-negocios", "version": "2", "repo": "https://github.com/…" }
+}
+```
+
+`resumen` es una línea (hasta 200 caracteres) y es lo que muestra la tarjeta del proceso; sin
+ficha, la tarjeta muestra la primera oración del propósito. `skill.repo` es opcional: aparece
+como «Ver en GitHub» cuando la skill está publicada. Cada iteración dice con qué skill y versión
+se hizo (`receta.skill`, o una herramienta «skill … vN»).
+
 `validar_proceso` revisa una definición contra estas reglas y contra los roles de la aplicación,
 sin guardar nada.
 
@@ -214,17 +236,17 @@ queda para que lo apruebe quien administra, con la receta a la vista, y si creó
 proceso nace en borrador y se publica con esa aprobación. Una reproducción no se aprueba: es una
 prueba de la receta.
 
-La conversación de origen la tiene que pasar la persona: una IA no conoce la dirección de su
-propia conversación. El enlace compartido lo abre cualquiera del equipo; el de la barra del
+La conversación de origen puede ser un enlace web o uno `claude://`, el que da la app de Claude a
+una sesión de la propia máquina. Si la IA no puede averiguarlo, lo pasa la persona. El enlace compartido lo abre cualquiera del equipo; el de la barra del
 navegador, sólo su dueño. Y la receta es lo que la IA reporta de la conversación, no la
 conversación misma: por eso se le muestra a la persona antes de guardarla.
 
-En el panel, **Procesos** lista cada proceso con su versión vigente, sus iteraciones y los
-casos en curso. La página de cada uno junta todo lo suyo: cómo se hace, lo que está en curso, las
-iteraciones —con el resultado, la conversación, la receta y, en las reproducciones, si salió
-igual— y, para quien administra, cómo rinde y el enlace a la definición. Las vistas técnicas del
-motor (casos en curso de todos los procesos, bitácora, definiciones, tablero) salieron del menú y
-siguen abriéndose por su dirección.
+En el panel, **Procesos** muestra una tarjeta por proceso: como portada, las primeras imágenes de
+la última pieza; debajo, qué hace en una línea, la versión de la skill y cuántas veces se hizo. La
+página de cada uno abre con la ficha —con qué skill, qué hay que darle, qué entrega, qué necesita,
+la frase para pedírselo a una IA y quién lo sabe hacer— y sigue con las iteraciones como galería:
+cada pieza con sus imágenes, quién la hizo, con qué versión, la carpeta y la conversación donde se
+hizo. Para quien administra siguen estando lo que está en curso, cómo rinde y la definición.
 
 La familia de un proceso —todas sus versiones— la da la clave `proceso` de la definición; si no
 la declara, sale del nombre sin el « vN» del final.

@@ -27,6 +27,9 @@ import {
   destinoTrasAprobar,
   destinoTrasCerrar,
   entradasFaltantes,
+  esEnlaceDeConversacion,
+  resumenCorto,
+  skillDeReceta,
   herramientasQueFaltan,
   opcionesParaElegir,
   puedeRevisar,
@@ -268,6 +271,40 @@ comprobar("la guía trae los prompts tal cual, también los de varias líneas",
 comprobar("la guía trae los pasos y la última vez que salió bien",
   guiaReceta.includes("1. Elegir la nota") && guiaReceta.includes("La frustración de Russell") && guiaReceta.includes("https://x.y/z"));
 comprobar("la guía dice cómo registrar la reproducción", guiaReceta.includes("registrar_iteracion") && guiaReceta.includes("reproducción"));
+
+// --- La ficha del proceso, para personas -------------------------------------------------
+const conFicha = (ficha) => validarDefinicion({ ficha, etapas: [conEleccion.etapas[1] && { ...conEleccion.etapas[1], orden: 1, entradas_visibles: [] }] }, roles);
+const fichaBuena = conFicha({
+  resumen: "El negocio de un deportista en 9 láminas.",
+  entrada: "Un deportista", entrega: "9 láminas", necesita: ["carousel-builder"],
+  pedido_ejemplo: "Hacé un carrusel de P3 Negocios sobre …",
+  skill: { nombre: "carrusel-p3-negocios", version: "2", repo: "https://github.com/x/y" },
+});
+comprobar("una ficha completa valida", fichaBuena.ok, JSON.stringify(fichaBuena.errores ?? []));
+comprobar("una ficha con skill sin repositorio también", conFicha({ skill: { nombre: "x" } }).ok);
+const fichaMala = conFicha({ resumen: "x".repeat(201), necesita: "node", skill: { version: "2", repo: "github.com/x" } });
+comprobar("rechaza un resumen de más de una línea, necesita que no es lista y skill sin nombre",
+  !fichaMala.ok && fichaMala.errores.some((e) => e.includes("ficha.resumen")) && fichaMala.errores.some((e) => e.includes("ficha.necesita"))
+  && fichaMala.errores.some((e) => e.includes("ficha.skill")), JSON.stringify(fichaMala.errores ?? []));
+const repoMalo = conFicha({ skill: { nombre: "x", repo: "github.com/x" } });
+comprobar("el repositorio de la skill tiene que ser una dirección web", !repoMalo.ok && repoMalo.errores.some((e) => e.includes("skill.repo")));
+
+const largo = "Producir un carrusel de Instagram para P3 Negocios: una cuenta sobre los negocios y las inversiones de los deportistas. Cada pieza cuenta una historia. Si te falta algo, llamá esperar_caso.";
+comprobar("sin ficha, la tarjeta muestra sólo la primera oración del propósito",
+  resumenCorto(largo, 200) === "Producir un carrusel de Instagram para P3 Negocios: una cuenta sobre los negocios y las inversiones de los deportistas.");
+const recortado = resumenCorto(largo, 60);
+comprobar("una primera oración larga se recorta en una palabra entera, con puntos suspensivos",
+  recortado.length <= 61 && recortado.endsWith("…") && !recortado.includes("esperar_caso") && largo.startsWith(recortado.slice(0, -1)), recortado);
+comprobar("un propósito que no es texto no rompe", resumenCorto(undefined) === "" && resumenCorto("Corto") === "Corto");
+
+comprobar("la skill de una iteración sale de la receta", skillDeReceta({ skill: " carrusel-p3-negocios v2 " }) === "carrusel-p3-negocios v2");
+comprobar("o de una herramienta «skill …»", skillDeReceta({ herramientas: ["carousel-builder", "skill carrusel-p3-negocios v1"] }) === "carrusel-p3-negocios v1");
+comprobar("una receta sin skill no inventa una", skillDeReceta({ herramientas: ["carousel-builder", "skills varias"] }) === null && skillDeReceta(null) === null);
+
+comprobar("la conversación acepta enlaces web y de la app de Claude",
+  esEnlaceDeConversacion("https://claude.ai/share/abc") && esEnlaceDeConversacion("claude://claude.ai/epitaxy/local_1"));
+comprobar("y no acepta otros esquemas ni texto suelto",
+  !esEnlaceDeConversacion("javascript:alert(1)") && !esEnlaceDeConversacion("file:///c:/x") && !esEnlaceDeConversacion("la de ayer") && !esEnlaceDeConversacion(undefined));
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);

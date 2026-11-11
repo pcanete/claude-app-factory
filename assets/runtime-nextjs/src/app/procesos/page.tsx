@@ -6,11 +6,12 @@ import { familiasDeProcesos, motorDisponible } from "@/platform/processes/engine
 
 export const dynamic = "force-dynamic";
 
-const fecha = (valor: unknown) => (valor ? new Date(String(valor)).toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" }) : null);
+const fecha = (valor: unknown) => (valor ? new Date(String(valor)).toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : null);
 
 /**
- * Lo que la organización sabe hacer: cada proceso con su versión vigente y cuántas veces
- * se hizo. Es la memoria del método: lo que salió bien queda acá, con cómo se hizo.
+ * Lo que la organización sabe hacer. Cada tarjeta se lee de un vistazo: lo último que salió,
+ * qué hace en una línea, con qué skill y cuántas veces se hizo. La guía completa, que está
+ * escrita para la IA, no va acá.
  */
 export default async function ProcesosPage() {
   const user = await requireUser();
@@ -29,28 +30,41 @@ export default async function ProcesosPage() {
         <div>
           <p className="eyebrow">Procesos</p>
           <h1>Lo que sabemos hacer</h1>
-          <p className="subtitle">
-            Cada proceso es cómo se hace algo que ya salió bien, y sus iteraciones son las veces que se hizo.
-            Para sumar uno, pedile a tu IA «registrá esto en Operaciones» al terminar algo que te quedó bien.
-          </p>
+          <p className="subtitle">Cada proceso es algo que ya salió bien: cómo se hace, y las veces que se hizo.</p>
         </div>
       </div>
       {familias.length === 0 ? (
-        <div className="empty">Todavía no hay procesos registrados.</div>
+        <div className="empty">
+          Todavía no hay procesos. Cuando algo te quede bien, pedile a tu IA «registrá esto en Operaciones».
+        </div>
       ) : (
-        <div className="grid">
+        <div className="process-grid">
           {familias.map((familia) => (
-            <article className="card" key={familia.familia}>
-              <div className="card-label">v{familia.version}{familia.estado !== "publicado" ? ` · ${familia.estado}` : ""}</div>
-              <h3 className="process-name">{familia.nombre}</h3>
-              {familia.proposito && <p className="subtitle process-purpose">{familia.proposito}</p>}
-              <div className="table-secondary">
-                {familia.iteraciones === 1 ? "1 iteración" : `${familia.iteraciones} iteraciones`}
-                {familia.en_curso ? ` · ${familia.en_curso} en curso` : ""}
-                {familia.ultima ? ` · la última, ${fecha(familia.ultima)}` : ""}
+            <Link className="process-card" href={`/procesos/${familia.familia}`} key={familia.familia}>
+              <div className={`process-cover${familia.miniaturas.length ? "" : " empty-cover"}`}>
+                {familia.miniaturas.length
+                  ? familia.miniaturas.map((imagen) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos
+                    <img alt="" key={imagen.id} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
+                  ))
+                  : <span>Sin piezas todavía</span>}
               </div>
-              <Link className="card-link" href={`/procesos/${familia.familia}`}>Ver iteraciones →</Link>
-            </article>
+              <div className="process-card-body">
+                <h3 className="process-name">{familia.nombre}</h3>
+                {familia.resumen && <p className="process-summary">{familia.resumen}</p>}
+                <div className="process-meta">
+                  {familia.skill
+                    ? <span className="badge accent">skill{familia.skill.version ? ` v${familia.skill.version}` : ""}</span>
+                    : <span className="badge">v{familia.version}</span>}
+                  {familia.estado !== "publicado" && <span className="badge warn">{familia.estado}</span>}
+                  <span>
+                    {familia.iteraciones === 1 ? "1 iteración" : `${familia.iteraciones} iteraciones`}
+                    {familia.ultima ? ` · ${fecha(familia.ultima)}` : ""}
+                    {familia.en_curso ? ` · ${familia.en_curso} en curso` : ""}
+                  </span>
+                </div>
+              </div>
+            </Link>
           ))}
         </div>
       )}
