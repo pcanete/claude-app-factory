@@ -303,6 +303,13 @@ tbody tr:hover { background: #1a1d25; }
 .upload-slides { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 13px; }
 .upload-slides .control { max-width: 320px; }
 /* Procesos: tarjetas que se leen de un vistazo, con lo último que salió como portada. */
+.view-switch { display: inline-flex; margin-left: auto; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.view-switch a { padding: 8px 12px; font-size: 13px; color: var(--muted); text-decoration: none; }
+.view-switch a.active { background: var(--primary-soft); color: var(--text); }
+.header-danger { position: relative; }
+.header-danger summary { list-style: none; cursor: pointer; }
+.header-danger summary::-webkit-details-marker { display: none; }
+.header-danger form { position: absolute; right: 0; top: calc(100% + 8px); z-index: 5; width: 320px; display: grid; gap: 8px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .process-grid, .iteration-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); align-items: start; }
 .process-card, .iteration { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; display: block; color: inherit; text-decoration: none; }
 .process-card:hover { border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); }

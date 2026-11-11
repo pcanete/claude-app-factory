@@ -241,6 +241,22 @@ una sesión de la propia máquina. Si la IA no puede averiguarlo, lo pasa la per
 navegador, sólo su dueño. Y la receta es lo que la IA reporta de la conversación, no la
 conversación misma: por eso se le muestra a la persona antes de guardarla.
 
+**Procesos se maneja como cualquier listado.** Buscar por nombre, qué hace o skill; filtrar por
+estado (vigentes por defecto, o publicados, borradores, retirados, todos); ordenar por la última
+iteración, el nombre o la cantidad; y verlo como tarjetas o como lista. Lo mismo para las
+iteraciones de un proceso: buscar por título, filtrar por persona, por origen (así se hizo o
+reproducción) y por versión, y verlas como galería o como lista.
+
+**Alta, modificación y baja**, sólo para quien administra (`manage_users`):
+
+- **Nuevo proceso**: el formulario de la ficha. Nace publicado como v1, con una etapa que se hace
+  con la skill que la ficha nombra. No se puede crear dos veces el mismo.
+- **Editar ficha**: publica la versión siguiente con la ficha nueva y retira la anterior. Una
+  versión publicada no se toca: los casos que la usaron la siguen leyendo. La clave de la familia
+  queda fija, así que renombrar no la parte en dos.
+- **Retirar**: retira todas las versiones, con un motivo. No borra nada. No se puede con casos en
+  curso: primero se terminan o se cancelan. **Reactivar** vuelve a publicar la última versión.
+
 En el panel, **Procesos** muestra una tarjeta por proceso: como portada, las primeras imágenes de
 la última pieza; debajo, qué hace en una línea, la versión de la skill y cuántas veces se hizo. La
 página de cada uno abre con la ficha —con qué skill, qué hay que darle, qué entrega, qué necesita,

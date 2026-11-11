@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { Copiar } from "@/components/copiar";
 import { Receta } from "@/components/process-output";
 import { SubirLaminas } from "@/components/subir-laminas";
-import { cancelarCasoAction } from "../actions";
-import { canViewAudit, hasPermission, requireUser } from "@/lib/auth";
+import { VistaSelector } from "@/components/vista-selector";
+import { cancelarCasoAction, reactivarProcesoAction, retirarProcesoAction } from "../actions";
+import { canManageUsers, canViewAudit, hasPermission, requireUser } from "@/lib/auth";
 import { USER_SCOPES } from "@/platform/mcp/store";
 import { tableroDeProceso } from "@/platform/processes/dashboard";
 import { comoSeHace, iteracionesDeProceso, motorDisponible } from "@/platform/processes/engine";
@@ -62,6 +63,23 @@ export default async function ProcesoPage({
   const administra = canViewAudit(user);
   const rendimiento = administra ? await tableroDeProceso(String(datos.vigente.id)).catch(() => null) : null;
   const ficha = datos.ficha;
+  const gestiona = canManageUsers(user);
+  const retirado = datos.versiones.every((v) => v.estado === "retirado");
+  const uno = (valor: string | string[] | undefined) => (Array.isArray(valor) ? valor[0] : valor) ?? "";
+  const filtros = {
+    q: uno(consulta.q).trim(),
+    quien: uno(consulta.quien),
+    origen: uno(consulta.origen),
+    version: uno(consulta.version),
+    vista: uno(consulta.vista) === "lista" ? "lista" : "galeria",
+  };
+  const personas = [...new Set(datos.iteraciones.map((it) => it.quien).filter((q): q is string => Boolean(q)))];
+  const iteraciones = datos.iteraciones
+    .filter((it) => !filtros.q || it.titulo.toLowerCase().includes(filtros.q.toLowerCase()))
+    .filter((it) => !filtros.quien || it.quien === filtros.quien)
+    .filter((it) => !filtros.origen || (filtros.origen === "reproduccion" ? it.origen === "reproduccion" : it.origen !== "reproduccion"))
+    .filter((it) => !filtros.version || String(it.version) === filtros.version);
+  const filtrando = Boolean(filtros.q || filtros.quien || filtros.origen || filtros.version);
   const pedido = ficha?.pedido_ejemplo ?? `Hacé ${datos.nombre}`;
   const reproducciones = datos.iteraciones.filter((it) => it.origen === "reproduccion");
   const fallidas = reproducciones.filter((it) => it.reproduccion?.salio_igual === false).length;
@@ -70,10 +88,34 @@ export default async function ProcesoPage({
     <>
       <div className="page-header">
         <div>
-          <p className="eyebrow"><Link className="record-link" href="/procesos">Procesos</Link></p>
+          <p className="eyebrow">
+            <Link className="record-link" href="/procesos">Procesos</Link>
+            {retirado ? " · retirado" : ""}
+          </p>
           <h1>{datos.nombre}</h1>
           {datos.resumen && <p className="subtitle">{datos.resumen}</p>}
         </div>
+        {gestiona && (
+          <div className="header-actions">
+            {!retirado && <Link className="button" href={`/procesos/${familia}/editar`}>Editar ficha</Link>}
+            {retirado ? (
+              <form action={reactivarProcesoAction}>
+                <input name="familia" type="hidden" value={familia} />
+                <button className="button secondary" type="submit">Reactivar</button>
+              </form>
+            ) : (
+              <details className="header-danger">
+                <summary className="button secondary">Retirar</summary>
+                <form action={retirarProcesoAction}>
+                  <input name="familia" type="hidden" value={familia} />
+                  <input className="control" maxLength={500} name="motivo" placeholder="Por qué ya no se hace" required />
+                  <button className="button danger" type="submit">Retirar el proceso</button>
+                  <span className="field-help">No borra nada: las iteraciones siguen a la vista.</span>
+                </form>
+              </details>
+            )}
+          </div>
+        )}
       </div>
 
       {aviso && <div className="notice success">{aviso}</div>}
@@ -159,12 +201,77 @@ export default async function ProcesoPage({
       )}
 
       <section className="work-section">
-        <h2>Iteraciones{datos.iteraciones.length ? ` · ${datos.iteraciones.length}` : ""}</h2>
+        <h2>Iteraciones{datos.iteraciones.length ? ` · ${filtrando ? `${iteraciones.length} de ${datos.iteraciones.length}` : datos.iteraciones.length}` : ""}</h2>
+        {datos.iteraciones.length > 0 && (
+          <form className="filter-panel">
+            <div className="filter-primary">
+              <input className="control search" defaultValue={filtros.q} name="q" placeholder="Buscar por título…" type="search" />
+              <select aria-label="Quién" className="control" defaultValue={filtros.quien} name="quien">
+                <option value="">Todas las personas</option>
+                {personas.map((nombre) => <option key={nombre} value={nombre}>{nombre}</option>)}
+              </select>
+              <select aria-label="Origen" className="control" defaultValue={filtros.origen} name="origen">
+                <option value="">Todo</option>
+                <option value="descubrimiento">Así se hizo</option>
+                <option value="reproduccion">Reproducciones</option>
+              </select>
+              {datos.versiones.length > 1 && (
+                <select aria-label="Versión" className="control" defaultValue={filtros.version} name="version">
+                  <option value="">Todas las versiones</option>
+                  {datos.versiones.map((v) => <option key={String(v.id)} value={String(v.version)}>v{v.version}</option>)}
+                </select>
+              )}
+              <input name="vista" type="hidden" value={filtros.vista} />
+              <button className="button" type="submit">Aplicar</button>
+              <Link className="button secondary" href={`/procesos/${familia}?vista=${filtros.vista}`}>Limpiar</Link>
+              <VistaSelector
+                actual={filtros.vista}
+                base={`/procesos/${familia}`}
+                consulta={filtros}
+                opciones={[{ valor: "galeria", etiqueta: "Galería" }, { valor: "lista", etiqueta: "Lista" }]}
+              />
+            </div>
+          </form>
+        )}
         {datos.iteraciones.length === 0 && (
           <div className="empty compact">Todavía no se registró ninguna. Al terminar una pieza, pedile a tu IA «registrá esto en Operaciones».</div>
         )}
+        {datos.iteraciones.length > 0 && iteraciones.length === 0 && (
+          <div className="empty compact">Ninguna iteración coincide con estos filtros.</div>
+        )}
+        {filtros.vista === "lista" && iteraciones.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Pieza</th><th>Fecha</th><th>Quién</th><th>Con qué</th><th>Imágenes</th><th>Enlaces</th></tr>
+              </thead>
+              <tbody>
+                {iteraciones.map((it) => (
+                  <tr key={it.iteracion}>
+                    <td data-label="Pieza">
+                      <Link className="record-link" href={`/procesos/${familia}?vista=galeria&q=${encodeURIComponent(it.titulo)}`}>{it.titulo}</Link>
+                      {it.origen === "reproduccion" && <> <Origen origen={it.origen} reproduccion={it.reproduccion} /></>}
+                      {it.estado === "en_revision" && <> <span className="badge warn">Para aprobar</span></>}
+                    </td>
+                    <td data-label="Fecha">{fecha(it.fecha)}</td>
+                    <td data-label="Quién">{it.quien ?? "—"}</td>
+                    <td data-label="Con qué">{it.skill ?? `guía v${it.version}`}</td>
+                    <td data-label="Imágenes">{it.imagenes.length || "—"}</td>
+                    <td data-label="Enlaces">
+                      <span className="iteration-links">
+                        {it.resultado && <a className="record-link" href={it.resultado} rel="noreferrer" target="_blank">Carpeta</a>}
+                        {it.conversacion && <a className="record-link" href={it.conversacion} rel="noreferrer" target="_blank">Conversación</a>}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {filtros.vista === "galeria" && (
         <div className="iteration-grid">
-          {datos.iteraciones.map((it) => (
+          {iteraciones.map((it) => (
             <article className="iteration" key={it.iteracion}>
               <div className={`process-cover${it.imagenes.length ? "" : " empty-cover"}`}>
                 {it.imagenes.length
@@ -214,6 +321,7 @@ export default async function ProcesoPage({
             </article>
           ))}
         </div>
+        )}
       </section>
 
       {administra && (
