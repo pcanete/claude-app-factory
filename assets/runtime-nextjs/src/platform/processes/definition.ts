@@ -450,8 +450,9 @@ export function claveDeNombre(nombre: string) {
 }
 
 /**
- * La familia de un proceso: todas sus versiones comparten la clave. La declara la
- * definición (`proceso`); si no la declara, sale del nombre sin el « vN» del final.
+ * La clave estable de un proceso. La declara la definición (`proceso`); si no la declara,
+ * sale del nombre. Los procesos anteriores a la plataforma 1.12 guardaban una versión por
+ * registro, con « vN» al final del nombre: comparten clave, y por eso se ven como uno.
  */
 export function familiaDe(proceso: { nombre?: unknown; definicion?: unknown }) {
   const definicion = esObjeto(proceso.definicion) ? proceso.definicion : {};
@@ -459,7 +460,7 @@ export function familiaDe(proceso: { nombre?: unknown; definicion?: unknown }) {
   return claveDeNombre(String(proceso.nombre ?? "").replace(/\s+v\d+\s*$/i, ""));
 }
 
-/** El nombre de una familia para mostrar: el de la versión, sin el « vN». */
+/** El nombre de un proceso para mostrar: sin el « vN» que llevaban los registros viejos. */
 export function nombreDeFamilia(nombre: unknown) {
   return String(nombre ?? "").replace(/\s+v\d+\s*$/i, "").trim();
 }
@@ -478,8 +479,8 @@ export type Receta = {
 
 /**
  * La definición de un proceso que nace de una receta: alguien hizo algo, le quedó bien,
- * y lo registró. Es una sola etapa —hacerlo— cuyas instrucciones son cómo se hizo. La
- * versión siguiente la mejora con lo que muestren las iteraciones.
+ * y lo registró. Es una sola etapa —hacerlo— cuyas instrucciones son cómo se hizo. Se
+ * mejora con lo que muestren las iteraciones.
  */
 export function definicionDesdeReceta(entrada: {
   nombre: string;
@@ -506,7 +507,7 @@ export function definicionDesdeReceta(entrada: {
       ejecutor: "cualquiera",
       grupo: [...new Set(entrada.roles)],
       instrucciones: [
-        `Así se hizo la vez que salió bien, con ${receta.modelo}. Seguilo en ese orden; si algo no funciona igual, anotalo: es lo que mejora la versión siguiente.`,
+        `Así se hizo la vez que salió bien, con ${receta.modelo}. Seguilo en ese orden; si algo no funciona igual, anotalo: es lo que mejora el proceso.`,
         ...prompts,
         ...decisiones,
       ].join("\n"),
@@ -526,7 +527,6 @@ export function definicionDesdeReceta(entrada: {
  */
 export function guiaDeProceso(entrada: {
   nombre: string;
-  version: unknown;
   definicion: Definicion;
   recientes: Array<{
     titulo: string;
@@ -537,7 +537,14 @@ export function guiaDeProceso(entrada: {
   }>;
 }) {
   const { definicion } = entrada;
-  const partes = [`# ${entrada.nombre}`, `Versión vigente: ${String(entrada.version)}.`];
+  const partes = [`# ${entrada.nombre}`];
+  const skill = definicion.ficha?.skill;
+  if (skill?.nombre) {
+    partes.push(
+      "",
+      `Se hace con la skill ${skill.nombre}${skill.repo ? ` (${skill.repo})` : ""}. El método vigente es el de la skill: antes de empezar, traé su última versión. Lo que sigue es el resumen y lo que pasó las últimas veces.`,
+    );
+  }
   if (definicion.proposito) partes.push("", `Para qué: ${definicion.proposito}`);
   for (const etapa of definicion.etapas) {
     partes.push("", definicion.etapas.length > 1 ? `## Etapa ${etapa.orden}: ${etapa.nombre}` : "## Cómo se hace", "", etapa.instrucciones.trim());
@@ -569,7 +576,7 @@ export function guiaDeProceso(entrada: {
     "",
     "## Al terminar",
     "",
-    "Si salió bien, registralo con registrar_iteracion como reproducción de esta versión, diciendo si salió igual y, si no, qué faltó en la receta. Eso es lo que permite mejorar el proceso.",
+    "Si salió bien, registralo con registrar_iteracion como reproducción, diciendo si salió igual y, si no, qué faltó en la receta. En receta.skill poné con qué skill y qué commit se hizo. Eso es lo que permite mejorar el proceso.",
   );
   return partes.join("\n");
 }

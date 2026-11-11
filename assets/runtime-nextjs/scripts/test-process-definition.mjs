@@ -262,10 +262,18 @@ comprobar("los descartes quedan como errores frecuentes", nacida.etapas[0].error
 
 const guiaReceta = guiaDeProceso({
   nombre: "Carrusel P3 · concepto + historia",
-  version: 1,
   definicion: nacida,
   recientes: [{ titulo: "La frustración de Russell", fecha: "2026-11-04", receta: recetaRegistrada, resultado: "https://x.y/z" }],
 });
+comprobar("la guía no habla de versiones del proceso: es uno solo", !/versi[oó]n vigente/i.test(guiaReceta));
+const guiaConSkill = guiaDeProceso({
+  nombre: "Carrusel P3 Negocios",
+  definicion: { ...nacida, ficha: { skill: { nombre: "carrusel-p3-negocios", repo: "https://github.com/x/y" } } },
+  recientes: [],
+});
+comprobar("con skill, la guía manda a la skill y a traer su última versión",
+  guiaConSkill.includes("skill carrusel-p3-negocios (https://github.com/x/y)") && guiaConSkill.includes("traé su última versión"));
+comprobar("y pide el commit de la skill al registrar", guiaConSkill.includes("receta.skill") && guiaConSkill.includes("commit"));
 comprobar("la guía trae los prompts tal cual, también los de varias líneas",
   guiaReceta.includes("> Escribí 6 slides sobre esta nota,") && guiaReceta.includes("> uno por idea"));
 comprobar("la guía trae los pasos y la última vez que salió bien",

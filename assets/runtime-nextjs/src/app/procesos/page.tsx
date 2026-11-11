@@ -105,7 +105,7 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
                 <tr key={familia.familia}>
                   <td data-label="Proceso"><Link className="record-link" href={`/procesos/${familia.familia}`}>{familia.nombre}</Link></td>
                   <td data-label="Qué hace" className="table-secondary">{familia.resumen}</td>
-                  <td data-label="Skill">{familia.skill ? `${familia.skill.nombre}${familia.skill.version ? ` v${familia.skill.version}` : ""}` : `guía v${familia.version}`}</td>
+                  <td data-label="Skill">{familia.skill ? familia.skill.nombre : "guía"}</td>
                   <td data-label="Estado">{ESTADOS[familia.estado] ?? familia.estado}</td>
                   <td data-label="Iteraciones">{familia.iteraciones}{familia.en_curso ? ` · ${familia.en_curso} en curso` : ""}</td>
                   <td data-label="Última">{fecha(familia.ultima) ?? "—"}</td>
@@ -130,9 +130,7 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
                 <h3 className="process-name">{familia.nombre}</h3>
                 {familia.resumen && <p className="process-summary">{familia.resumen}</p>}
                 <div className="process-meta">
-                  {familia.skill
-                    ? <span className="badge accent">skill{familia.skill.version ? ` v${familia.skill.version}` : ""}</span>
-                    : <span className="badge">v{familia.version}</span>}
+                  {familia.skill && <span className="badge accent">skill</span>}
                   {familia.estado !== "publicado" && <span className="badge warn">{ESTADOS[familia.estado] ?? familia.estado}</span>}
                   <span>
                     {familia.iteraciones === 1 ? "1 iteración" : `${familia.iteraciones} iteraciones`}

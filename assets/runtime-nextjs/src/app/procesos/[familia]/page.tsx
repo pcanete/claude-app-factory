@@ -64,22 +64,20 @@ export default async function ProcesoPage({
   const rendimiento = administra ? await tableroDeProceso(String(datos.vigente.id)).catch(() => null) : null;
   const ficha = datos.ficha;
   const gestiona = canManageUsers(user);
-  const retirado = datos.versiones.every((v) => v.estado === "retirado");
+  const retirado = datos.retirado;
   const uno = (valor: string | string[] | undefined) => (Array.isArray(valor) ? valor[0] : valor) ?? "";
   const filtros = {
     q: uno(consulta.q).trim(),
     quien: uno(consulta.quien),
     origen: uno(consulta.origen),
-    version: uno(consulta.version),
     vista: uno(consulta.vista) === "lista" ? "lista" : "galeria",
   };
   const personas = [...new Set(datos.iteraciones.map((it) => it.quien).filter((q): q is string => Boolean(q)))];
   const iteraciones = datos.iteraciones
     .filter((it) => !filtros.q || it.titulo.toLowerCase().includes(filtros.q.toLowerCase()))
     .filter((it) => !filtros.quien || it.quien === filtros.quien)
-    .filter((it) => !filtros.origen || (filtros.origen === "reproduccion" ? it.origen === "reproduccion" : it.origen !== "reproduccion"))
-    .filter((it) => !filtros.version || String(it.version) === filtros.version);
-  const filtrando = Boolean(filtros.q || filtros.quien || filtros.origen || filtros.version);
+    .filter((it) => !filtros.origen || (filtros.origen === "reproduccion" ? it.origen === "reproduccion" : it.origen !== "reproduccion"));
+  const filtrando = Boolean(filtros.q || filtros.quien || filtros.origen);
   const pedido = ficha?.pedido_ejemplo ?? `Hacé ${datos.nombre}`;
   const reproducciones = datos.iteraciones.filter((it) => it.origen === "reproduccion");
   const fallidas = reproducciones.filter((it) => it.reproduccion?.salio_igual === false).length;
@@ -127,11 +125,11 @@ export default async function ProcesoPage({
             <div className="card-label">Cómo se hace</div>
             {ficha?.skill ? (
               <>
-                <div className="sheet-value">skill {ficha.skill.nombre}{ficha.skill.version ? ` v${ficha.skill.version}` : ""}</div>
+                <div className="sheet-value">skill {ficha.skill.nombre}</div>
                 {ficha.skill.repo && <a className="record-link" href={ficha.skill.repo} rel="noreferrer" target="_blank">Ver en GitHub</a>}
               </>
             ) : (
-              <div className="sheet-value">Guía del proceso, versión {datos.vigente.version}</div>
+              <div className="sheet-value">Guía del proceso</div>
             )}
           </div>
           {ficha?.entrada && (
@@ -158,11 +156,10 @@ export default async function ProcesoPage({
           <Copiar texto={pedido} />
         </div>
         <p className="sheet-foot">
-          {datos.saben.length > 0 && <>Lo {datos.saben.length === 1 ? "sabe" : "saben"} hacer: {datos.saben.join(", ")} · </>}
-          versión {datos.vigente.version}{datos.vigente.estado !== "publicado" ? ` (${String(datos.vigente.estado)})` : ""}
-          {datos.versiones.length > 1 ? ` de ${datos.versiones.length}` : ""}
+          {datos.saben.length > 0 && <>Lo {datos.saben.length === 1 ? "sabe" : "saben"} hacer: {datos.saben.join(", ")}</>}
+          {datos.vigente.estado !== "publicado" ? `${datos.saben.length ? " · " : ""}${String(datos.vigente.estado)}` : ""}
           {reproducciones.length
-            ? ` · ${reproducciones.length === 1 ? "1 reproducción" : `${reproducciones.length} reproducciones`}${fallidas ? `, ${fallidas} sin salir igual` : ""}`
+            ? `${datos.saben.length || datos.vigente.estado !== "publicado" ? " · " : ""}${reproducciones.length === 1 ? "1 reproducción" : `${reproducciones.length} reproducciones`}${fallidas ? `, ${fallidas} sin salir igual` : ""}`
             : ""}
         </p>
         {guia && (
@@ -215,12 +212,6 @@ export default async function ProcesoPage({
                 <option value="descubrimiento">Así se hizo</option>
                 <option value="reproduccion">Reproducciones</option>
               </select>
-              {datos.versiones.length > 1 && (
-                <select aria-label="Versión" className="control" defaultValue={filtros.version} name="version">
-                  <option value="">Todas las versiones</option>
-                  {datos.versiones.map((v) => <option key={String(v.id)} value={String(v.version)}>v{v.version}</option>)}
-                </select>
-              )}
               <input name="vista" type="hidden" value={filtros.vista} />
               <button className="button" type="submit">Aplicar</button>
               <Link className="button secondary" href={`/procesos/${familia}?vista=${filtros.vista}`}>Limpiar</Link>
@@ -255,7 +246,7 @@ export default async function ProcesoPage({
                     </td>
                     <td data-label="Fecha">{fecha(it.fecha)}</td>
                     <td data-label="Quién">{it.quien ?? "—"}</td>
-                    <td data-label="Con qué">{it.skill ?? `guía v${it.version}`}</td>
+                    <td data-label="Con qué">{it.skill ?? "—"}</td>
                     <td data-label="Imágenes">{it.imagenes.length || "—"}</td>
                     <td data-label="Enlaces">
                       <span className="iteration-links">
@@ -286,7 +277,7 @@ export default async function ProcesoPage({
                 <div className="process-meta">
                   <span>
                     {fecha(it.fecha)}{it.quien ? ` · ${it.quien}` : ""}
-                    {it.skill ? ` · ${it.skill}` : ` · v${it.version}`}
+                    {it.skill ? ` · ${it.skill}` : ""}
                     {it.imagenes.length ? ` · ${it.imagenes.length} ${it.imagenes.length === 1 ? "imagen" : "imágenes"}` : ""}
                   </span>
                   {it.origen === "reproduccion" && <Origen origen={it.origen} reproduccion={it.reproduccion} />}
@@ -351,10 +342,10 @@ export default async function ProcesoPage({
               </p>
             </>
           ) : (
-            <div className="empty compact">Todavía no hay casos de la versión vigente para medir.</div>
+            <div className="empty compact">Todavía no hay casos para medir.</div>
           )}
           <p className="iteration-links">
-            <Link className="record-link" href={`/records/proceso/${String(datos.vigente.id)}`}>Ver la definición de la versión {datos.vigente.version}</Link>
+            <Link className="record-link" href={`/records/proceso/${String(datos.vigente.id)}`}>Ver la definición</Link>
           </p>
         </section>
       )}
