@@ -56,6 +56,8 @@ export const MARCAS = {
   iteraciones_de_proceso: LEE,
   registrar_iteracion: AGREGA,
   adjuntar_a_caso: AGREGA,
+  // Cambia el destino del caso y no se deshace desde las herramientas: que el cliente confirme.
+  cancelar_caso: REEMPLAZA,
   crear_caso: AGREGA,
   tomar_caso: AGREGA,
   esperar_caso: AGREGA,

@@ -141,6 +141,7 @@ con el enlace del último cierre como resultado.
 | `como_se_hace` | cualquiera | La versión vigente de un proceso y la receta de las últimas veces que salió bien, sin abrir un caso |
 | `iteraciones_de_proceso` | cualquiera | Las veces que se hizo un proceso, en todas sus versiones, con su receta, su conversación y sus imágenes |
 | `adjuntar_a_caso` | quien lo hizo, quien responde o quien administra | Adjunta archivos livianos (las láminas de un carrusel) a un caso o a una iteración |
+| `cancelar_caso` | quien administra | Cancela un caso que ya no se va a hacer, con el motivo. No borra nada: lo hecho sigue en la bitácora. No es devolver, que pide una corrección |
 | `tablero_de_trabajo` | roles con `view_audit` | Cómo rinde cada proceso. Ver [El tablero del trabajo](#el-tablero-del-trabajo) |
 
 Prompts: `pendientes`, `trabajar_caso`, `registrar`, `reproducir` y `mejorar_proceso`. En los clientes que los muestran como comandos, la
@@ -227,6 +228,13 @@ siguen abriéndose por su dirección.
 
 La familia de un proceso —todas sus versiones— la da la clave `proceso` de la definición; si no
 la declara, sale del nombre sin el « vN» del final.
+
+**Cancelar.** Un caso que ya no se va a hacer —una prueba colgada, un pedido que se cayó— lo
+cancela quien administra desde la página de su proceso, en «En curso», o con `cancelar_caso`,
+siempre con un motivo. «Devolver» no sirve para eso: es «corregí esto», y una máquina que recibe
+«descartar» como motivo de devolución hace bien en preguntar qué corregir. Una aplicación que ya
+existía necesita sumar `cancelada` a los tipos de evento: es una opción más del enum, sin tocar
+datos.
 
 **El resultado se ve, no sólo se enlaza.** Lo liviano que hace falta mirar —las láminas de un
 carrusel, la portada de un video— se adjunta a la iteración: desde el panel, eligiendo todas las

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { USER_SCOPES } from "@/platform/mcp/store";
-import { adjuntarACaso } from "@/platform/processes/engine";
+import { redirect } from "next/navigation";
+import { adjuntarACaso, cancelarCaso } from "@/platform/processes/engine";
 
 /**
  * Sube un archivo a una iteración desde el panel. Uno por llamada, a propósito: Vercel corta
@@ -26,4 +27,22 @@ export async function subirArchivoAIteracionAction(formData: FormData): Promise<
   }
   revalidatePath("/procesos", "layout");
   return { ok: true };
+}
+
+/** Cancelar un caso desde la página del proceso. El motor exige que quien lo pide administre. */
+export async function cancelarCasoAction(formData: FormData) {
+  const user = await requireUser();
+  const caso = String(formData.get("caso") ?? "");
+  const familia = String(formData.get("familia") ?? "");
+  const motivo = String(formData.get("motivo") ?? "").trim();
+  let error: string | null = null;
+  try {
+    await cancelarCaso({ id: user.id, name: user.displayName, roleKey: user.roleKey, scopes: [...USER_SCOPES], kind: "user" }, caso, motivo);
+  } catch (causa) {
+    error = causa instanceof Error ? causa.message : "No se pudo cancelar el caso.";
+  }
+  revalidatePath("/procesos", "layout");
+  revalidatePath("/pendientes");
+  const destino = `/procesos/${encodeURIComponent(familia)}`;
+  redirect(error ? `${destino}?error=${encodeURIComponent(error)}` : `${destino}?hecho=${encodeURIComponent("Caso cancelado.")}`);
 }

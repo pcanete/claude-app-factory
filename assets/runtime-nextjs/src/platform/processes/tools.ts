@@ -6,6 +6,7 @@ import { runtimeSpec } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
   adjuntarACaso,
+  cancelarCaso,
   cerrarEtapa,
   comoSeHace,
   iteracionesDeProceso,
@@ -159,6 +160,19 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
       criterios: entrada.criterios,
       eleccion: entrada.eleccion,
     }, eventId),
+    resultCount: 1,
+  })));
+
+  server.registerTool("cancelar_caso", {
+    annotations: marcas("cancelar_caso"),
+    description:
+      "Cancela un caso que ya no se va a hacer (una prueba colgada, un pedido que se cayó), con el motivo. Lo decide quien administra. No borra nada: lo hecho sigue en la bitácora. No es devolver: devolver es pedir una corrección.",
+    inputSchema: z.object({
+      caso,
+      motivo: z.string().min(3).max(1_000).describe("Por qué se cancela."),
+    }),
+  }, async (entrada) => rastreo("cancelar_caso", entrada, async (eventId) => ({
+    value: await cancelarCaso(agent, entrada.caso, entrada.motivo, eventId),
     resultCount: 1,
   })));
 
