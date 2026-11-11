@@ -222,7 +222,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
         prompts: textos.optional().describe("Los prompts que funcionaron, textuales, en el orden en que se usaron."),
         herramientas: textos.describe("Qué skills, conectores o programas se usaron. Vacía si ninguno."),
         modelo: z.string().max(200).describe("Qué IA se usó."),
-        skill: z.string().max(200).optional().describe("Con qué skill y versión se hizo, si se hizo con una: «carrusel-p3-negocios v2»."),
+        skill: z.string().max(200).optional().describe("Con qué skill y qué commit se hizo, si se hizo con una: «carrusel-p3-negocios @ 9078dbc». El commit es el del repositorio de la skill en esa máquina; no lo inventes."),
         decisiones: textos.describe("Qué se eligió y por qué, cuando había opciones."),
         descartes: textos.optional().describe("Lo que se probó y no funcionó: le ahorra el camino a quien lo repita."),
       }),
@@ -261,7 +261,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("como_se_hace", {
     annotations: marcas("como_se_hace"),
     description:
-      "Cómo se hace un proceso, sin abrir un caso: la versión vigente y la receta de las últimas veces que salió bien, con sus prompts. Usalo cuando la persona pida hacer algo que el equipo ya sabe hacer («hacé un carrusel estilo X para P3»), y seguilo.",
+      "Cómo se hace un proceso, sin abrir un caso: con qué skill, su guía y la receta de las últimas veces que salió bien, con sus prompts. Usalo cuando la persona pida hacer algo que el equipo ya sabe hacer («hacé un carrusel estilo X para P3»), y seguilo.",
     inputSchema: z.object({
       proceso: z.string().min(2).max(200).describe("El id del proceso o su nombre, por ejemplo «Carrusel P3»."),
     }),
@@ -273,7 +273,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("iteraciones_de_proceso", {
     annotations: marcas("iteraciones_de_proceso"),
     description:
-      "Las veces que se hizo un proceso, en todas sus versiones: quién, cuándo, el resultado, la conversación, la receta y, en las reproducciones, si salió igual y qué faltó. Es lo que se mira para proponer la versión siguiente.",
+      "Las veces que se hizo un proceso: quién, cuándo, con qué skill y commit, el resultado, la conversación, la receta y, en las reproducciones, si salió igual y qué faltó. Es lo que se mira para mejorarlo.",
     inputSchema: z.object({
       proceso: z.string().min(2).max(200).describe("El id del proceso o su nombre."),
       limite: z.number().int().min(1).max(100).optional(),
@@ -388,7 +388,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
 
   server.registerPrompt("mejorar_proceso", {
     title: "Mejorar un proceso",
-    description: "Mira las iteraciones de un proceso y propone la versión siguiente.",
+    description: "Mira las iteraciones de un proceso y propone qué mejorar en su skill.",
     argsSchema: z.object({ proceso: z.string().describe("El nombre del proceso") }),
   }, ({ proceso }) => ({
     messages: [{
@@ -396,10 +396,10 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
       content: {
         type: "text" as const,
         text: [
-          `Mirá con iteraciones_de_proceso las veces que se hizo «${proceso}» y con como_se_hace la versión vigente.`,
+          `Mirá con iteraciones_de_proceso las veces que se hizo «${proceso}» y con como_se_hace cómo se hace hoy.`,
           "Fijate qué se repite en las recetas que salieron bien, qué faltó en las reproducciones que no salieron igual y qué prompts cambiaron.",
-          "Proponeme la versión siguiente: mostrame qué cambia respecto de la vigente y por qué, con la iteración que lo justifica.",
-          "Si la apruebo, validala con validar_proceso y guardala como un proceso nuevo con la versión siguiente, el mismo nombre con su « vN» y la misma clave en «proceso», en borrador: la publico yo.",
+          "Proponeme qué cambiar: mostrame cada cambio y por qué, con la iteración que lo justifica.",
+          "El método vive en la skill del proceso: si apruebo los cambios y tenés su repositorio en esta máquina, aplicalos ahí y guardalos con un commit que diga qué cambió y por qué pieza. No crees otro proceso ni otra versión: el proceso es uno y siempre muestra lo vigente. Si cambia lo que la ficha dice (qué hay que darle, qué entrega, qué necesita), decímelo y la edito yo en el panel.",
         ].join(" "),
       },
     }],

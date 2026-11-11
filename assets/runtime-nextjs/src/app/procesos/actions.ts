@@ -9,7 +9,7 @@ import {
   adjuntarACaso,
   cancelarCaso,
   crearProceso,
-  nuevaVersionDeProceso,
+  editarProceso,
   reactivarProceso,
   retirarProceso,
 } from "@/platform/processes/engine";
@@ -80,7 +80,6 @@ function fichaDelFormulario(formData: FormData): Ficha {
     ...(skillNombre ? {
       skill: {
         nombre: skillNombre,
-        ...(texto(formData, "skill_version") ? { version: texto(formData, "skill_version") } : {}),
         ...(texto(formData, "skill_repo") ? { repo: texto(formData, "skill_repo") } : {}),
       },
     } : {}),
@@ -88,7 +87,7 @@ function fichaDelFormulario(formData: FormData): Ficha {
   return Object.fromEntries(Object.entries(ficha).filter(([, valor]) => valor !== undefined)) as Ficha;
 }
 
-/** Alta (sin familia) o modificación (con familia: publica la versión siguiente). */
+/** Alta (sin familia) o modificación (con familia: cambia la ficha en el lugar). */
 export async function guardarProcesoAction(formData: FormData) {
   const user = await requireUser();
   const familia = texto(formData, "familia");
@@ -99,7 +98,7 @@ export async function guardarProcesoAction(formData: FormData) {
   let hecho = "";
   try {
     if (familia) {
-      const r = await nuevaVersionDeProceso(persona(user), familia, { nombre, ficha });
+      const r = await editarProceso(persona(user), familia, { nombre, ficha });
       destino = `/procesos/${encodeURIComponent(familia)}`;
       hecho = r.mensaje;
     } else {

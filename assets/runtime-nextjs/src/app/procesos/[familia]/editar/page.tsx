@@ -7,7 +7,7 @@ import { iteracionesDeProceso, motorDisponible } from "@/platform/processes/engi
 
 export const dynamic = "force-dynamic";
 
-/** Modificar un proceso: editar su ficha publica la versión siguiente. */
+/** Modificar un proceso: su ficha se cambia en el lugar. */
 export default async function EditarProcesoPage({
   params,
   searchParams,
@@ -33,7 +33,7 @@ export default async function EditarProcesoPage({
         <div>
           <p className="eyebrow"><Link className="record-link" href={`/procesos/${familia}`}>{datos.nombre}</Link></p>
           <h1>Editar ficha</h1>
-          <p className="subtitle">Versión vigente: {datos.vigente.version}. Al guardar se publica la {Math.max(...datos.versiones.map((v) => v.version)) + 1}.</p>
+          <p className="subtitle">Lo que guardes reemplaza la ficha actual. Cómo cambia el método queda en el historial de la skill.</p>
         </div>
       </div>
       {error && <div className="notice error">{error}</div>}

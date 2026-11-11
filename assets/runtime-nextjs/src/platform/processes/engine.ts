@@ -987,7 +987,7 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
     const escritura: Escritura = { agent, agentEventId, quien, client };
     if (definicionNueva) {
       const valores = recordInputFromObject(requireEntity("proceso"), {
-        nombre: `${entrada.nuevo_proceso!.nombre.trim()} v1`,
+        nombre: entrada.nuevo_proceso!.nombre.trim(),
         version: 1,
         estado: quien.administra ? "publicado" : "borrador",
         descripcion: entrada.nuevo_proceso!.proposito,
@@ -1065,7 +1065,7 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   revalidateAfterWrite("proceso", resultado.proceso);
   return {
     ...resultado,
-    ...(definicionNueva ? { proceso_nuevo: true, mensaje: `${resultado.mensaje} El proceso nació como v1${quien.administra ? "" : ", en borrador hasta esa aprobación"}.` } : {}),
+    ...(definicionNueva ? { proceso_nuevo: true, mensaje: `${resultado.mensaje} El proceso quedó creado${quien.administra ? "" : ", en borrador hasta esa aprobación"}.` } : {}),
   };
 }
 
@@ -1152,7 +1152,6 @@ export async function adjuntarACaso(agent: AgentPrincipal, caso: string, archivo
 type Iteracion = {
   iteracion: string;
   titulo: string;
-  version: number;
   estado: string;
   fecha: unknown;
   quien: string | null;
@@ -1190,7 +1189,6 @@ function ultimaEtapaDe(proceso: Record<string, unknown>) {
 
 /** Las iteraciones de toda la familia de un proceso, de la más reciente a la más vieja. */
 async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: Identidad, limite = 100): Promise<Iteracion[]> {
-  const version = new Map(procesos.map((proceso) => [String(proceso.id), versionDe(proceso)]));
   const ultima = new Map(procesos.map((proceso) => [String(proceso.id), ultimaEtapaDe(proceso)]));
   const casos = (await Promise.all(procesos.map((proceso) => listRecords("instancia", {
     filters: { proceso_id: String(proceso.id) },
@@ -1212,7 +1210,6 @@ async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: 
     iteraciones.push({
       iteracion: String(caso.id),
       titulo: String(caso.titulo),
-      version: version.get(String(caso.proceso_id)) ?? 0,
       estado: String(caso.estado),
       fecha: caso.created_at,
       quien: persona ? nombres.get(persona) ?? persona : null,
@@ -1259,7 +1256,6 @@ async function enCursoDeFamilia(procesos: Record<string, unknown>[], quien: Iden
       return {
         caso: String(caso.id),
         titulo: String(caso.titulo),
-        version: versionDe(proceso),
         etapa: etapa ? `${etapa.orden}${total ? ` de ${total}` : ""} · ${etapa.nombre}` : `Etapa ${String(caso.etapa)}`,
         estado: ESTADO_LEGIBLE[String(caso.estado)] ?? String(caso.estado),
         quien: typeof caso.tomada_por === "string" ? nombres.get(caso.tomada_por) ?? null : null,
@@ -1292,15 +1288,17 @@ export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: strin
     saben: [...new Set(iteraciones
       .filter((it) => it.estado === "entregada" && it.reproduccion?.salio_igual !== false && it.quien)
       .map((it) => it.quien as string))],
-    vigente: { id: actual.id, version: versionDe(actual), estado: actual.estado },
-    versiones: procesos.map((p) => ({ id: p.id, version: versionDe(p), estado: p.estado })).sort((a, b) => b.version - a.version),
+    // El registro que se muestra y se edita. Un proceso es uno solo: lo que cambia en el
+    // método queda en el historial de su skill, no en versiones acá.
+    vigente: { id: actual.id, estado: actual.estado },
+    retirado: procesos.every((p) => p.estado === "retirado"),
     iteraciones,
     en_curso: await enCursoDeFamilia(procesos, quien),
   };
 }
 
 /**
- * Cómo se hace un proceso, sin abrir un caso: la versión vigente y la receta de las
+ * Cómo se hace un proceso, sin abrir un caso: su guía y la receta de las
  * últimas veces que salió bien. Es lo que lee la IA de otra persona, en otra máquina,
  * para hacerlo igual.
  */
@@ -1312,7 +1310,7 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
   const actual = vigente(procesos);
   if (!actual) {
     throw new Error(procesos.length
-      ? `«${nombreDeFamilia(procesos[0].nombre)}» todavía no tiene una versión publicada.`
+      ? `«${nombreDeFamilia(procesos[0].nombre)}» no está publicado.`
       : `No hay ningún proceso «${proceso}».`);
   }
   const definicion = definicionValida(actual);
@@ -1322,10 +1320,8 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
   return {
     proceso: actual.id,
     nombre: nombreDeFamilia(actual.nombre),
-    version: versionDe(actual),
     guia: guiaDeProceso({
       nombre: nombreDeFamilia(actual.nombre),
-      version: versionDe(actual),
       definicion,
       recientes: buenas.map((it) => ({ titulo: it.titulo, fecha: it.fecha, receta: it.receta, resultado: it.resultado, imagenes: it.imagenes })),
     }),
@@ -1336,7 +1332,7 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
   };
 }
 
-/** Las familias de procesos, para el panel: versión vigente, cuántas iteraciones y la última. */
+/** Los procesos, para el panel: su ficha, cuántas iteraciones y la última. */
 export async function familiasDeProcesos(agent: AgentPrincipal) {
   exigirAlcance(agent, "records:read");
   const quien = identidad(agent);
@@ -1363,7 +1359,6 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
       skill: fichaDe(actual)?.skill ?? null,
       // Los casos donde buscar la portada: las últimas iteraciones, de la más nueva a la más vieja.
       candidatos: propios.slice(0, 5).map((caso) => String(caso.id)),
-      version: versionDe(actual),
       estado: String(actual.estado),
       actualizado: actual.updated_at ?? null,
       iteraciones: propios.length,
@@ -1408,7 +1403,7 @@ async function insertarProceso(escritura: Escritura, valores: Record<string, unk
 
 /**
  * Da de alta un proceso desde el panel: su ficha y una etapa que se hace con la skill que la
- * ficha nombra. Nace publicado como v1. Lo que el proceso tiene de método vive en la skill;
+ * ficha nombra. Nace publicado. Lo que el proceso tiene de método vive en la skill;
  * acá queda lo que una persona necesita para saber cómo se hace y pedirlo.
  */
 export async function crearProceso(agent: AgentPrincipal, datos: { nombre: string; ficha: Ficha; instrucciones?: string }) {
@@ -1419,7 +1414,7 @@ export async function crearProceso(agent: AgentPrincipal, datos: { nombre: strin
   if (nombre.length < 3) throw new Error("El proceso necesita un nombre.");
   const familia = claveDeNombre(nombre);
   if ((await procesosDeLaFamilia(familia, quien)).length) {
-    throw new Error(`Ya hay un proceso «${nombre}». Para cambiarlo, editá su ficha: se publica la versión siguiente.`);
+    throw new Error(`Ya hay un proceso «${nombre}». Para cambiarlo, editá su ficha.`);
   }
   const administradores = rolesQueAdministran();
   const skill = datos.ficha.skill?.nombre;
@@ -1434,7 +1429,7 @@ export async function crearProceso(agent: AgentPrincipal, datos: { nombre: strin
       ejecutor: "cualquiera",
       grupo: rolesDeLaAplicacion(),
       instrucciones: datos.instrucciones?.trim()
-        || (skill ? `Se hace con la skill ${skill}${datos.ficha.skill?.version ? ` v${datos.ficha.skill.version}` : ""}: seguila. Al terminar, registralo con registrar_iteracion.` : "Seguí la ficha del proceso. Al terminar, registralo con registrar_iteracion."),
+        || (skill ? `Se hace con la skill ${skill}: seguila. Al terminar, registralo con registrar_iteracion.` : "Seguí la ficha del proceso. Al terminar, registralo con registrar_iteracion."),
       revision: "humana",
       revisores: administradores.length ? administradores : quien.roles,
       autorrevision: true,
@@ -1443,55 +1438,47 @@ export async function crearProceso(agent: AgentPrincipal, datos: { nombre: strin
   const validacion = validarDefinicion(definicion, rolesDeLaAplicacion());
   if (!validacion.ok) throw new Error(validacion.errores.join(" "));
   const id = await withTransaction((client) => insertarProceso({ agent, quien, client }, {
-    nombre: `${nombre} v1`,
+    nombre,
     version: 1,
     estado: "publicado",
     descripcion: datos.ficha.resumen ?? "",
     definicion,
   }));
   revalidateAfterWrite("proceso", id);
-  return { proceso: id, familia, mensaje: `«${nombre}» quedó publicado como v1.` };
+  return { proceso: id, familia, mensaje: `«${nombre}» quedó publicado.` };
 }
 
 /**
- * Modifica un proceso: publica la versión siguiente con la ficha nueva y retira la anterior.
- * Una versión publicada no se toca —los casos que la usaron siguen leyéndola—; cambiar un
- * proceso es publicar otra. La guía para la IA y las etapas pasan sin cambios.
+ * Modifica un proceso: cambia su ficha en el lugar. Un proceso es un solo registro y siempre
+ * muestra lo vigente, para que quien lo tome no tenga que elegir entre versiones. Cómo cambió
+ * el método queda en el historial de su skill, y cada iteración dice con cuál se hizo. La
+ * guía para la IA y las etapas pasan sin cambios.
  */
-export async function nuevaVersionDeProceso(agent: AgentPrincipal, familia: string, datos: { nombre?: string; ficha: Ficha }) {
+export async function editarProceso(agent: AgentPrincipal, familia: string, datos: { nombre?: string; ficha: Ficha }) {
   exigirAlcance(agent, "records:write");
   const quien = identidad(agent);
   exigirQueAdministre(quien);
   const procesos = await procesosDeLaFamilia(familia, quien);
   const actual = vigente(procesos) ?? [...procesos].sort((a, b) => versionDe(b) - versionDe(a))[0];
   if (!actual) throw new Error("Ese proceso no existe.");
-  const siguiente = Math.max(...procesos.map(versionDe)) + 1;
   const nombre = (datos.nombre?.trim() || nombreDeFamilia(actual.nombre));
   const anterior = esObjeto(actual.definicion) ? actual.definicion : {};
   // La clave de la familia queda fija: así renombrar no la parte en dos.
-  const definicion = { ...anterior, proceso: familia, ficha: datos.ficha, version: siguiente };
+  const definicion = { ...anterior, proceso: familia, ficha: datos.ficha };
   const validacion = validarDefinicion(definicion, rolesDeLaAplicacion());
   if (!validacion.ok) throw new Error(validacion.errores.join(" "));
-  const resultado = await withTransaction(async (client) => {
-    const escritura: Escritura = { agent, quien, client };
-    const id = await insertarProceso(escritura, {
-      nombre: `${nombre} v${siguiente}`,
-      version: siguiente,
-      estado: "publicado",
-      descripcion: datos.ficha.resumen ?? (typeof actual.descripcion === "string" ? actual.descripcion : ""),
-      definicion,
-    });
-    for (const proceso of procesos.filter((p) => p.estado === "publicado")) {
-      await actualizarProceso(escritura, proceso, { estado: "retirado" });
-    }
-    return id;
-  });
-  revalidateAfterWrite("proceso", resultado);
-  return { proceso: resultado, version: siguiente, mensaje: `Se publicó la v${siguiente}. La anterior quedó retirada; sus casos la siguen leyendo.` };
+  const id = String(actual.id);
+  await withTransaction((client) => actualizarProceso({ agent, quien, client }, actual, {
+    nombre,
+    descripcion: datos.ficha.resumen ?? (typeof actual.descripcion === "string" ? actual.descripcion : ""),
+    definicion,
+  }));
+  revalidateAfterWrite("proceso", id);
+  return { proceso: id, mensaje: "Ficha guardada." };
 }
 
 /**
- * Da de baja un proceso: retira todas sus versiones. No borra nada —las iteraciones y su
+ * Da de baja un proceso: retira todos sus registros. No borra nada —las iteraciones y su
  * bitácora siguen a la vista—, pero ya no se abren casos ni aparece entre los vigentes.
  * No se retira con casos en curso: primero se terminan o se cancelan.
  */
@@ -1539,7 +1526,7 @@ export async function reactivarProceso(agent: AgentPrincipal, familia: string) {
   const ultima = [...procesos].sort((a, b) => versionDe(b) - versionDe(a))[0];
   await withTransaction((client) => actualizarProceso({ agent, quien, client }, ultima, { estado: "publicado" }));
   revalidateAfterWrite("proceso", String(ultima.id));
-  return { familia, mensaje: `Se volvió a publicar la v${versionDe(ultima)}.` };
+  return { familia, mensaje: `«${nombreDeFamilia(ultima.nombre)}» volvió a estar publicado.` };
 }
 
 export function validarProceso(definicion: unknown) {

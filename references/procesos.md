@@ -48,8 +48,8 @@ corregir a mano un caso trabado. Sobre `evento` nadie debería tener más que le
 
 ## La definición
 
-Vive en `proceso.definicion`. Una versión publicada no se edita: mejorarla es publicar la
-siguiente, y cada caso sigue con la versión con la que nació.
+Vive en `proceso.definicion`. Un proceso es un solo registro y siempre muestra lo vigente
+(desde la plataforma 1.12; ver [Un proceso, un registro](#un-proceso-un-registro)).
 
 ```json
 {
@@ -117,14 +117,15 @@ definición:
   "entrega": "9 láminas de 1080×1350, caption y texto alternativo.",
   "necesita": ["carousel-builder", "Dropbox sincronizado"],
   "pedido_ejemplo": "Hacé un carrusel de P3 Negocios sobre …",
-  "skill": { "nombre": "carrusel-p3-negocios", "version": "2", "repo": "https://github.com/…" }
+  "skill": { "nombre": "carrusel-p3-negocios", "repo": "https://github.com/…" }
 }
 ```
 
 `resumen` es una línea (hasta 200 caracteres) y es lo que muestra la tarjeta del proceso; sin
 ficha, la tarjeta muestra la primera oración del propósito. `skill.repo` es opcional: aparece
-como «Ver en GitHub» cuando la skill está publicada. Cada iteración dice con qué skill y versión
-se hizo (`receta.skill`, o una herramienta «skill … vN»).
+como «Ver en GitHub» cuando la skill está en un repositorio. La ficha no anota la versión de
+la skill —la vigente es la última del repositorio—; cada iteración dice con qué skill y qué
+commit se hizo (`receta.skill`, por ejemplo «carrusel-p3-negocios @ 9078dbc»).
 
 `validar_proceso` revisa una definición contra estas reglas y contra los roles de la aplicación,
 sin guardar nada.
@@ -159,9 +160,9 @@ con el enlace del último cierre como resultado.
 | `revisar_etapa` | revisores, nunca quien cerró | Aprueba, elige una opción (`eleccion`) o devuelve con motivo |
 | `ver_caso` | roles que leen `evento` | El recorrido completo: quién, cuándo, con qué receta y dónde quedó |
 | `validar_proceso` | cualquiera | Revisa una definición |
-| `registrar_iteracion` | cualquiera | Guarda algo que salió bien —resultado, receta y conversación— como iteración de un proceso; si el proceso no existe, lo crea como v1 |
-| `como_se_hace` | cualquiera | La versión vigente de un proceso y la receta de las últimas veces que salió bien, sin abrir un caso |
-| `iteraciones_de_proceso` | cualquiera | Las veces que se hizo un proceso, en todas sus versiones, con su receta, su conversación y sus imágenes |
+| `registrar_iteracion` | cualquiera | Guarda algo que salió bien —resultado, receta y conversación— como iteración de un proceso; si el proceso no existe, lo crea |
+| `como_se_hace` | cualquiera | Con qué skill se hace un proceso, su guía y la receta de las últimas veces que salió bien, sin abrir un caso |
+| `iteraciones_de_proceso` | cualquiera | Las veces que se hizo un proceso, con su receta, la skill y el commit, su conversación y sus imágenes |
 | `adjuntar_a_caso` | quien lo hizo, quien responde o quien administra | Adjunta archivos livianos (las láminas de un carrusel) a un caso o a una iteración |
 | `cancelar_caso` | quien administra | Cancela un caso que ya no se va a hacer, con el motivo. No borra nada: lo hecho sigue en la bitácora. No es devolver, que pide una corrección |
 | `tablero_de_trabajo` | roles con `view_audit` | Cómo rinde cada proceso. Ver [El tablero del trabajo](#el-tablero-del-trabajo) |
@@ -223,13 +224,38 @@ se hace, después se decide que está bien, y recién ahí se quiere guardar có
   IA arma la receta de la conversación —pasos, prompts textuales, herramientas, modelo,
   decisiones y lo que se descartó—, pide el enlace al resultado y el de la conversación, se la
   muestra a la persona y llama `registrar_iteracion`. Si el proceso no existe, ese registro lo
-  crea como v1, con la receta como instrucciones de una sola etapa.
+  crea, con la receta como instrucciones de una sola etapa.
 - **Reproducir.** Otra persona, en otra máquina o con otra IA, pide «hacé X». Su IA trae la
   receta con `como_se_hace`, la sigue y al terminar registra una **reproducción**: si salió
   igual, y si no, qué faltó. Una reproducción fallida es la señal más clara de qué le falta a la
   receta.
-- **Mejorar.** «Mirá las iteraciones y proponé la versión siguiente»: la IA lee
-  `iteraciones_de_proceso`, propone qué cambia y por qué, y quien administra publica.
+- **Mejorar.** «Mirá las iteraciones y proponé qué mejorar»: la IA lee
+  `iteraciones_de_proceso`, propone qué cambia y por qué, y el cambio se hace en la skill del
+  proceso, con un commit. No se crea otra versión del proceso.
+
+### Un proceso, un registro
+
+Hasta la plataforma 1.11 cada cambio a un proceso publicaba una versión nueva —otro
+registro, «Nombre vN»— y retiraba la anterior. Eso venía del motor de etapas: un caso a mitad
+de camino tenía que seguir con la definición con la que nació. Para la memoria del método era
+un costo sin beneficio: quien entraba a ver cómo se hace algo encontraba varias versiones y
+tenía que saber cuál mirar.
+
+Desde la 1.12:
+
+- **El proceso es un solo registro**, sin número de versión en el nombre. Editar la ficha la
+  cambia en el lugar.
+- **El historial del método es el de la skill**, en su repositorio. Quien sólo viene a hacer
+  la pieza no lo ve nunca.
+- **Las iteraciones cuelgan del proceso**, en una sola galería. Cada una dice con qué skill y
+  qué commit se hizo: sirve para entender por qué una pieza vieja se ve distinta, y para ver
+  si un cambio empeoró el resultado.
+- **La guía le dice a la IA que traiga la última versión de la skill antes de empezar.** Con
+  una sola versión a la vista, el riesgo ya no es mirar la equivocada sino tener una vieja en
+  la máquina.
+
+Los registros anteriores no se migran: los que comparten clave se siguen viendo como un solo
+proceso, con todas sus iteraciones juntas, y el campo `version` queda sin uso.
 
 Quién aprueba: lo que registra quien administra queda entregado; lo que registra otra persona
 queda para que lo apruebe quien administra, con la receta a la vista, y si creó un proceso, el
@@ -244,28 +270,27 @@ conversación misma: por eso se le muestra a la persona antes de guardarla.
 **Procesos se maneja como cualquier listado.** Buscar por nombre, qué hace o skill; filtrar por
 estado (vigentes por defecto, o publicados, borradores, retirados, todos); ordenar por la última
 iteración, el nombre o la cantidad; y verlo como tarjetas o como lista. Lo mismo para las
-iteraciones de un proceso: buscar por título, filtrar por persona, por origen (así se hizo o
-reproducción) y por versión, y verlas como galería o como lista.
+iteraciones de un proceso: buscar por título, filtrar por persona y por origen (así se hizo o
+reproducción), y verlas como galería o como lista.
 
 **Alta, modificación y baja**, sólo para quien administra (`manage_users`):
 
-- **Nuevo proceso**: el formulario de la ficha. Nace publicado como v1, con una etapa que se hace
+- **Nuevo proceso**: el formulario de la ficha. Nace publicado, con una etapa que se hace
   con la skill que la ficha nombra. No se puede crear dos veces el mismo.
-- **Editar ficha**: publica la versión siguiente con la ficha nueva y retira la anterior. Una
-  versión publicada no se toca: los casos que la usaron la siguen leyendo. La clave de la familia
-  queda fija, así que renombrar no la parte en dos.
-- **Retirar**: retira todas las versiones, con un motivo. No borra nada. No se puede con casos en
-  curso: primero se terminan o se cancelan. **Reactivar** vuelve a publicar la última versión.
+- **Editar ficha**: la cambia en el lugar. La clave del proceso queda fija, así que renombrar
+  no lo parte en dos.
+- **Retirar**: lo retira, con un motivo. No borra nada. No se puede con casos en
+  curso: primero se terminan o se cancelan. **Reactivar** lo vuelve a publicar.
 
 En el panel, **Procesos** muestra una tarjeta por proceso: como portada, las primeras imágenes de
-la última pieza; debajo, qué hace en una línea, la versión de la skill y cuántas veces se hizo. La
+la última pieza; debajo, qué hace en una línea, si se hace con una skill y cuántas veces se hizo. La
 página de cada uno abre con la ficha —con qué skill, qué hay que darle, qué entrega, qué necesita,
 la frase para pedírselo a una IA y quién lo sabe hacer— y sigue con las iteraciones como galería:
-cada pieza con sus imágenes, quién la hizo, con qué versión, la carpeta y la conversación donde se
-hizo. Para quien administra siguen estando lo que está en curso, cómo rinde y la definición.
+cada pieza con sus imágenes, quién la hizo, con qué skill y commit, la carpeta y la conversación
+donde se hizo. Para quien administra siguen estando lo que está en curso, cómo rinde y la definición.
 
-La familia de un proceso —todas sus versiones— la da la clave `proceso` de la definición; si no
-la declara, sale del nombre sin el « vN» del final.
+La clave estable de un proceso la da `proceso` en la definición; si no la declara, sale del
+nombre (sin el « vN» final que llevaban los registros anteriores a la 1.12).
 
 **Cancelar.** Un caso que ya no se va a hacer —una prueba colgada, un pedido que se cayó— lo
 cancela quien administra desde la página de su proceso, en «En curso», o con `cancelar_caso`,
@@ -334,6 +359,7 @@ credenciales no salen de esa máquina y los archivos pesados no pasan por la pla
 - **Cara del cliente**: formulario, seguimiento y aprobación del cliente.
 - **Revisión por agente real.** `agente` hoy significa que la evidencia de los criterios
   mecánicos es la revisión.
-- **Que una versión publicada no se pueda editar** lo sostiene la convención, no el motor.
+- **Comprobar que la skill de la máquina es la última.** La guía lo pide; la plataforma no lo
+  verifica, porque no ve la máquina.
 - **La bitácora completa sigue legible con `query_records`** para quien tenga lectura sobre
   `evento`. `entradas_visibles` acota la guía, no esa lectura.

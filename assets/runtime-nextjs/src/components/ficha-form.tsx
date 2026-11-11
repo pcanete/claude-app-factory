@@ -4,7 +4,7 @@ import { guardarProcesoAction } from "@/app/procesos/actions";
 
 /**
  * El formulario de la ficha de un proceso: el mismo para el alta y para la modificación.
- * Sin `familia` da de alta un proceso; con `familia` publica su versión siguiente.
+ * Sin `familia` da de alta un proceso; con `familia` cambia su ficha en el lugar.
  */
 export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
   familia?: string;
@@ -19,7 +19,6 @@ export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
         <label className="field full">
           <span className="field-label">Nombre *</span>
           <input className="control" defaultValue={nombre ?? ""} maxLength={120} minLength={3} name="nombre" placeholder="Carrusel P3 Negocios" required />
-          <span className="field-help">Sin el número de versión: lo pone la plataforma.</span>
         </label>
         <label className="field full">
           <span className="field-label">Qué hace, en una línea *</span>
@@ -48,12 +47,9 @@ export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
           <input className="control" defaultValue={ficha?.skill?.nombre ?? ""} maxLength={120} name="skill_nombre" placeholder="carrusel-p3-negocios" />
         </label>
         <label className="field">
-          <span className="field-label">Versión de la skill</span>
-          <input className="control" defaultValue={ficha?.skill?.version ?? ""} maxLength={20} name="skill_version" placeholder="3" />
-        </label>
-        <label className="field full">
           <span className="field-label">Repositorio de la skill</span>
           <input className="control" defaultValue={ficha?.skill?.repo ?? ""} name="skill_repo" placeholder="https://github.com/…" type="url" />
+          <span className="field-help">La versión no se anota acá: es la última del repositorio, y cada iteración dice con cuál se hizo.</span>
         </label>
         {!familia && (
           <label className="field full">
@@ -62,11 +58,8 @@ export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
           </label>
         )}
       </div>
-      {familia && (
-        <p className="field-help">Guardar publica la versión siguiente y retira la actual. Los casos que ya la usaron la siguen leyendo.</p>
-      )}
       <div className="form-actions">
-        <button className="button" type="submit">{familia ? "Publicar versión nueva" : "Crear proceso"}</button>
+        <button className="button" type="submit">{familia ? "Guardar ficha" : "Crear proceso"}</button>
         <Link className="button secondary" href={cancelarHref}>Cancelar</Link>
       </div>
     </form>
