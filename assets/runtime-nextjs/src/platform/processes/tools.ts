@@ -216,12 +216,13 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
       titulo: z.string().min(3).max(200).describe("Qué se hizo esta vez, por ejemplo «Carrusel P3 · la frustración de Russell»."),
       resultado: z.string().max(2_000).describe("Dirección (https://…) de lo que quedó bien, en la carpeta compartida."),
       conversacion: z.string().max(2_000).optional()
-        .describe("Dirección de la conversación donde se hizo. Pedísela a la persona: vos no la conocés. Mejor el enlace compartido, que lo abre cualquiera del equipo."),
+        .describe("Dirección de la conversación donde se hizo (https://… o claude://…). Si la app te la da (get_session), usala; si no, pedísela a la persona. Un enlace compartido lo abre cualquiera del equipo; uno claude://, sólo en la máquina donde se hizo."),
       receta: z.object({
         pasos: textos.min(1).describe("Qué se hizo, en orden, para que otra persona con otra IA lo pueda repetir."),
         prompts: textos.optional().describe("Los prompts que funcionaron, textuales, en el orden en que se usaron."),
         herramientas: textos.describe("Qué skills, conectores o programas se usaron. Vacía si ninguno."),
         modelo: z.string().max(200).describe("Qué IA se usó."),
+        skill: z.string().max(200).optional().describe("Con qué skill y versión se hizo, si se hizo con una: «carrusel-p3-negocios v2»."),
         decisiones: textos.describe("Qué se eligió y por qué, cuando había opciones."),
         descartes: textos.optional().describe("Lo que se probó y no funcionó: le ahorra el camino a quien lo repita."),
       }),

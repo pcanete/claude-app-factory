@@ -26,12 +26,15 @@ import {
   destinoTrasCerrar,
   entradasFaltantes,
   etapaPorOrden,
+  esEnlaceDeConversacion,
   faltasDeReceta,
   familiaDe,
   guiaDeProceso,
   herramientasQueFaltan,
   nombreDeFamilia,
   opcionesParaElegir,
+  resumenCorto,
+  skillDeReceta,
   puedeRevisar,
   puedeTomar,
   validarCierre,
@@ -40,6 +43,7 @@ import {
   type Definicion,
   type Destino,
   type Etapa,
+  type Ficha,
   type Receta,
   type RespuestaCriterio,
 } from "@/platform/processes/definition";
@@ -941,8 +945,8 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   const quien = identidad(agent);
   const faltas = faltasDeReceta(entrada.receta);
   if (!esUrlWeb(entrada.resultado)) faltas.unshift("resultado: la dirección (https://…) de lo que quedó bien, en la carpeta compartida.");
-  if (entrada.conversacion !== undefined && entrada.conversacion !== "" && !esUrlWeb(entrada.conversacion)) {
-    faltas.push("conversacion: tiene que ser la dirección de la conversación (https://…).");
+  if (entrada.conversacion !== undefined && entrada.conversacion !== "" && !esEnlaceDeConversacion(entrada.conversacion)) {
+    faltas.push("conversacion: tiene que ser la dirección de la conversación (https://… o claude://…).");
   }
   if (entrada.reproduccion && !entrada.reproduccion.salio_igual && !entrada.reproduccion.que_falto?.trim()) {
     faltas.push("reproduccion.que_falto: si no salió igual, qué faltó o qué cambió respecto de la receta.");
@@ -1153,6 +1157,8 @@ type Iteracion = {
   fecha: unknown;
   quien: string | null;
   persona: string | null;
+  /** Con qué skill y versión se hizo, si la receta lo dice. */
+  skill: string | null;
   imagenes: Imagen[];
   origen: string;
   resultado: string | null;
@@ -1211,10 +1217,11 @@ async function iteracionesDeFamilia(procesos: Record<string, unknown>[], quien: 
       fecha: caso.created_at,
       quien: persona ? nombres.get(persona) ?? persona : null,
       persona: persona ?? null,
+      skill: skillDeReceta(cierre?.receta),
       imagenes: await imagenesDe(String(caso.id)),
       origen: typeof insumos.origen === "string" ? insumos.origen : "caso",
       resultado: typeof caso.resultado === "string" ? caso.resultado : typeof cierre?.enlace === "string" ? cierre.enlace : null,
-      conversacion: typeof insumos.conversacion === "string" ? insumos.conversacion : null,
+      conversacion: esEnlaceDeConversacion(insumos.conversacion) ? String(insumos.conversacion) : null,
       reproduccion: esObjeto(insumos.reproduccion) ? insumos.reproduccion as Reproduccion : null,
       receta: esObjeto(cierre?.receta) ? cierre.receta : null,
     });
@@ -1261,6 +1268,12 @@ async function enCursoDeFamilia(procesos: Record<string, unknown>[], quien: Iden
     });
 }
 
+/** La ficha de un proceso, si su definición la trae: sólo los campos con contenido. */
+function fichaDe(proceso: Record<string, unknown>): Ficha | null {
+  const definicion = esObjeto(proceso.definicion) ? proceso.definicion : {};
+  return esObjeto(definicion.ficha) ? definicion.ficha as Ficha : null;
+}
+
 export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: string, limite = 50) {
   exigirAlcance(agent, "records:read");
   const quien = identidad(agent);
@@ -1268,12 +1281,20 @@ export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: strin
   const procesos = await procesosDeLaFamilia(familia, quien);
   if (!procesos.length) throw new Error(`No hay ningún proceso «${proceso}».`);
   const actual = vigente(procesos) ?? procesos[0];
+  const iteraciones = await iteracionesDeFamilia(procesos, quien, limite);
+  const definicion = esObjeto(actual.definicion) ? actual.definicion : {};
   return {
     familia,
     nombre: nombreDeFamilia(actual.nombre),
+    ficha: fichaDe(actual),
+    resumen: fichaDe(actual)?.resumen ?? resumenCorto(definicion.proposito ?? actual.descripcion, 220),
+    // Quién ya lo hizo bien: a quién preguntarle.
+    saben: [...new Set(iteraciones
+      .filter((it) => it.estado === "entregada" && it.reproduccion?.salio_igual !== false && it.quien)
+      .map((it) => it.quien as string))],
     vigente: { id: actual.id, version: versionDe(actual), estado: actual.estado },
     versiones: procesos.map((p) => ({ id: p.id, version: versionDe(p), estado: p.estado })).sort((a, b) => b.version - a.version),
-    iteraciones: await iteracionesDeFamilia(procesos, quien, limite),
+    iteraciones,
     en_curso: await enCursoDeFamilia(procesos, quien),
   };
 }
@@ -1326,7 +1347,7 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
     const clave = familiaDe(proceso);
     familias.set(clave, [...(familias.get(clave) ?? []), proceso]);
   }
-  return [...familias.entries()].map(([clave, versiones]) => {
+  const resumenes = [...familias.entries()].map(([clave, versiones]) => {
     const ultima = new Map(versiones.map((v) => [String(v.id), ultimaEtapaDe(v)]));
     const propios = casos.filter((caso) => ultima.has(String(caso.proceso_id)) && esIteracion(caso, ultima.get(String(caso.proceso_id))));
     const enCurso = casos.filter((caso) => ultima.has(String(caso.proceso_id))
@@ -1337,7 +1358,11 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
     return {
       familia: clave,
       nombre: nombreDeFamilia(actual.nombre),
-      proposito: typeof definicion.proposito === "string" ? definicion.proposito : typeof actual.descripcion === "string" ? actual.descripcion : "",
+      // Una línea para la tarjeta: la de la ficha, o la primera oración del propósito.
+      resumen: fichaDe(actual)?.resumen ?? resumenCorto(definicion.proposito ?? actual.descripcion),
+      skill: fichaDe(actual)?.skill ?? null,
+      // Los casos donde buscar la portada: las últimas iteraciones, de la más nueva a la más vieja.
+      candidatos: propios.slice(0, 5).map((caso) => String(caso.id)),
       version: versionDe(actual),
       estado: String(actual.estado),
       iteraciones: propios.length,
@@ -1345,6 +1370,15 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
       ultima: propios[0]?.created_at ?? null,
     };
   }).sort((a, b) => String(b.ultima ?? "").localeCompare(String(a.ultima ?? "")));
+  // La portada de cada tarjeta: las primeras imágenes de la iteración más reciente que tenga.
+  return Promise.all(resumenes.map(async ({ candidatos, ...familia }) => {
+    let miniaturas: Imagen[] = [];
+    for (const caso of candidatos) {
+      miniaturas = (await imagenesDe(caso)).slice(0, 3);
+      if (miniaturas.length) break;
+    }
+    return { ...familia, miniaturas };
+  }));
 }
 
 export function validarProceso(definicion: unknown) {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Copiar } from "@/components/copiar";
 import { Receta } from "@/components/process-output";
 import { SubirLaminas } from "@/components/subir-laminas";
 import { cancelarCasoAction } from "../actions";
@@ -11,7 +12,7 @@ import { comoSeHace, iteracionesDeProceso, motorDisponible } from "@/platform/pr
 export const dynamic = "force-dynamic";
 
 const fecha = (valor: unknown) => (valor
-  ? new Date(String(valor)).toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  ? new Date(String(valor)).toLocaleDateString("es-AR", { day: "numeric", month: "short" })
   : "");
 
 function Origen({ origen, reproduccion }: { origen: string; reproduccion: { salio_igual: boolean; que_falto?: string } | null }) {
@@ -60,6 +61,8 @@ export default async function ProcesoPage({
   const guia = await comoSeHace(persona, familia).catch(() => null);
   const administra = canViewAudit(user);
   const rendimiento = administra ? await tableroDeProceso(String(datos.vigente.id)).catch(() => null) : null;
+  const ficha = datos.ficha;
+  const pedido = ficha?.pedido_ejemplo ?? `Hacé ${datos.nombre}`;
   const reproducciones = datos.iteraciones.filter((it) => it.origen === "reproduccion");
   const fallidas = reproducciones.filter((it) => it.reproduccion?.salio_igual === false).length;
 
@@ -67,32 +70,66 @@ export default async function ProcesoPage({
     <>
       <div className="page-header">
         <div>
-          <p className="eyebrow"><Link className="record-link" href="/procesos">Procesos</Link> · v{datos.vigente.version}{datos.vigente.estado !== "publicado" ? ` · ${String(datos.vigente.estado)}` : ""}</p>
+          <p className="eyebrow"><Link className="record-link" href="/procesos">Procesos</Link></p>
           <h1>{datos.nombre}</h1>
-          <p className="subtitle">
-            {datos.iteraciones.length === 1 ? "1 iteración" : `${datos.iteraciones.length} iteraciones`}
-            {reproducciones.length
-              ? ` · ${reproducciones.length === 1 ? "1 reproducción" : `${reproducciones.length} reproducciones`}${fallidas ? `, ${fallidas} sin salir igual` : ", todas salieron igual"}`
-              : ""}
-            {datos.versiones.length > 1 ? ` · ${datos.versiones.length} versiones` : ""}
-          </p>
+          {datos.resumen && <p className="subtitle">{datos.resumen}</p>}
         </div>
       </div>
 
       {aviso && <div className="notice success">{aviso}</div>}
       {fallo && <div className="notice error">{fallo}</div>}
 
-      <div className="notice">
-        Para hacerlo desde cualquier IA conectada a esta aplicación, pedile «hacé {datos.nombre}»: recibe esta receta.
-        Para mejorarlo: «mirá las iteraciones de {datos.nombre} y proponé la versión siguiente».
-      </div>
-
-      {guia && (
-        <details className="process-guide">
-          <summary>Cómo se hace · versión {guia.version}</summary>
-          <pre>{guia.guia}</pre>
-        </details>
-      )}
+      <section className="process-sheet" aria-label="Cómo lo hace el equipo">
+        <div className="sheet-grid">
+          <div className="sheet-item">
+            <div className="card-label">Cómo se hace</div>
+            {ficha?.skill ? (
+              <>
+                <div className="sheet-value">skill {ficha.skill.nombre}{ficha.skill.version ? ` v${ficha.skill.version}` : ""}</div>
+                {ficha.skill.repo && <a className="record-link" href={ficha.skill.repo} rel="noreferrer" target="_blank">Ver en GitHub</a>}
+              </>
+            ) : (
+              <div className="sheet-value">Guía del proceso, versión {datos.vigente.version}</div>
+            )}
+          </div>
+          {ficha?.entrada && (
+            <div className="sheet-item">
+              <div className="card-label">Qué hay que darle</div>
+              <div className="sheet-value">{ficha.entrada}</div>
+            </div>
+          )}
+          {ficha?.entrega && (
+            <div className="sheet-item">
+              <div className="card-label">Qué entrega</div>
+              <div className="sheet-value">{ficha.entrega}</div>
+            </div>
+          )}
+          {ficha?.necesita?.length ? (
+            <div className="sheet-item">
+              <div className="card-label">Necesita</div>
+              <div className="sheet-value">{ficha.necesita.join(", ")}</div>
+            </div>
+          ) : null}
+        </div>
+        <div className="sheet-ask">
+          <span><span className="table-secondary">Pedíselo a tu IA:</span> <code>{pedido}</code></span>
+          <Copiar texto={pedido} />
+        </div>
+        <p className="sheet-foot">
+          {datos.saben.length > 0 && <>Lo {datos.saben.length === 1 ? "sabe" : "saben"} hacer: {datos.saben.join(", ")} · </>}
+          versión {datos.vigente.version}{datos.vigente.estado !== "publicado" ? ` (${String(datos.vigente.estado)})` : ""}
+          {datos.versiones.length > 1 ? ` de ${datos.versiones.length}` : ""}
+          {reproducciones.length
+            ? ` · ${reproducciones.length === 1 ? "1 reproducción" : `${reproducciones.length} reproducciones`}${fallidas ? `, ${fallidas} sin salir igual` : ""}`
+            : ""}
+        </p>
+        {guia && (
+          <details className="process-guide">
+            <summary>Leer la guía completa</summary>
+            <pre>{guia.guia}</pre>
+          </details>
+        )}
+      </section>
 
       {datos.en_curso.length > 0 && (
         <section className="work-section">
@@ -122,51 +159,61 @@ export default async function ProcesoPage({
       )}
 
       <section className="work-section">
-        <h2>Iteraciones</h2>
-        {datos.iteraciones.length === 0 && <div className="empty compact">Todavía no se registró ninguna.</div>}
-        {datos.iteraciones.map((it) => (
-          <article className="iteration" key={it.iteracion}>
-            <div className="decision-head">
-              <div>
-                <div className="card-label">v{it.version} · {fecha(it.fecha)}{it.quien ? ` · ${it.quien}` : ""}</div>
+        <h2>Iteraciones{datos.iteraciones.length ? ` · ${datos.iteraciones.length}` : ""}</h2>
+        {datos.iteraciones.length === 0 && (
+          <div className="empty compact">Todavía no se registró ninguna. Al terminar una pieza, pedile a tu IA «registrá esto en Operaciones».</div>
+        )}
+        <div className="iteration-grid">
+          {datos.iteraciones.map((it) => (
+            <article className="iteration" key={it.iteracion}>
+              <div className={`process-cover${it.imagenes.length ? "" : " empty-cover"}`}>
+                {it.imagenes.length
+                  ? it.imagenes.slice(0, 3).map((imagen) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos
+                    <img alt="" key={imagen.id} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
+                  ))
+                  : <span>Sin imágenes</span>}
+              </div>
+              <div className="iteration-body">
                 <h3>{it.titulo}</h3>
+                <div className="process-meta">
+                  <span>
+                    {fecha(it.fecha)}{it.quien ? ` · ${it.quien}` : ""}
+                    {it.skill ? ` · ${it.skill}` : ` · v${it.version}`}
+                    {it.imagenes.length ? ` · ${it.imagenes.length} ${it.imagenes.length === 1 ? "imagen" : "imágenes"}` : ""}
+                  </span>
+                  {it.origen === "reproduccion" && <Origen origen={it.origen} reproduccion={it.reproduccion} />}
+                  {it.estado === "en_revision" && <span className="badge warn">Para aprobar</span>}
+                </div>
+                {it.reproduccion && !it.reproduccion.salio_igual && it.reproduccion.que_falto && (
+                  <p className="iteration-missing">Qué faltó: {it.reproduccion.que_falto}</p>
+                )}
+                <div className="iteration-links">
+                  {it.resultado && <a className="record-link" href={it.resultado} rel="noreferrer" target="_blank">Carpeta</a>}
+                  {it.conversacion && <a className="record-link" href={it.conversacion} rel="noreferrer" target="_blank">Conversación</a>}
+                  {administra && <Link className="record-link" href={`/records/instancia/${it.iteracion}`}>Registro</Link>}
+                </div>
+                <details className="iteration-recipe">
+                  <summary>
+                    {it.imagenes.length > 3 ? `Ver las ${it.imagenes.length} imágenes y cómo se hizo` : "Ver cómo se hizo"}
+                  </summary>
+                  {it.imagenes.length > 0 && (
+                    <div className="iteration-gallery">
+                      {it.imagenes.map((imagen) => (
+                        <a href={`/attachments/${imagen.id}?ver=1`} key={imagen.id} rel="noreferrer" target="_blank" title={imagen.nombre}>
+                          {/* eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos */}
+                          <img alt={imagen.nombre} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {it.receta && <Receta receta={it.receta} />}
+                  {(administra || it.persona === user.id) && it.imagenes.length < 20 && <SubirLaminas caso={it.iteracion} />}
+                </details>
               </div>
-              <div className="iteration-badges">
-                <Origen origen={it.origen} reproduccion={it.reproduccion} />
-                {it.estado === "en_revision" && <span className="badge warn">Para aprobar</span>}
-              </div>
-            </div>
-            {it.reproduccion && !it.reproduccion.salio_igual && it.reproduccion.que_falto && (
-              <p className="iteration-missing">Qué faltó: {it.reproduccion.que_falto}</p>
-            )}
-            <div className="iteration-links">
-              {it.resultado && <a className="record-link" href={it.resultado} rel="noreferrer" target="_blank">Resultado</a>}
-              {it.conversacion
-                ? <a className="record-link" href={it.conversacion} rel="noreferrer" target="_blank">Conversación</a>
-                : <span className="table-secondary">Sin conversación registrada</span>}
-              <Link className="record-link" href={`/records/instancia/${it.iteracion}`}>Ver el caso</Link>
-            </div>
-            {it.imagenes.length > 0 && (
-              <div className="iteration-gallery">
-                {it.imagenes.map((imagen) => (
-                  <a href={`/attachments/${imagen.id}?ver=1`} key={imagen.id} rel="noreferrer" target="_blank" title={imagen.nombre}>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos */}
-                    <img alt={imagen.nombre} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
-                  </a>
-                ))}
-              </div>
-            )}
-            {(administra || it.persona === user.id) && it.imagenes.length < 20 && (
-              <SubirLaminas caso={it.iteracion} />
-            )}
-            {it.receta && (
-              <details className="iteration-recipe">
-                <summary>Cómo se hizo{typeof it.receta.modelo === "string" ? ` · ${it.receta.modelo}` : ""}</summary>
-                <Receta receta={it.receta} />
-              </details>
-            )}
-          </article>
-        ))}
+            </article>
+          ))}
+        </div>
       </section>
 
       {administra && (
