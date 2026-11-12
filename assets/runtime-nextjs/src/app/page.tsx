@@ -4,6 +4,7 @@ import { hasPermission, hasViewAccess, requireUser } from "@/lib/auth";
 import { countRecords } from "@/lib/repository";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { getEntity, runtimeSpec } from "@/lib/spec";
+import { agruparVistas } from "@/lib/view-groups";
 import { motorDisponible } from "@/platform/processes/engine";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,13 @@ export default async function HomePage() {
     .filter((view) => !(motor && view.entity && ENTIDADES_DE_PROCESO.has(view.entity)));
   const descripcion = (view: (typeof vistas)[number]) =>
     view.description ?? (view.entity ? getEntity(view.entity)?.description : undefined) ?? "";
+  const grupos = agruparVistas(vistas, (clave) => getEntity(clave)?.label_plural).map((grupo) => {
+    const primera = vistas.find((view) => view.key === grupo.vistas[0].key)!;
+    return {
+      ...grupo,
+      descripcion: grupo.entity ? getEntity(grupo.entity)?.description ?? descripcion(primera) : descripcion(primera),
+    };
+  });
 
   const visibles = runtimeSpec.entities
     .filter((entity) => hasPermission(user, entity.key, "list"))
@@ -60,15 +68,18 @@ export default async function HomePage() {
         </section>
       )}
 
-      {vistas.length > 0 && (
+      {grupos.length > 0 && (
         <section className="work-section">
           <h2>Dónde está cada cosa</h2>
           <div className="grid">
-            {vistas.map((view) => (
-              <article className="card" key={view.key}>
-                <div className="card-label">{view.label}</div>
-                <p className="subtitle">{descripcion(view)}</p>
-                <Link className="card-link" href={`/views/${view.key}`}>Abrir →</Link>
+            {grupos.map((grupo) => (
+              <article className="card" key={grupo.key}>
+                <div className="card-label">{grupo.label}</div>
+                <p className="subtitle">{grupo.descripcion}</p>
+                {grupo.vistas.length > 1 && (
+                  <p className="table-secondary">{grupo.vistas.map((vista) => vista.label).join(" · ")}</p>
+                )}
+                <Link className="card-link" href={grupo.href}>Abrir →</Link>
               </article>
             ))}
           </div>

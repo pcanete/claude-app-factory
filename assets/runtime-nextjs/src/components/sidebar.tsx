@@ -4,7 +4,8 @@ import { SessionSignOut } from "@/components/session-sign-out";
 import { clerkAuthConfigured } from "@/platform/auth/config";
 import { canManageUsers, canViewAudit, canViewRules, getCurrentUser, hasPermission, hasViewAccess } from "@/lib/auth";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
-import { runtimeSpec } from "@/lib/spec";
+import { getEntity, runtimeSpec } from "@/lib/spec";
+import { agruparVistas } from "@/lib/view-groups";
 import { motorDisponible } from "@/platform/processes/engine";
 
 /** Las entidades del motor de procesos: se ven desde la página de cada proceso, no desde el menú. */
@@ -19,7 +20,8 @@ type Enlace = { key: string; label: string; href: string };
  * otro nombre: «Instancias» y «Procesos en curso» llevaban a los mismos casos. Ahora:
  *
  *   Trabajo      los procesos, si la aplicación los tiene
- *   Operación    las vistas del dominio
+ *   Operación    una entrada por entidad con vistas (sus vistas son pestañas) y las vistas
+ *                que no son de una entidad, como un panorama
  *   Datos        las entidades sin vista propia, plegadas: para cargar o buscar
  *   Sistema      administración
  *
@@ -35,7 +37,6 @@ export async function Sidebar() {
     .filter((view) => view.navigation && ["table", "kanban", "calendar", "dashboard"].includes(view.type))
     .filter((view) => user && hasViewAccess(user, view));
   const entidadesConVista = new Set(vistas.map((view) => view.entity).filter((key): key is string => Boolean(key)));
-  const enlaceDeVista = (view: (typeof vistas)[number]): Enlace => ({ key: `view:${view.key}`, label: view.label, href: `/views/${view.key}` });
   const entidades = runtimeSpec.entities
     .filter((entity) => user && hasPermission(user, entity.key, "list"))
     .filter((entity) => !entidadesConVista.has(entity.key));
@@ -45,7 +46,10 @@ export async function Sidebar() {
   const miTrabajo: Enlace[] = [
     ...(motor && user && hasPermission(user, "proceso", "list") ? [{ key: "familias", label: "Procesos", href: "/procesos" }] : []),
   ];
-  const operacion = vistas.filter((view) => !deProceso(view.entity)).map(enlaceDeVista);
+  // Una entrada por entidad, no por vista: la tabla, la agenda y el tablero de los mismos
+  // compromisos son una sola cosa vista de tres maneras, y adentro se eligen por pestaña.
+  const operacion = agruparVistas(vistas.filter((view) => !deProceso(view.entity)), (clave) => getEntity(clave)?.label_plural)
+    .map((grupo): Enlace => ({ key: grupo.key, label: grupo.label, href: grupo.href }));
   const datos = entidades.filter((entity) => !deProceso(entity.key)).map(enlaceDeEntidad);
   const sistema: Enlace[] = [
     ...(user && canManageUsers(user) ? [{ key: "users", label: "Usuarios", href: "/users" }] : []),
