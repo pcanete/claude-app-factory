@@ -36,10 +36,11 @@ cada llamada, también para leer. Las marcas viven en un solo lugar,
 registra sin la suya o si una que modifica datos queda marcada como lectura. Son una pista para
 el cliente, no un control: los permisos siguen en el servidor.
 
-Si la AppSpec tiene las entidades `proceso`, `instancia` y `evento`, se suman las herramientas del
-motor de procesos (`mis_pendientes`, `tomar_caso`, `cerrar_etapa`, `revisar_etapa` y las demás),
-los prompts `pendientes` y `trabajar_caso`, y las instrucciones de servidor mandan a la IA a empezar
-por ahí. El contrato está en [`procesos.md`](procesos.md).
+Si la AppSpec tiene las entidades `proceso` e `iteracion`, se suman cuatro herramientas
+(`como_se_hace`, `registrar_iteracion`, `iteraciones_de_proceso`, `adjuntar_a_iteracion`), los
+prompts `registrar`, `reproducir` y `mejorar_proceso`, y las instrucciones de servidor le dicen a
+la IA que traiga cómo se hace algo antes de improvisarlo y que registre lo que sale bien. El
+contrato está en [`procesos.md`](procesos.md).
 
 ## Instrucciones de servidor
 

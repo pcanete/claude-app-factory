@@ -67,7 +67,6 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
           <select aria-label="Estado" className="control" defaultValue={consulta.estado} name="estado">
             <option value="vigentes">Vigentes</option>
             <option value="publicado">Publicados</option>
-            <option value="borrador">Borradores</option>
             <option value="retirado">Retirados</option>
             <option value="todos">Todos</option>
           </select>
@@ -107,7 +106,7 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
                   <td data-label="Qué hace" className="table-secondary">{familia.resumen}</td>
                   <td data-label="Skill">{familia.skill ? familia.skill.nombre : "guía"}</td>
                   <td data-label="Estado">{ESTADOS[familia.estado] ?? familia.estado}</td>
-                  <td data-label="Iteraciones">{familia.iteraciones}{familia.en_curso ? ` · ${familia.en_curso} en curso` : ""}</td>
+                  <td data-label="Iteraciones">{familia.iteraciones}</td>
                   <td data-label="Última">{fecha(familia.ultima) ?? "—"}</td>
                 </tr>
               ))}
@@ -131,11 +130,11 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
                 {familia.resumen && <p className="process-summary">{familia.resumen}</p>}
                 <div className="process-meta">
                   {familia.skill && <span className="badge accent">skill</span>}
+                  {familia.requisitos > 0 && <span className="badge">{familia.requisitos} requisitos</span>}
                   {familia.estado !== "publicado" && <span className="badge warn">{ESTADOS[familia.estado] ?? familia.estado}</span>}
                   <span>
                     {familia.iteraciones === 1 ? "1 iteración" : `${familia.iteraciones} iteraciones`}
                     {familia.ultima ? ` · ${fecha(familia.ultima)}` : ""}
-                    {familia.en_curso ? ` · ${familia.en_curso} en curso` : ""}
                   </span>
                 </div>
               </div>

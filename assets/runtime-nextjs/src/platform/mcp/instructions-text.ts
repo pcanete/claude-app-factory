@@ -47,18 +47,16 @@ export function componerInstrucciones(contexto: ContextoInstrucciones, valor: un
     );
   }
   partes.push("Para saber qué podés consultar y modificar, usá list_entities y describe_entity.");
-  // Con motor de procesos, la forma de trabajar no la tiene que saber la IA: se la da la
-  // plataforma etapa por etapa. Esto la manda ahí antes de que improvise con los registros.
+  // Con procesos, lo que el equipo ya sabe hacer está en la plataforma: la IA lo trae antes
+  // de improvisar, y registra lo que sale bien para que otro lo repita.
   if (contexto.motorDeProcesos) {
     partes.push(
       "",
-      "Esta aplicación organiza el trabajo en procesos, y el método de cada etapa lo da la plataforma: no hace falta conocerlo de antemano.",
-      "- Empezá por mis_pendientes: lo que tenés para seguir, para revisar y lo que podés tomar.",
-      "- tomar_caso te devuelve la guía de la etapa: qué tenés para trabajar, qué herramientas usar, cómo se hace, qué se controla y cómo cerrar. Seguila; no improvises otro método.",
-      "- A la persona pedile sólo lo que la guía dice que le toca: insumos, decisiones y su criterio sobre el resultado.",
-      "- Si falta algo que no podés conseguir, esperar_caso. Para terminar, cerrar_etapa con la receta y la evidencia de cada criterio. Para revisar, revisar_etapa.",
-      "- No muevas casos editando registros con update_record o create_record: las herramientas del motor son las que registran y controlan cada paso.",
-      "- Si te piden algo que el equipo ya sabe hacer, traé la receta con como_se_hace y seguila. Cuando algo quede bien y la persona quiera guardarlo, registrar_iteracion: guarda cómo se hizo y en qué conversación, para que otra persona lo repita.",
+      "Esta aplicación guarda lo que el equipo sabe hacer como procesos, y cada vez que se hizo como iteraciones.",
+      "- Si te piden algo que el equipo ya sabe hacer, traé cómo se hace con como_se_hace. Comprobá primero en esta máquina los requisitos que lista; lo que falte, instalalo como dice o avisá, y no lo reemplaces por otra cosa.",
+      "- Lo producido va a la carpeta de Dropbox del proceso. Comprobá con el conector de Dropbox que quedó ahí antes de registrar.",
+      "- Al terminar, registralo con registrar_iteracion: carpeta, archivos, los datos que pide el proceso, la receta, la skill con su commit y el enlace a la conversación.",
+      "- No crees ni edites procesos ni iteraciones con create_record o update_record.",
     );
   }
 

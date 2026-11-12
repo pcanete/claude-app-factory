@@ -1,6 +1,6 @@
 ---
 name: claude-app-factory
-description: "Genera, evoluciona y actualiza la aplicación propia de una organización que entrega un servicio con software: un AppSpec se compila en una aplicación Next.js + PostgreSQL de un solo cliente, con procesos versionados que las personas ejecutan con su propia IA por MCP, receta obligatoria al cerrar cada etapa, revisión y auditoría con una persona responsable. Sirve también para herramientas internas, sistemas de datos y aplicaciones operativas sin procesos. No fuerces el arquetipo de un CRM ni un runtime multi-inquilino compartido."
+description: "Genera, evoluciona y actualiza la aplicación propia de una organización que entrega un servicio con software: un AppSpec se compila en una aplicación Next.js + PostgreSQL de un solo cliente, con procesos que registran cómo se hizo cada trabajo con IA —requisitos de la máquina, receta, skill y lo producido en Dropbox— para que otra persona lo repita con su propia IA por MCP, y auditoría con una persona responsable. Sirve también para herramientas internas, sistemas de datos y aplicaciones operativas sin procesos. No fuerces el arquetipo de un CRM ni un runtime multi-inquilino compartido."
 ---
 
 # Claude App Factory
@@ -50,12 +50,11 @@ resuelven a mano, no con un flag. Después de `--apply`: `pnpm install`, `pnpm d
 15. Una migración que borra datos no se aplica sola durante un despliegue. Si la guarda la frena, la salida no es autorizarla y seguir: primero desacoplá el código y desplegá, y recién después borrá los datos, con respaldo y como paso separado.
 16. Cuando la aplicación vaya a ser operada por agentes, leé [references/mcp.md](references/mcp.md). Emití
 una credencial por agente, con los alcances mínimos que necesite y con vencimiento; nunca compartas una sesión humana con un agente.
-17. Cuando la organización entregue un servicio que pasa por varias manos, declará
-`"blocks": ["procesos"]` en el AppSpec: la fábrica agrega `proceso`, `instancia` y `evento` con sus
+17. Cuando la organización quiera registrar cómo hace su trabajo con IA para que otro lo repita,
+declará `"blocks": ["procesos"]` en el AppSpec: la fábrica agrega `proceso` e `iteracion` con sus
 vistas y permisos. No las escribas a mano. Seguí [references/procesos.md](references/procesos.md); para
-una aplicación existente, `scripts/blocks.py` arma la propuesta para `evolve_app.py`. A los roles que
-operan dales sólo `list` y `read` sobre `instancia` y `evento`: el motor es la única puerta para mover
-un caso. Validá cada definición con `validar_proceso` antes de publicarla.
+una aplicación existente, `scripts/blocks.py` arma la propuesta para `evolve_app.py`, y una que venga de
+la 1.x sigue los pasos de «Pasar de 1.x a 2.0».
 18. Implementá los cálculos, integraciones, flujos e interfaz propios del cliente en `src/features/`, siguiendo [references/extension-contract.md](references/extension-contract.md). Nunca edites `src/platform/` ni `database/platform/` para un cliente: envolvelos desde una feature.
 
 ## Contrato de entrega

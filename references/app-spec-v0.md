@@ -298,10 +298,10 @@ pide con una línea y la fábrica lo expande antes de validar, al generar y al e
 }
 ```
 
-Hoy hay un bloque, `procesos`: agrega las entidades `proceso`, `instancia` y `evento` sobre las que
-opera el [motor de procesos](procesos.md), y las vistas «Casos en curso» (kanban por estado),
-«Casos», «Bitácora» y «Procesos». Declaralo siempre que la organización entregue un servicio que
-pasa por varias manos; dejalo afuera en una herramienta interna sin procesos.
+Hoy hay un bloque, `procesos` (versión 2): agrega las entidades `proceso` e `iteracion` con las
+que la plataforma guarda [lo que el equipo sabe hacer y cada vez que lo hizo](procesos.md), y las
+vistas «Procesos» e «Iteraciones». Declaralo cuando la organización quiera registrar cómo hace
+su trabajo con IA para que otro lo repita; dejalo afuera en una herramienta interna sin eso.
 
 - **La expansión queda escrita** en el `app-spec.json` de la aplicación. Después de generarla, esas
   entidades son de la aplicación: se ven, se evolucionan y se extienden como cualquier otra. Se les

@@ -3,8 +3,8 @@
 Bloques estándar del AppSpec.
 
 Un bloque es un conjunto de entidades y vistas que la plataforma necesita con una forma fija.
-El primero es `procesos`: las entidades `proceso`, `instancia` y `evento` sobre las que opera el
-motor de procesos. Una AppSpec lo pide con una línea:
+El primero es `procesos`: las entidades `proceso` e `iteracion` con las que la plataforma guarda
+lo que el equipo sabe hacer y cada vez que lo hizo. Una AppSpec lo pide con una línea:
 
     "blocks": ["procesos"]
 
@@ -19,9 +19,9 @@ Tres reglas sostienen que expandir sea seguro:
   nueva del bloque nunca cambia en silencio el esquema de una aplicación instalada.
 - **Las vistas acompañan a la entidad.** Sólo se agregan las vistas de las entidades que el bloque
   agrega en esta pasada; si la entidad ya estaba, sus vistas son decisión de la aplicación.
-- **Los permisos salen de los roles.** Los roles con `manage_users` definen procesos y
-  administran casos; el resto lee. Si ningún rol declara capacidades, el primero hace de
-  administrador. El motor no usa esta matriz para mover casos: autoriza con el grupo de cada etapa.
+- **Los permisos salen de los roles.** Los roles con `manage_users` editan y borran procesos e
+  iteraciones; el resto lee. Si ningún rol declara capacidades, el primero hace de administrador.
+  Registrar una iteración no usa esta matriz: lo hace la herramienta, que valida lo que llega.
 
 Uso, para agregar el bloque a una aplicación que ya existe:
 
@@ -49,19 +49,12 @@ REQUISITOS: dict[str, dict[str, Any]] = {
     "proceso": {
         "campos": ["nombre", "estado", "definicion"],
         "relaciones": [],
-        "opciones": {"estado": ["publicado"]},
+        "opciones": {"estado": ["publicado", "retirado"]},
     },
-    "instancia": {
-        "campos": ["titulo", "etapa", "estado", "tomada_por", "responde", "insumos", "resultado"],
+    "iteracion": {
+        "campos": ["titulo", "carpeta", "archivos", "datos", "receta", "skill", "conversacion", "origen", "salio_igual", "que_falto", "autor"],
         "relaciones": ["proceso"],
-        "opciones": {"estado": ["en_cola", "tomada", "esperando", "en_revision", "devuelta", "entregada"]},
-    },
-    "evento": {
-        "campos": ["resumen", "tipo", "etapa", "autor", "salidas", "receta", "enlace"],
-        "relaciones": ["instancia"],
-        "opciones": {
-            "tipo": ["creada", "tomada", "liberada", "esperando", "cerrada", "revisada", "devuelta", "entregada"],
-        },
+        "opciones": {"origen": ["original", "reproduccion"]},
     },
 }
 
@@ -89,11 +82,9 @@ def block_permissions(entity_key: str, spec: dict[str, Any]) -> dict[str, list[s
         key = role.get("key") if isinstance(role, dict) else None
         if not isinstance(key, str):
             continue
-        if key in admins and entity_key != "evento":
-            permissions[key] = list(FULL)
-        else:
-            # La bitácora no se edita: ni quien administra la modifica a mano.
-            permissions[key] = list(READ)
+        # Quien administra edita y borra procesos e iteraciones desde el panel. El resto lee:
+        # las iteraciones se registran con la herramienta, que es la que valida.
+        permissions[key] = list(FULL) if key in admins else list(READ)
     return permissions
 
 
