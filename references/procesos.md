@@ -13,6 +13,11 @@ otra persona lo repita en otra máquina, con otra IA.
   tiene que inventarlo ni recordarlo.
 - **Lo producido queda en Dropbox.** Una iteración sin carpeta de Dropbox y sin la lista de
   archivos que quedaron ahí no se registra.
+- **Un proceso nace completo.** Sin ficha, skill (o método), carpeta, requisitos y registro no
+  se guarda, lo cree una persona en el panel o su agente por MCP.
+- **Quien administra define; el resto registra.** Crear y cambiar procesos lo hace quien
+  administra —en persona o con su agente, que opera con su rol—. Los demás registran
+  iteraciones.
 - **Nada más.** No hay etapas, colas, revisiones ni aprobaciones. Estado y responsable son
   opcionales. Quien administra edita y borra todo desde el panel.
 
@@ -37,7 +42,14 @@ El bloque `"blocks": ["procesos"]` agrega las dos entidades con sus permisos. Ve
 | `iteracion` | `titulo`, `carpeta`, `archivos` (json), `datos` (json), `receta` (json), `skill`, `conversacion`, `origen` (`original`, `reproduccion`), `salio_igual`, `que_falto`, `autor` (person), y opcionales `responsable` (person) y `estado` (`en_curso`, `terminada`, `publicada`) | `proceso` |
 
 Los roles con `manage_users` tienen todos los permisos sobre las dos; el resto, lectura.
-Registrar una iteración no usa esa matriz: lo hace la herramienta, que valida lo que llega.
+Registrar una iteración no usa esa matriz: lo hace la herramienta, que valida lo que llega, y
+la puede usar cualquier rol.
+
+Las herramientas genéricas no escriben procesos: `create_record`, `update_record` y
+`delete_record` rechazan `proceso`, y `create_record` rechaza `iteracion`. El formulario
+genérico del panel tampoco crea ni edita procesos. No saben qué tiene que tener un proceso
+completo; el motor sí. Editar o borrar una iteración ya registrada sigue siendo como con
+cualquier registro.
 
 ## La definición del proceso
 
@@ -73,6 +85,12 @@ Registrar una iteración no usa esa matriz: lo hace la herramienta, que valida l
 | `carpeta` | La carpeta de Dropbox donde va cada iteración, una carpeta por vez |
 | `ficha.skill` | Nombre y repositorio. La versión no se anota: es el commit, y cada iteración dice con cuál se hizo |
 
+**Obligatorio para guardar** (`faltasDeFicha`, igual en el panel y en el MCP): `ficha.resumen`,
+`ficha.entrada`, `ficha.entrega`, la skill con su repositorio —o `metodo`, si no hay skill—,
+una `carpeta` de Dropbox, al menos un requisito y al menos un dato en `registro`.
+`pedido_ejemplo` es opcional. Una definición vieja incompleta se sigue leyendo; no se puede
+volver a guardar hasta completarla.
+
 Un proceso es un solo registro y se edita en el lugar. El historial del método es el del
 repositorio de su skill. En el panel, requisitos y registro se escriben una línea por
 elemento: `nombre | tipo | cómo comprobarlo | qué hacer si falta` y `clave | qué es | opcional`.
@@ -91,8 +109,11 @@ lo que no se usa se ignora. Al editar el proceso en el panel se reemplazan por l
 - en una reproducción, si salió igual y, si no, qué faltó.
 
 Y guarda además la skill con su commit (`«carrusel-p3-negocios @ f31eaf4»`) y el enlace a la
-conversación (`https://…` o `claude://…`). Si el proceso no existe, `nuevo_proceso` lo crea con
-nombre y una línea de qué hace, para que quien administra le complete el resto.
+conversación (`https://…` o `claude://…`). Si el proceso no existe y quien registra administra,
+`nuevo_proceso` lo crea en el mismo paso con la ficha completa —nombre, `ficha`, `requisitos`,
+`registro`, `carpeta` y `metodo` si no hay skill— y la iteración se valida contra ese registro.
+Si quien registra no administra, se rechaza: tiene que pedirle a quien administra que lo cree.
+Lo producido ya está en Dropbox, así que no se pierde nada.
 
 La plataforma no lee Dropbox: la comprobación la hace la IA con el conector, antes de
 registrar. Si alguna vez una carpeta registrada resulta vacía, el paso siguiente es que el
@@ -106,6 +127,7 @@ servidor lo verifique con una credencial de Dropbox propia.
 | `registrar_iteracion` | Guarda una vez que se hizo, si está completa |
 | `iteraciones_de_proceso` | Todas las veces que se hizo, con todo lo registrado |
 | `adjuntar_a_iteracion` | Adjunta imágenes o PDF livianos para verlos en el panel |
+| `editar_proceso` | Sólo para quien administra (los demás no la ven): cambia lo que se manda de un proceso y deja el resto; tiene que quedar completo |
 
 Comandos (prompts MCP): `registrar`, `reproducir` y `mejorar_proceso`.
 

@@ -7,10 +7,13 @@ import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
   adjuntarAIteracion,
   comoSeHace,
+  administraProcesos,
   iteracionesDeProceso,
+  mejorarProceso,
   motorDisponible,
   registrarIteracion,
 } from "@/platform/processes/engine";
+import { TIPOS_DE_REQUISITO, type TipoRequisito } from "@/platform/processes/definition";
 
 type ResultadoMcp = {
   content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
@@ -26,13 +29,40 @@ export type Rastreo = (
 
 const textos = z.array(z.string().max(4_000)).max(100);
 
+// La ficha de un proceso, igual para crearlo y para mejorarlo. Qué es obligatorio lo decide
+// el motor (`faltasDeFicha`), no el esquema: así el panel y el MCP exigen lo mismo.
+const ficha = z.object({
+  resumen: z.string().min(10).max(200).describe("Qué hace, en una línea."),
+  entrada: z.string().max(500).describe("Qué hay que darle para empezar."),
+  entrega: z.string().max(500).describe("Qué entrega."),
+  pedido_ejemplo: z.string().max(300).optional().describe("La frase para pedírselo a una IA."),
+  skill: z.object({
+    nombre: z.string().min(1).max(120),
+    repo: z.string().url().max(500).describe("La dirección (https://…) del repositorio de la skill."),
+  }).optional().describe("La skill con que se hace. Si no hay skill, mandá metodo."),
+});
+const requisitos = z.array(z.object({
+  nombre: z.string().min(1).max(200),
+  tipo: z.enum(TIPOS_DE_REQUISITO as unknown as [TipoRequisito, ...TipoRequisito[]]),
+  verificar: z.string().min(1).max(1_000).describe("Cómo se comprueba en una máquina que está: un comando o qué mirar."),
+  instalar: z.string().max(1_000).optional().describe("Qué hacer si falta."),
+})).min(1).max(50).describe("Lo que la máquina tiene que tener: skills, librerías, programas, conectores, variables y archivos.");
+const registro = z.array(z.object({
+  clave: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/).describe("En minúsculas, sin espacios: «deportista»."),
+  descripcion: z.string().min(1).max(500),
+  requerido: z.boolean().optional().describe("Por defecto, sí."),
+})).min(1).max(50).describe("Los datos que cada iteración tiene que dejar. Carpeta, archivos, receta, skill y conversación se registran siempre.");
+const carpeta = z.string().max(500).describe("La carpeta de Dropbox donde va cada iteración: «/Clientes/<cliente>/…/piezas/».");
+const metodo = z.string().max(20_000).describe("Cómo se hace, en markdown. Sólo si no hay skill.");
+
 function acotado(valor: unknown, limite: number, etiqueta: string) {
   if (JSON.stringify(valor ?? null).length > limite) throw new Error(`${etiqueta} supera ${Math.round(limite / 1024)} KB.`);
 }
 
 /**
  * Cuatro herramientas: cómo se hace algo, registrar una vez que se hizo, ver las veces que
- * se hizo y adjuntar lo liviano para mirarlo. Se registran sólo si la AppSpec tiene
+ * se hizo y adjuntar lo liviano para mirarlo. Una quinta, editar_proceso, sólo para el
+ * agente de quien administra. Se registran sólo si la AppSpec tiene
  * `proceso` e `iteracion`.
  *
  * Las descripciones son parte del contrato: es lo que lee la IA de quien opera para saber
@@ -56,13 +86,17 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("registrar_iteracion", {
     annotations: marcas("registrar_iteracion"),
     description:
-      "Registra una vez que se hizo un proceso. Antes de llamarla, lo producido tiene que estar en Dropbox y tenés que haber comprobado con el conector de Dropbox que los archivos están en la carpeta: sin carpeta y archivos no se registra. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación. Si el proceso todavía no existe, usá nuevo_proceso.",
+      "Registra una vez que se hizo un proceso. Antes de llamarla, lo producido tiene que estar en Dropbox y tenés que haber comprobado con el conector de Dropbox que los archivos están en la carpeta: sin carpeta y archivos no se registra. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree.",
     inputSchema: z.object({
       proceso: z.string().max(200).optional().describe("El nombre o el id del proceso."),
       nuevo_proceso: z.object({
         nombre: z.string().min(3).max(120),
-        resumen: z.string().min(10).max(200).describe("Qué hace, en una línea."),
-      }).optional().describe("Sólo si es la primera vez que se hace."),
+        ficha,
+        requisitos,
+        registro,
+        carpeta,
+        metodo: metodo.optional(),
+      }).optional().describe("Sólo si es la primera vez que se hace, y sólo si quien registra administra: crea el proceso con su ficha completa en el mismo paso. Los datos de esta iteración tienen que cumplir el registro que declares."),
       titulo: z.string().min(3).max(200).describe("Qué se hizo esta vez, por ejemplo «Federer y On»."),
       carpeta: z.string().max(1_000).describe("La carpeta de Dropbox donde quedó lo producido: https://www.dropbox.com/… o /Clientes/…"),
       archivos: textos.min(1).describe("Los archivos que quedaron en esa carpeta, como los devolvió el conector de Dropbox al comprobarlos."),
@@ -89,6 +123,27 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     acotado(entrada.datos, 64_000, "datos");
     return { value: await registrarIteracion(agent, entrada, eventId), resultCount: 1 };
   }));
+
+  // Sólo lo ve el agente de quien administra: es el único que puede cambiar un proceso.
+  if (administraProcesos(agent)) {
+    server.registerTool("editar_proceso", {
+      annotations: marcas("editar_proceso"),
+      description:
+        "Mejora un proceso que ya existe: cambiá sólo lo que mandes (ficha, requisitos, registro, carpeta o método) y el resto queda como está. Requisitos y registro se reemplazan enteros: mandá la lista completa. El proceso tiene que quedar completo, si no, no se guarda. Lo que es método de la skill va a su repositorio, no acá.",
+      inputSchema: z.object({
+        proceso: z.string().min(2).max(200).describe("El nombre o el id del proceso."),
+        nombre: z.string().min(3).max(120).optional(),
+        ficha: ficha.partial().optional(),
+        requisitos: requisitos.optional(),
+        registro: registro.optional(),
+        carpeta: carpeta.optional(),
+        metodo: metodo.optional(),
+      }),
+    }, async ({ proceso, ...cambios }) => rastreo("editar_proceso", { proceso, cambios: Object.keys(cambios) }, async () => ({
+      value: await mejorarProceso(agent, proceso, cambios),
+      resultCount: 1,
+    })));
+  }
 
   server.registerTool("iteraciones_de_proceso", {
     annotations: marcas("iteraciones_de_proceso"),
@@ -134,7 +189,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     description: "Guarda cómo se hizo esto, en esta conversación, como iteración de un proceso.",
   }, () => mensaje([
     `Quiero registrar en «${aplicacion}» lo que hicimos en esta conversación.`,
-    "1. Fijate a qué proceso pertenece con como_se_hace (o query_records sobre proceso). Si no existe, proponeme nombre y una línea de qué hace.",
+    "1. Fijate a qué proceso pertenece con como_se_hace (o query_records sobre proceso). Si no existe y administro, proponeme la ficha completa —qué hace, qué entra, qué entrega, skill y repositorio, carpeta, requisitos con cómo comprobarlos y qué se registra— para crearlo con nuevo_proceso. Si no administro, decímelo: lo tiene que crear quien administra.",
     "2. Asegurate de que lo producido esté en la carpeta de Dropbox del proceso, y comprobalo con el conector de Dropbox: anotá los archivos que están.",
     "3. Armá la receta de esta conversación —pasos en orden, prompts que funcionaron textuales, herramientas, IA, decisiones y descartes— y los datos que pide el proceso.",
     "4. Anotá la skill con su commit, si se hizo con una, y el enlace de esta conversación.",
@@ -160,6 +215,6 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     `Mirá con iteraciones_de_proceso las veces que se hizo «${proceso}» y con como_se_hace cómo se hace hoy.`,
     "Fijate qué se repite en lo que salió bien, qué faltó en las reproducciones que no salieron igual y qué requisito o dato del registro falta.",
     "Proponeme qué cambiar, cada cambio con la iteración que lo justifica.",
-    "Lo que es método va a la skill, con un commit que diga qué cambió y por qué. Lo que es requisito, registro o carpeta lo edito yo en el panel.",
+    "Lo que es método va a la skill, con un commit que diga qué cambió y por qué. Lo que es ficha, requisito, registro o carpeta se cambia con editar_proceso, si administro, cuando lo apruebe; si no, lo edita quien administra en el panel.",
   ].join(" ")));
 }

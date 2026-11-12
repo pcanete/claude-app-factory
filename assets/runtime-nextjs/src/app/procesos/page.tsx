@@ -28,6 +28,7 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
     vista: uno(pedido.vista) === "lista" ? "lista" : "tarjetas",
   };
   const aviso = uno(pedido.hecho) || null;
+  const fallo = uno(pedido.error) || null;
   const administra = canManageUsers(user);
 
   const todas = await familiasDeProcesos({ id: user.id, name: user.displayName, roleKey: user.roleKey, scopes: [...USER_SCOPES], kind: "user" });
@@ -60,6 +61,7 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
       </div>
 
       {aviso && <div className="notice success">{aviso}</div>}
+      {fallo && <div className="notice error">{fallo}</div>}
 
       <form className="filter-panel">
         <div className="filter-primary">
