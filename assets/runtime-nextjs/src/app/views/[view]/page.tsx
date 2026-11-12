@@ -7,7 +7,7 @@ import { OperationalKanban } from "@/components/operational-kanban";
 import { Pagination } from "@/components/pagination";
 import { RecordFilters } from "@/components/record-filters";
 import { RecordTable } from "@/components/record-table";
-import { canAccessRelationshipOptions, hasPermission, requireViewAccess } from "@/lib/auth";
+import { canAccessRelationshipOptions, hasPermission, hasViewAccess, requireViewAccess } from "@/lib/auth";
 import { recordAccessForUser, type RecordAccessContext } from "@/lib/record-access";
 import type { RuntimeUser } from "@/lib/auth-types";
 import { recordsForClient } from "@/lib/presentation";
@@ -21,6 +21,7 @@ import {
 } from "@/lib/repository";
 import { getEntity, getView, type DashboardWidgetSpec, type EntitySpec, type ViewSpec, runtimeSpec } from "@/lib/spec";
 import { firstParam, parseListQuery, type RawSearchParams } from "@/lib/view-query";
+import { agruparVistas, grupoDeVista } from "@/lib/view-groups";
 
 export const dynamic = "force-dynamic";
 
@@ -269,17 +270,39 @@ export default async function NamedViewPage({
   const entity = view.entity ? getEntity(view.entity) : null;
   const canRead = entity ? hasPermission(user, entity.key, "read") : false;
   const canUpdate = entity ? hasPermission(user, entity.key, "update") : false;
+  // Las otras formas de ver la misma entidad, como pestañas: el menú tiene una sola entrada
+  // por entidad, y acá se elige si se ve como lista, agenda o tablero.
+  const visibles = runtimeSpec.views
+    .filter((candidata) => candidata.navigation && ["table", "kanban", "calendar", "dashboard"].includes(candidata.type))
+    .filter((candidata) => hasViewAccess(user, candidata));
+  const grupo = entity ? grupoDeVista(agruparVistas(visibles, (clave) => getEntity(clave)?.label_plural), view.key) : null;
+  const pestanas = grupo && grupo.vistas.length > 1 ? grupo.vistas : null;
+  const tieneLista = Boolean(grupo?.vistas.some((vista) => vista.type === "table"));
 
   return (
     <>
       <div className="page-header">
         <div>
-          <p className="eyebrow">{entity ? `${entity.label_plural} · ${TIPOS_DE_VISTA[view.type] ?? view.type}` : TIPOS_DE_VISTA[view.type] ?? view.type}</p>
-          <h1>{view.label}</h1>
+          <p className="eyebrow">{entity && !pestanas ? `${entity.label_plural} · ${TIPOS_DE_VISTA[view.type] ?? view.type}` : TIPOS_DE_VISTA[view.type] ?? view.type}</p>
+          <h1>{pestanas && grupo ? grupo.label : view.label}</h1>
           <p className="subtitle">{view.description ?? entity?.description ?? "Un resumen de lo que está pasando."}</p>
         </div>
-        {entity && <Link className="button secondary" href={`/records/${entity.key}`}>Abrir listado base</Link>}
+        {entity && !tieneLista && <Link className="button secondary" href={`/records/${entity.key}`}>Abrir listado base</Link>}
       </div>
+      {pestanas && (
+        <nav aria-label={`Cómo ver ${grupo!.label.toLowerCase()}`} className="view-switch view-tabs">
+          {pestanas.map((pestana) => (
+            <Link
+              aria-current={pestana.key === view.key ? "page" : undefined}
+              className={pestana.key === view.key ? "active" : undefined}
+              href={pestana.href}
+              key={pestana.key}
+            >
+              {pestana.label}
+            </Link>
+          ))}
+        </nav>
+      )}
       {view.type === "table" && <TableView access={access} canRead={canRead} canUpdate={canUpdate} query={query} user={user} view={view} />}
       {view.type === "kanban" && <KanbanView access={access} canRead={canRead} canUpdate={canUpdate} view={view} />}
       {view.type === "calendar" && <CalendarView access={access} canRead={canRead} canUpdate={canUpdate} month={firstParam(query.month)} view={view} />}

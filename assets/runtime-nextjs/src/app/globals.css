@@ -306,6 +306,8 @@ tbody tr:hover { background: #1a1d25; }
 .view-switch { display: inline-flex; margin-left: auto; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .view-switch a { padding: 8px 12px; font-size: 13px; color: var(--muted); text-decoration: none; }
 .view-switch a.active { background: var(--primary-soft); color: var(--text); }
+.view-tabs { display: flex; width: fit-content; max-width: 100%; margin: 0 0 18px; overflow-x: auto; }
+.view-tabs a { white-space: nowrap; }
 .header-danger { position: relative; }
 .header-danger summary { list-style: none; cursor: pointer; }
 .header-danger summary::-webkit-details-marker { display: none; }
