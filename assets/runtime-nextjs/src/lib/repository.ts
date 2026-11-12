@@ -555,6 +555,17 @@ export function recordInputFromForm(entity: EntitySpec, formData: FormData, mode
  * Ahora el repositorio lo hace siempre. Un camino nuevo --una feature, un importador,
  * una automatización-- nace protegido sin tener que enterarse de que esto existe.
  */
+/**
+ * El valor tal como lo espera PostgreSQL. Un campo JSON se manda como texto JSON: el driver
+ * convierte un objeto a JSON por su cuenta, pero una lista la manda como lista de
+ * PostgreSQL (`{a,b}`), y `jsonb` la rechaza con «invalid input syntax for type json».
+ */
+function valorParaLaBase(entity: EntitySpec, key: string, value: unknown) {
+  if (value === null || value === undefined || typeof value !== "object") return value;
+  const field = entity.fields.find((candidate) => candidate.key === key);
+  return field && (field.type === "json" || field.type === "file") ? JSON.stringify(value) : value;
+}
+
 export async function insertRecord(
   entityKey: string,
   values: Record<string, unknown>,
@@ -575,7 +586,7 @@ export async function insertRecord(
   const rows = await queryRows<{ id: string }>(
     client,
     `INSERT INTO ${identifier(entity.key)} (${columns}) VALUES (${placeholders}) RETURNING "id"`,
-    entries.map(([, value]) => value),
+    entries.map(([key, value]) => valorParaLaBase(entity, key, value)),
   );
   return rows[0].id;
 }
@@ -597,7 +608,7 @@ export async function updateRecord(
   const entries = Object.entries(values).filter(([key]) => allowed.has(key));
   if (!entries.length) return;
   const assignments = entries.map(([key], index) => `${identifier(key)} = $${index + 1}`).join(", ");
-  const parametros: unknown[] = [...entries.map(([, value]) => value), id];
+  const parametros: unknown[] = [...entries.map(([key, value]) => valorParaLaBase(entity, key, value)), id];
   const alcance = recordAccessCondition(entity, access, parametros);
   // `RETURNING` convierte el silencio en respuesta: sin fila, el registro no existe o
   // está fuera de alcance. Antes las dos cosas se veían como un éxito.
