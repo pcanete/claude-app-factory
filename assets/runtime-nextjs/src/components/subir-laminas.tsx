@@ -8,7 +8,7 @@ import { subirArchivoAIteracionAction } from "@/app/procesos/actions";
  * Subir las láminas de una iteración: se eligen todas juntas y viajan de a una, en orden de
  * nombre (slide-01, slide-02…), para no chocar con el límite de tamaño de un pedido.
  */
-export function SubirLaminas({ caso }: { caso: string }) {
+export function SubirLaminas({ iteracion }: { iteracion: string }) {
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   const [estado, setEstado] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export function SubirLaminas({ caso }: { caso: string }) {
       for (const [indice, archivo] of archivos.entries()) {
         setEstado(`Subiendo ${indice + 1} de ${archivos.length}: ${archivo.name}`);
         const datos = new FormData();
-        datos.set("caso", caso);
+        datos.set("iteracion", iteracion);
         datos.set("archivo", archivo);
         const respuesta = await subirArchivoAIteracionAction(datos);
         if (!respuesta.ok) {

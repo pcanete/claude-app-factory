@@ -8,7 +8,7 @@ import { runtimeSpec } from "@/lib/spec";
 import { motorDisponible } from "@/platform/processes/engine";
 
 /** Las entidades del motor de procesos: se ven desde la página de cada proceso, no desde el menú. */
-const ENTIDADES_DE_PROCESO = new Set(["proceso", "instancia", "evento"]);
+const ENTIDADES_DE_PROCESO = new Set(["proceso", "iteracion"]);
 
 type Enlace = { key: string; label: string; href: string };
 
@@ -18,7 +18,7 @@ type Enlace = { key: string; label: string; href: string };
  * Antes eran tres listas —entidades, vistas, sistema— y lo mismo aparecía dos veces con
  * otro nombre: «Instancias» y «Procesos en curso» llevaban a los mismos casos. Ahora:
  *
- *   Trabajo      lo que la persona tiene que decidir, y los procesos, si la aplicación los opera
+ *   Trabajo      los procesos, si la aplicación los tiene
  *   Operación    las vistas del dominio
  *   Datos        las entidades sin vista propia, plegadas: para cargar o buscar
  *   Sistema      administración
@@ -41,13 +41,8 @@ export async function Sidebar() {
     .filter((entity) => !entidadesConVista.has(entity.key));
   const enlaceDeEntidad = (entity: (typeof entidades)[number]): Enlace => ({ key: `entity:${entity.key}`, label: entity.label_plural, href: `/records/${entity.key}` });
 
-  // Con motor de procesos, todo lo del motor se reduce a dos entradas: lo que la persona
-  // tiene que decidir, y los procesos. Las vistas técnicas del motor —casos en curso,
-  // bitácora, definiciones, tablero— no salen del menú por estar mal, sino porque son
-  // cómo se guarda el trabajo, no lo que alguien viene a hacer: cada proceso las muestra
-  // en su página, y siguen abriéndose por su dirección.
+  // Procesos e iteraciones se ven desde la página de cada proceso: en el menú, una entrada.
   const miTrabajo: Enlace[] = [
-    ...(motor && user && hasPermission(user, "instancia", "read") ? [{ key: "pendientes", label: "Mis pendientes", href: "/pendientes" }] : []),
     ...(motor && user && hasPermission(user, "proceso", "list") ? [{ key: "familias", label: "Procesos", href: "/procesos" }] : []),
   ];
   const operacion = vistas.filter((view) => !deProceso(view.entity)).map(enlaceDeVista);

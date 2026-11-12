@@ -75,9 +75,9 @@ const sinTexto = componerInstrucciones({ ...persona, rol: "socio" }, porRol);
 comprobar("un rol sin texto propio recibe sólo lo general", sinTexto.includes("GENERAL") && !sinTexto.includes("SOLO_"));
 
 const conMotor = componerInstrucciones({ ...persona, motorDeProcesos: true }, null);
-comprobar("con motor de procesos, manda a mis_pendientes", conMotor.includes("mis_pendientes") && conMotor.includes("tomar_caso"));
+comprobar("con procesos, manda a como_se_hace y a registrar_iteracion", conMotor.includes("como_se_hace") && conMotor.includes("registrar_iteracion") && !conMotor.includes("mis_pendientes"));
 comprobar("con motor de procesos, dice cómo reutilizar y registrar lo que salió bien", conMotor.includes("como_se_hace") && conMotor.includes("registrar_iteracion"));
-comprobar("sin motor, no nombra herramientas que no existen", !componerInstrucciones(persona, null).includes("mis_pendientes"));
+comprobar("sin motor, no nombra herramientas que no existen", !componerInstrucciones(persona, null).includes("como_se_hace"));
 
 const largo = componerInstrucciones(persona, "x".repeat(LIMITE_INSTRUCCIONES * 2));
 comprobar("respeta el límite", largo.length <= LIMITE_INSTRUCCIONES, `largo ${largo.length}`);

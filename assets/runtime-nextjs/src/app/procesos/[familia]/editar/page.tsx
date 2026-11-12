@@ -7,7 +7,7 @@ import { iteracionesDeProceso, motorDisponible } from "@/platform/processes/engi
 
 export const dynamic = "force-dynamic";
 
-/** Modificar un proceso: su ficha se cambia en el lugar. */
+/** Modificar un proceso. Se cambia en el lugar: el historial del método está en su skill. */
 export default async function EditarProcesoPage({
   params,
   searchParams,
@@ -27,17 +27,18 @@ export default async function EditarProcesoPage({
   }
   // Sin ficha todavía, se arranca del resumen que ya muestra la tarjeta.
   const ficha = datos.ficha ?? { resumen: datos.resumen };
+  const proceso = { ficha, metodo: datos.metodo ?? undefined, requisitos: datos.requisitos, registro: datos.registro, carpeta: datos.carpeta ?? undefined };
   return (
     <>
       <div className="page-header">
         <div>
           <p className="eyebrow"><Link className="record-link" href={`/procesos/${familia}`}>{datos.nombre}</Link></p>
-          <h1>Editar ficha</h1>
+          <h1>Editar proceso</h1>
           <p className="subtitle">Lo que guardes reemplaza la ficha actual. Cómo cambia el método queda en el historial de la skill.</p>
         </div>
       </div>
       {error && <div className="notice error">{error}</div>}
-      <FichaForm cancelarHref={`/procesos/${familia}`} familia={familia} ficha={ficha} nombre={datos.nombre} />
+      <FichaForm cancelarHref={`/procesos/${familia}`} familia={familia} nombre={datos.nombre} proceso={proceso} />
     </>
   );
 }

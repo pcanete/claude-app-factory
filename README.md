@@ -2,10 +2,11 @@
 
 **Una base para servicios que se entregan con software.**
 
-Quien vende el servicio define sus procesos: qué etapas tienen, quién las toma y qué se revisa. La
-gente de la organización los ejecuta con la IA que ya usa, y los clientes piden, siguen y reciben.
-La plataforma no hace el trabajo. Guarda el método, guía cada etapa y registra quién hizo qué, con
-qué y cómo quedó, para que el método sea de la organización y no de la IA de cada persona.
+Cuando a alguien del equipo algo le sale bien con IA en su máquina, la plataforma guarda cómo lo
+hizo —qué necesitaba la máquina, qué pasos, qué prompts, con qué skill y dónde quedó lo
+producido— para que otra persona lo repita en otra máquina, con otra IA. La plataforma no hace el
+trabajo: guarda el método y cada vez que se hizo, para que el método sea de la organización y no
+de la IA de cada persona.
 
 Cada organización recibe su propia aplicación —Next.js y PostgreSQL, con su repositorio, su base y su
 despliegue—, generada a partir de una descripción de lo que maneja. No es un servicio compartido: si
@@ -30,36 +31,20 @@ Te sirve si:
 
 ## Cómo funciona
 
-Hay tres lugares desde donde se usa la misma aplicación:
+Dos piezas:
 
-| Quién | Qué hace |
+| Pieza | Qué guarda |
 |---|---|
-| **Quien vende el servicio** | Define los procesos como datos versionados: etapas, quién puede tomar cada una, instrucciones, criterios para cerrarla y si lleva revisión. Mejorar un proceso es publicar la versión siguiente, sin desplegar nada |
-| **Quien opera** | Conecta su propia IA (Claude, ChatGPT o la que use) por MCP, pregunta qué tiene pendiente y toma un caso. La plataforma le da a su IA las instrucciones de esa etapa; la persona aporta los insumos que sólo ella tiene y su criterio sobre el resultado |
-| **El cliente** | Pide, sigue en qué etapa está su caso y recibe el resultado. Esta cara todavía no está construida: hoy el pedido lo carga alguien de la organización |
+| **Proceso** | Qué hace, con qué skill, qué tiene que tener la máquina —cada requisito con cómo comprobarlo y cómo instalarlo—, qué hay que registrar cada vez y en qué carpeta de Dropbox va lo producido |
+| **Iteración** | Una vez que se hizo: la carpeta con lo producido y sus archivos, los datos que el proceso pide, la receta (pasos, prompts, herramientas, modelo, decisiones, descartes), la skill con su commit y la conversación |
 
-Para cerrar una etapa no alcanza con decir "listo": hace falta el enlace al resultado, en el
-almacenamiento de la organización, y una **receta** —qué pasos siguió, con qué herramientas, qué
-modelo de IA usó, qué decidió y qué falló—. Sin receta la etapa no cierra, sea cual sea la IA que
-llama. Así cualquiera puede retomar un caso a medio hacer leyendo sólo la plataforma, y la
-organización puede comparar qué rinde mejor en cada etapa.
+Quien lo repite le pide a su IA «hacé X». La IA trae el proceso por MCP, comprueba los requisitos
+en esa máquina, instala o avisa lo que falta, sigue la skill, guarda en Dropbox, comprueba que
+quedó y registra la iteración. Si estaba repitiendo, dice si salió igual y, si no, qué faltó: es lo
+que mejora el proceso.
 
-La calidad la sostiene la revisión, no la confianza en la IA de cada uno: lo mecánico (medidas,
-cantidades, que el enlace exista) lo verifica un agente o la evidencia; lo que requiere juicio, una
-persona.
-
-### Un ejemplo
-
-La liquidación mensual de IVA de un estudio contable, como proceso de tres etapas:
-
-| Etapa | Quién | Qué deja | Revisión |
-|---|---|---|---|
-| 1. Reunir comprobantes | quien opera, con su IA | planilla de comprobantes del mes | ninguna |
-| 2. Liquidar | quien opera, con su IA | borrador de la declaración y papeles de trabajo | una persona del grupo de revisión |
-| 3. Presentar | una persona | constancia de presentación | — |
-
-El cliente carga el pedido con los datos que el proceso pide, ve el caso avanzar y recibe la
-constancia. Quien toma la etapa 2 ve lo que necesita de la etapa 1, no el contrato del cliente.
+Una iteración sin carpeta de Dropbox y sin la lista de archivos que quedaron ahí no se registra.
+Estado y responsable son opcionales. No hay etapas, colas ni aprobaciones.
 
 ## Qué no es
 
@@ -70,8 +55,8 @@ constancia. Quien toma la etapa 2 ve lo que necesita de la etapa 1, no el contra
 - **No es un agente.** Cada persona trae su IA; la plataforma es la memoria común a la que todas se
   conectan.
 - **No es un CRM, un ERP ni un gestor de contenidos.** No presupone a qué se dedica quien la usa.
-- **No ejecuta el trabajo.** Registra, guía y controla las transiciones. Lo que necesita código —un
-  render, un envío de correo, un agente revisor— va a un servicio aparte, todavía no construido.
+- **No ejecuta el trabajo.** Lo hace la IA de cada persona en su máquina, con sus skills. La
+  plataforma guarda cómo se hizo.
 
 ## Qué hay adentro
 
@@ -89,11 +74,8 @@ vistas, roles y reglas— en una aplicación funcionando:
 - un endpoint MCP donde cada agente entra con su propia credencial —hasheada, con vencimiento, con
   alcance y con una persona responsable— o por OAuth con la cuenta de la persona, y recibe
   instrucciones según su rol;
-- el **motor de procesos**: definiciones versionadas, casos con toma bloqueada, espera, liberación,
-  cierre con receta obligatoria, revisión y devolución con motivo;
-- un **tablero del trabajo**, en el panel y por MCP: tiempo en cola, trabajando, esperando y en
-  revisión por etapa, tasa de devolución, qué modelo de IA declaró cada cierre y cómo le fue, y
-  dónde se traba cada proceso;
+- **procesos e iteraciones**: requisitos comprobables, registro definido por el proceso, carpeta
+  de Dropbox obligatoria y receta, con su galería en el panel;
 - una configuración clave/valor JSON, acotada y auditada;
 - zonas de extensión explícitas para el comportamiento propio de cada organización.
 
@@ -133,8 +115,8 @@ pnpm dev
 `/dev-access`, y producción siempre lo ignora.
 
 Para que la aplicación opere procesos, el AppSpec declara una línea, `"blocks": ["procesos"]`, y la
-fábrica agrega las entidades `proceso`, `instancia` y `evento` con sus vistas y permisos. El ejemplo
-ya la trae. El contrato está en [el motor de procesos](references/procesos.md).
+fábrica agrega las entidades `proceso` e `iteracion` con sus vistas y permisos. El ejemplo
+ya la trae. El contrato está en [procesos e iteraciones](references/procesos.md).
 
 ## El ciclo de vida de una aplicación
 
@@ -240,9 +222,8 @@ vista previa de importación y los adjuntos. Dos pruebas lo sostienen: una recor
 alcance en todo camino que llega a los datos; la otra (`pnpm db:access`) siembra dos personas en
 PostgreSQL y comprueba que una no vea, modifique ni borre lo de la otra.
 
-**El gerente ve el trabajo, no las conversaciones.** La plataforma guarda casos, etapas, recetas y
-resultados, nunca el chat de nadie con su IA. Cada etapa muestra sólo los datos que necesita, porque
-lo que pasó por la IA personal de alguien no se puede revocar.
+**El equipo ve el trabajo, no las conversaciones.** La plataforma guarda procesos, iteraciones,
+recetas y dónde quedó cada cosa, y un enlace a la conversación de origen, nunca el chat en sí.
 
 El respaldo del código no reemplaza al respaldo de la base. El código vive en GitHub, los datos en
 PostgreSQL, la configuración del despliegue en el proveedor de hosting y la de identidad en Clerk.
@@ -259,22 +240,17 @@ ni una garantía general de que lo generado esté listo para producción.
 aplicación generada chequea tipos y compila; las migraciones se aplican contra un PostgreSQL real y
 son idempotentes; cada entidad sobrevive a una prueba de ABM; la guarda de migraciones destructivas
 frena cuando hay datos; el alcance por registro se comprueba con dos personas reales en la base; las
-instrucciones MCP se componen por rol; las definiciones de proceso se validan, cierran y guían; una
+instrucciones MCP se componen por rol; las definiciones de proceso y las iteraciones se validan; una
 evolución del esquema conserva los datos existentes; y una aplicación generada con la versión
 anterior de la fábrica se actualiza a la actual.
 
 **Todavía no construido:**
 
-- operar un caso desde el panel, para quien no usa IA;
-- la cara del cliente: pedido, seguimiento, aprobación y entrega;
-- plazo de toma y membresía de personas con vencimiento;
-- procesos contratados y casos recurrentes, como una liquidación de cada mes;
-- el taller, el servicio aparte que ejecuta lo que necesita código: el agente revisor, renders,
-  correos de entrega;
+- que el servidor compruebe por sí mismo la carpeta de Dropbox de una iteración;
 - relaciones `many_to_many`.
 
-El porqué de cada decisión del motor y el orden de lo que falta están en
-[el diseño del motor de procesos](references/process-engine.md).
+El motor de etapas de las versiones 1.x, retirado en la 2.0, queda descripto en
+[su diseño original](references/process-engine.md).
 
 Las contribuciones más seguras son las que mejoran la neutralidad, el determinismo, la portabilidad,
 la seguridad o la verificación sin introducir multi-tenencia compartida. Empezá por

@@ -12,7 +12,7 @@ import {
 import { withTransaction } from "@/lib/db";
 import { deleteRecord, getRecord, insertRecord, recordInputFromForm, updateRecord } from "@/lib/repository";
 import { applyRules, RuleBlockedError } from "@/lib/rules";
-import { requireEntity } from "@/lib/spec";
+import { getEntity, requireEntity } from "@/lib/spec";
 import { revalidateAfterWrite } from "@/lib/revalidation";
 
 export async function createRecordAction(entityKey: string, formData: FormData) {
@@ -99,6 +99,13 @@ export async function deleteRecordAction(entityKey: string, id: string) {
     });
   } catch (error) {
     if (error instanceof RuleBlockedError) blockedMessage = error.message;
+    // Otro registro apunta a este y la base no deja borrarlo. Antes esto terminaba en la
+    // pantalla de error genérica, sin decir por qué.
+    else if ((error as { code?: string } | null)?.code === "23503") {
+      const tabla = (error as { table?: string }).table;
+      const otra = tabla ? getEntity(tabla) : null;
+      blockedMessage = `No se puede borrar: hay ${otra ? otra.label_plural.toLowerCase() : "otros registros"} que dependen de este. Borralos primero.`;
+    }
     else throw error;
   }
   if (blockedMessage) redirect(`/records/${entityKey}/${id}?rule_error=${encodeURIComponent(blockedMessage)}`);

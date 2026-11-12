@@ -1,4 +1,9 @@
-# Motor de procesos
+# Motor de procesos (histórico)
+
+**Retirado en la plataforma 2.0 (2026-11-12).** Las etapas, colas, revisiones y el tablero se
+quitaron: el objetivo real resultó ser registrar cómo se hizo algo para repetirlo, y para eso
+alcanzan proceso e iteración. Lo vigente está en [`procesos.md`](procesos.md). Lo que sigue es
+el diseño original, como antecedente.
 
 **Estado: fase 0 y núcleo de la fase 1 construidos (plataforma 1.2.0, 2026-11-06).** El contrato
 de lo construido —definición, estados, herramientas, permisos— está en [`procesos.md`](procesos.md).

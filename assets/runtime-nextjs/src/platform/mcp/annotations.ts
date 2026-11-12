@@ -45,25 +45,11 @@ export const MARCAS = {
   update_record: REEMPLAZA,
   delete_record: BORRA,
 
-  // Motor de procesos. Mover un caso deja un evento en la bitácora y no borra nada:
-  // lo anterior sigue a la vista, por eso ninguna es destructiva.
-  mis_pendientes: LEE,
-  guia_de_etapa: LEE,
-  ver_caso: LEE,
-  validar_proceso: LEE,
-  tablero_de_trabajo: LEE,
+  // Procesos: leer cómo se hace y registrar una vez que se hizo. Nada borra.
   como_se_hace: LEE,
   iteraciones_de_proceso: LEE,
   registrar_iteracion: AGREGA,
-  adjuntar_a_caso: AGREGA,
-  // Cambia el destino del caso y no se deshace desde las herramientas: que el cliente confirme.
-  cancelar_caso: REEMPLAZA,
-  crear_caso: AGREGA,
-  tomar_caso: AGREGA,
-  esperar_caso: AGREGA,
-  liberar_caso: AGREGA,
-  cerrar_etapa: AGREGA,
-  revisar_etapa: AGREGA,
+  adjuntar_a_iteracion: AGREGA,
 } satisfies Record<string, ToolAnnotations>;
 
 export type NombreDeHerramienta = keyof typeof MARCAS;

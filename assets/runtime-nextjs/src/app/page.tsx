@@ -4,18 +4,15 @@ import { hasPermission, hasViewAccess, requireUser } from "@/lib/auth";
 import { countRecords } from "@/lib/repository";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { getEntity, runtimeSpec } from "@/lib/spec";
-import { USER_SCOPES } from "@/platform/mcp/store";
-import { misPendientes, motorDisponible } from "@/platform/processes/engine";
-import { comoSeguirEnElPanel } from "@/platform/processes/pending-text";
+import { motorDisponible } from "@/platform/processes/engine";
 
 export const dynamic = "force-dynamic";
 
-const ENTIDADES_DE_PROCESO = new Set(["proceso", "instancia", "evento"]);
+const ENTIDADES_DE_PROCESO = new Set(["proceso", "iteracion"]);
 
 /**
- * Por dónde empezar. Antes era un conteo de registros por entidad, que no decía qué hacer.
- * Ahora dice primero lo que la persona tiene pendiente, después dónde está cada cosa, y el
- * conteo queda al final para quien viene a cargar o buscar datos.
+ * Por dónde empezar: los procesos, si la aplicación los tiene, después dónde está cada cosa,
+ * y el conteo al final para quien viene a cargar o buscar datos.
  */
 export default async function HomePage() {
   const user = await requireUser();
@@ -23,10 +20,6 @@ export default async function HomePage() {
   const motor = motorDisponible();
   const rol = runtimeSpec.roles.find((role) => role.key === user.roleKey)?.label ?? user.roleKey;
   const nombre = user.displayName.split(" ")[0] || user.displayName;
-
-  const pendientes = motor && hasPermission(user, "instancia", "read")
-    ? await misPendientes({ id: user.id, name: user.displayName, roleKey: user.roleKey, scopes: [...USER_SCOPES], kind: "user" })
-    : null;
 
   const vistas = runtimeSpec.views
     .filter((view) => view.navigation && ["table", "kanban", "calendar", "dashboard"].includes(view.type))
@@ -57,36 +50,11 @@ export default async function HomePage() {
         </div>
       )}
 
-      {pendientes && (
-        <section className="work-section first">
-          <h2>Tu trabajo</h2>
-          <p className="subtitle">{comoSeguirEnElPanel(pendientes)}</p>
-          <div className="grid">
-            <article className="card">
-              <div className="card-label">Para decidir</div>
-              <div className="metric">{pendientes.para_revisar.length}</div>
-              <div className="table-secondary">Elegir o aprobar: el caso no avanza hasta que decidas</div>
-            </article>
-            <article className="card">
-              <div className="card-label">Para seguir</div>
-              <div className="metric">{pendientes.para_seguir.length}</div>
-              <div className="table-secondary">Tomados, esperando algo o devueltos</div>
-            </article>
-            <article className="card">
-              <div className="card-label">Disponibles</div>
-              <div className="metric">{pendientes.disponibles.length}</div>
-              <div className="table-secondary">En la cola de etapas que podés tomar</div>
-            </article>
-          </div>
-          <p><Link className="card-link" href="/pendientes">Ver mis pendientes →</Link></p>
-        </section>
-      )}
-
       {motor && hasPermission(user, "proceso", "list") && (
-        <section className="work-section">
+        <section className="work-section first">
           <h2>Procesos</h2>
           <p className="subtitle">
-            Lo que sabemos hacer: cada proceso con cómo se hace, lo que está en curso y las veces que se hizo.
+            Lo que sabemos hacer: cada proceso con lo que necesita, cómo se hace y las veces que se hizo.
           </p>
           <p><Link className="card-link" href="/procesos">Ver los procesos →</Link></p>
         </section>

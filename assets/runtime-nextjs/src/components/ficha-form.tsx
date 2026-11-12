@@ -1,17 +1,21 @@
 import Link from "next/link";
-import type { Ficha } from "@/platform/processes/definition";
+import { registroATexto, requisitosATexto, type Definicion } from "@/platform/processes/definition";
 import { guardarProcesoAction } from "@/app/procesos/actions";
 
 /**
- * El formulario de la ficha de un proceso: el mismo para el alta y para la modificación.
- * Sin `familia` da de alta un proceso; con `familia` cambia su ficha en el lugar.
+ * El formulario de un proceso, el mismo para el alta y para la modificación. Sin `familia`
+ * lo crea; con `familia` lo cambia en el lugar.
+ *
+ * Requisitos y registro se escriben una línea por elemento, separando las partes con «|»:
+ * es lo más corto que una persona puede escribir sin aprender un formato.
  */
-export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
+export function FichaForm({ familia, nombre, proceso, cancelarHref }: {
   familia?: string;
   nombre?: string;
-  ficha?: Ficha | null;
+  proceso?: Definicion | null;
   cancelarHref: string;
 }) {
+  const ficha = proceso?.ficha;
   return (
     <form action={guardarProcesoAction} className="form-card">
       {familia && <input name="familia" type="hidden" value={familia} />}
@@ -23,7 +27,6 @@ export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
         <label className="field full">
           <span className="field-label">Qué hace, en una línea *</span>
           <input className="control" defaultValue={ficha?.resumen ?? ""} maxLength={200} name="resumen" placeholder="El negocio de un deportista contado en 9 láminas, con fotos reales." required />
-          <span className="field-help">Es lo que se lee en la tarjeta del proceso.</span>
         </label>
         <label className="field">
           <span className="field-label">Qué hay que darle</span>
@@ -32,11 +35,6 @@ export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
         <label className="field">
           <span className="field-label">Qué entrega</span>
           <textarea className="control" defaultValue={ficha?.entrega ?? ""} maxLength={500} name="entrega" rows={2} />
-        </label>
-        <label className="field full">
-          <span className="field-label">Qué necesita la máquina</span>
-          <input className="control" defaultValue={ficha?.necesita?.join(", ") ?? ""} name="necesita" placeholder="carousel-builder, Dropbox sincronizado" />
-          <span className="field-help">Separado por comas.</span>
         </label>
         <label className="field full">
           <span className="field-label">Cómo pedírselo a una IA</span>
@@ -49,17 +47,29 @@ export function FichaForm({ familia, nombre, ficha, cancelarHref }: {
         <label className="field">
           <span className="field-label">Repositorio de la skill</span>
           <input className="control" defaultValue={ficha?.skill?.repo ?? ""} name="skill_repo" placeholder="https://github.com/…" type="url" />
-          <span className="field-help">La versión no se anota acá: es la última del repositorio, y cada iteración dice con cuál se hizo.</span>
         </label>
-        {!familia && (
-          <label className="field full">
-            <span className="field-label">Instrucciones para la IA</span>
-            <textarea className="control" maxLength={4000} name="instrucciones" placeholder="Si lo dejás vacío: «seguí la skill y al terminar registralo»." rows={3} />
-          </label>
-        )}
+        <label className="field full">
+          <span className="field-label">Carpeta de Dropbox</span>
+          <input className="control" defaultValue={proceso?.carpeta ?? ""} maxLength={500} name="carpeta" placeholder="/Clientes/www.p3planeta.com/p3-negocios/piezas/" />
+          <span className="field-help">Donde va cada iteración, una carpeta por vez. Sin carpeta en Dropbox no se registra nada.</span>
+        </label>
+        <label className="field full">
+          <span className="field-label">Qué necesita la máquina</span>
+          <textarea className="control mono" defaultValue={requisitosATexto(proceso?.requisitos)} name="requisitos" placeholder={"carousel-builder | skill | que exista .claude/skills/carousel-builder | clonar prc-skills\nPillow | libreria | python -c \"import PIL\" | pip install pillow\nDropbox | conector | que responda list_folder | conectar Dropbox en la app"} rows={6} />
+          <span className="field-help">Una línea por requisito: nombre | tipo | cómo comprobarlo | qué hacer si falta. Tipos: skill, libreria, programa, conector, variable, archivo.</span>
+        </label>
+        <label className="field full">
+          <span className="field-label">Qué se registra cada vez</span>
+          <textarea className="control mono" defaultValue={registroATexto(proceso?.registro)} name="registro" placeholder={"deportista | el deportista y el negocio\nfuentes | los enlaces de cada dato, con dos fuentes por dato\nfotos | autor y licencia de cada foto usada"} rows={5} />
+          <span className="field-help">Una línea por dato: clave | qué es | opcional. La clave, en minúsculas y sin espacios. Carpeta, archivos, receta, skill y conversación se registran siempre.</span>
+        </label>
+        <label className="field full">
+          <span className="field-label">Cómo se hace, si no hay skill</span>
+          <textarea className="control" defaultValue={proceso?.metodo ?? ""} maxLength={20000} name="metodo" rows={4} />
+        </label>
       </div>
       <div className="form-actions">
-        <button className="button" type="submit">{familia ? "Guardar ficha" : "Crear proceso"}</button>
+        <button className="button" type="submit">{familia ? "Guardar" : "Crear proceso"}</button>
         <Link className="button secondary" href={cancelarHref}>Cancelar</Link>
       </div>
     </form>
