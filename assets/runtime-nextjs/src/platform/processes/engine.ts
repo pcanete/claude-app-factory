@@ -657,12 +657,14 @@ export async function borrarProceso(agent: AgentPrincipal, familia: string) {
     for (const proceso of procesos) {
       const iteraciones = await listRecords("iteracion", { filters: { proceso_id: String(proceso.id) }, limit: 500, access: quien.access });
       for (const it of iteraciones) {
-        const adjuntos = await deleteAttachmentsForRecord(client, "iteracion", String(it.id));
-        await deleteRecord("iteracion", String(it.id), client, quien.access);
-        await recordAuditEvent(client, { ...autoria(escritura), entityKey: "iteracion", recordId: String(it.id), action: "delete", changes: { before: it, attachments: adjuntos, source: "panel:procesos" } });
+        const idIteracion = String(it.id);
+        const adjuntos = await deleteAttachmentsForRecord(client, "iteracion", idIteracion);
+        await deleteRecord("iteracion", idIteracion, client, quien.access);
+        await recordAuditEvent(client, { ...autoria(escritura), entityKey: "iteracion", recordId: idIteracion, action: "delete", changes: { before: it, attachments: adjuntos, source: "panel:procesos" } });
       }
-      await deleteRecord("proceso", String(proceso.id), client, quien.access);
-      await recordAuditEvent(client, { ...autoria(escritura), entityKey: "proceso", recordId: String(proceso.id), action: "delete", changes: { before: proceso, source: "panel:procesos" } });
+      const idProceso = String(proceso.id);
+      await deleteRecord("proceso", idProceso, client, quien.access);
+      await recordAuditEvent(client, { ...autoria(escritura), entityKey: "proceso", recordId: idProceso, action: "delete", changes: { before: proceso, source: "panel:procesos" } });
     }
   });
   revalidateAfterWrite("proceso");
