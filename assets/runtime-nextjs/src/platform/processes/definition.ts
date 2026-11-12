@@ -178,6 +178,31 @@ export function validarDefinicion(valor: unknown): { ok: true; definicion: Defin
   };
 }
 
+/**
+ * Lo que le falta a un proceso para que otra persona lo pueda repetir. Vacía: está completo.
+ *
+ * `validarDefinicion` revisa la forma y tolera procesos viejos a medias, para poder leerlos.
+ * Ésta es la vara para guardar: un proceso no se crea ni se edita si le falta algo de esto,
+ * lo haga una persona en el panel o su agente por MCP.
+ */
+export function faltasDeFicha(definicion: Definicion): string[] {
+  const ficha = definicion.ficha ?? {};
+  const faltas: string[] = [];
+  if (!textoNoVacio(ficha.resumen)) faltas.push("qué hace, en una línea (ficha.resumen)");
+  if (!textoNoVacio(ficha.entrada)) faltas.push("qué hay que darle para empezar (ficha.entrada)");
+  if (!textoNoVacio(ficha.entrega)) faltas.push("qué entrega (ficha.entrega)");
+  const conSkill = textoNoVacio(ficha.skill?.nombre) && textoNoVacio(ficha.skill?.repo);
+  if (!conSkill && !textoNoVacio(definicion.metodo)) {
+    faltas.push(textoNoVacio(ficha.skill?.nombre)
+      ? "el repositorio de la skill (ficha.skill.repo)"
+      : "la skill con su repositorio (ficha.skill) o, si no hay skill, cómo se hace (metodo)");
+  }
+  if (!esCarpetaDeDropbox(definicion.carpeta)) faltas.push("la carpeta de Dropbox donde va cada iteración (carpeta)");
+  if (!(definicion.requisitos ?? []).length) faltas.push("al menos un requisito, con cómo comprobarlo (requisitos)");
+  if (!(definicion.registro ?? []).length) faltas.push("al menos un dato que se registra cada vez (registro)");
+  return faltas;
+}
+
 /** Una clave estable a partir de un nombre: «Carrusel P3 · estilo X» → «carrusel-p3-estilo-x». */
 export function claveDeNombre(nombre: string) {
   return nombre

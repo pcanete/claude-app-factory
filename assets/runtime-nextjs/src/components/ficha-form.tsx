@@ -29,43 +29,44 @@ export function FichaForm({ familia, nombre, proceso, cancelarHref }: {
           <input className="control" defaultValue={ficha?.resumen ?? ""} maxLength={200} name="resumen" placeholder="El negocio de un deportista contado en 9 láminas, con fotos reales." required />
         </label>
         <label className="field">
-          <span className="field-label">Qué hay que darle</span>
-          <textarea className="control" defaultValue={ficha?.entrada ?? ""} maxLength={500} name="entrada" rows={2} />
+          <span className="field-label">Qué hay que darle *</span>
+          <textarea className="control" defaultValue={ficha?.entrada ?? ""} maxLength={500} name="entrada" required rows={2} />
         </label>
         <label className="field">
-          <span className="field-label">Qué entrega</span>
-          <textarea className="control" defaultValue={ficha?.entrega ?? ""} maxLength={500} name="entrega" rows={2} />
+          <span className="field-label">Qué entrega *</span>
+          <textarea className="control" defaultValue={ficha?.entrega ?? ""} maxLength={500} name="entrega" required rows={2} />
         </label>
         <label className="field full">
           <span className="field-label">Cómo pedírselo a una IA</span>
           <input className="control" defaultValue={ficha?.pedido_ejemplo ?? ""} maxLength={300} name="pedido_ejemplo" placeholder="Hacé un carrusel de P3 Negocios sobre …" />
         </label>
         <label className="field">
-          <span className="field-label">Skill</span>
+          <span className="field-label">Skill **</span>
           <input className="control" defaultValue={ficha?.skill?.nombre ?? ""} maxLength={120} name="skill_nombre" placeholder="carrusel-p3-negocios" />
         </label>
         <label className="field">
-          <span className="field-label">Repositorio de la skill</span>
+          <span className="field-label">Repositorio de la skill **</span>
           <input className="control" defaultValue={ficha?.skill?.repo ?? ""} name="skill_repo" placeholder="https://github.com/…" type="url" />
         </label>
         <label className="field full">
-          <span className="field-label">Carpeta de Dropbox</span>
-          <input className="control" defaultValue={proceso?.carpeta ?? ""} maxLength={500} name="carpeta" placeholder="/Clientes/www.p3planeta.com/p3-negocios/piezas/" />
+          <span className="field-label">Carpeta de Dropbox *</span>
+          <input className="control" defaultValue={proceso?.carpeta ?? ""} maxLength={500} name="carpeta" placeholder="/Clientes/www.p3planeta.com/p3-negocios/piezas/" required />
           <span className="field-help">Donde va cada iteración, una carpeta por vez. Sin carpeta en Dropbox no se registra nada.</span>
         </label>
         <label className="field full">
-          <span className="field-label">Qué necesita la máquina</span>
-          <textarea className="control mono" defaultValue={requisitosATexto(proceso?.requisitos)} name="requisitos" placeholder={"carousel-builder | skill | que exista .claude/skills/carousel-builder | clonar prc-skills\nPillow | libreria | python -c \"import PIL\" | pip install pillow\nDropbox | conector | que responda list_folder | conectar Dropbox en la app"} rows={6} />
+          <span className="field-label">Qué necesita la máquina *</span>
+          <textarea className="control mono" defaultValue={requisitosATexto(proceso?.requisitos)} name="requisitos" required placeholder={"carousel-builder | skill | que exista .claude/skills/carousel-builder | clonar prc-skills\nPillow | libreria | python -c \"import PIL\" | pip install pillow\nDropbox | conector | que responda list_folder | conectar Dropbox en la app"} rows={6} />
           <span className="field-help">Una línea por requisito: nombre | tipo | cómo comprobarlo | qué hacer si falta. Tipos: skill, libreria, programa, conector, variable, archivo.</span>
         </label>
         <label className="field full">
-          <span className="field-label">Qué se registra cada vez</span>
-          <textarea className="control mono" defaultValue={registroATexto(proceso?.registro)} name="registro" placeholder={"deportista | el deportista y el negocio\nfuentes | los enlaces de cada dato, con dos fuentes por dato\nfotos | autor y licencia de cada foto usada"} rows={5} />
+          <span className="field-label">Qué se registra cada vez *</span>
+          <textarea className="control mono" defaultValue={registroATexto(proceso?.registro)} name="registro" required placeholder={"deportista | el deportista y el negocio\nfuentes | los enlaces de cada dato, con dos fuentes por dato\nfotos | autor y licencia de cada foto usada"} rows={5} />
           <span className="field-help">Una línea por dato: clave | qué es | opcional. La clave, en minúsculas y sin espacios. Carpeta, archivos, receta, skill y conversación se registran siempre.</span>
         </label>
         <label className="field full">
-          <span className="field-label">Cómo se hace, si no hay skill</span>
+          <span className="field-label">Cómo se hace, si no hay skill **</span>
           <textarea className="control" defaultValue={proceso?.metodo ?? ""} maxLength={20000} name="metodo" rows={4} />
+          <span className="field-help">* Obligatorio. ** La skill con su repositorio, o esto si no hay skill: uno de los dos. Un proceso incompleto no se guarda.</span>
         </label>
       </div>
       <div className="form-actions">

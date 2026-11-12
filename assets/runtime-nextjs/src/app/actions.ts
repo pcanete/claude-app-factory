@@ -14,9 +14,12 @@ import { deleteRecord, getRecord, insertRecord, recordInputFromForm, updateRecor
 import { applyRules, RuleBlockedError } from "@/lib/rules";
 import { getEntity, requireEntity } from "@/lib/spec";
 import { revalidateAfterWrite } from "@/lib/revalidation";
+import { motivoParaNoEscribirAMano } from "@/platform/processes/engine";
 
 export async function createRecordAction(entityKey: string, formData: FormData) {
   const user = await requirePermission(entityKey, "create");
+  const aMano = motivoParaNoEscribirAMano(entityKey, "create");
+  if (aMano) redirect(`/procesos?error=${encodeURIComponent(aMano)}`);
   const access = recordAccessForUser(user);
   const entity = requireEntity(entityKey);
   const values = prepareRecordCreate(entity, recordInputFromForm(entity, formData, "create"), access);
@@ -48,6 +51,8 @@ export async function createRecordAction(entityKey: string, formData: FormData) 
 
 export async function updateRecordAction(entityKey: string, id: string, formData: FormData) {
   const user = await requirePermission(entityKey, "update");
+  const aMano = motivoParaNoEscribirAMano(entityKey, "update");
+  if (aMano) redirect(`/procesos?error=${encodeURIComponent(aMano)}`);
   const access = recordAccessForUser(user);
   const entity = requireEntity(entityKey);
   const values = recordInputFromForm(entity, formData, "update");

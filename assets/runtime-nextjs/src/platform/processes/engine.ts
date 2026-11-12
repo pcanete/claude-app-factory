@@ -21,6 +21,7 @@ import { getEntity, relationFields, requireEntity } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
   claveDeNombre,
+  faltasDeFicha,
   faltasDeIteracion,
   familiaDe,
   guiaDeProceso,
@@ -293,12 +294,13 @@ async function iteracionesDe(procesos: Record<string, unknown>[], quien: Identid
 }
 
 /**
- * Registra una vez que se hizo un proceso. Si el proceso no existe, lo crea con lo mínimo
- * —nombre y qué hace— para que quien administra le complete requisitos y registro.
+ * Registra una vez que se hizo un proceso. Si el proceso no existe y quien registra
+ * administra, lo crea en el mismo paso con la ficha completa: el agente que acaba de hacerlo
+ * es el que sabe qué hace falta. Quien no administra no crea procesos.
  */
 export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   proceso?: string;
-  nuevo_proceso?: { nombre: string; resumen: string };
+  nuevo_proceso?: DatosDeProceso;
   titulo: string;
   carpeta: string;
   archivos: string[];
@@ -322,12 +324,16 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
     proceso = vigente(procesos);
     if (!proceso) throw new Error(`No hay ningún proceso «${entrada.proceso}». Si es la primera vez, usá nuevo_proceso.`);
   } else {
+    if (!quien.administra) {
+      throw new Error("Este proceso no existe, y crearlo lo hace quien administra. Pedile que lo cree, desde el panel o con su agente; lo producido ya está en Dropbox y se registra cuando exista.");
+    }
     const familia = claveDeNombre(entrada.nuevo_proceso!.nombre);
     const existente = vigente(await procesosDeLaFamilia(familia, quien));
     if (existente) throw new Error(`Ya existe «${nombreDeFamilia(existente.nombre)}»: registralo con proceso «${nombreDeFamilia(existente.nombre)}».`);
   }
 
-  const definicion: Definicion = proceso ? definicionDe(proceso) : { requisitos: [], registro: [] };
+  const definicionNueva = entrada.nuevo_proceso ? definicionDesdeDatos(claveDeNombre(entrada.nuevo_proceso.nombre), entrada.nuevo_proceso) : null;
+  const definicion: Definicion = proceso ? definicionDe(proceso) : (definicionNueva as Definicion);
   const faltas = faltasDeIteracion(definicion, entrada);
   if (faltas.length) throw new Error(["No se registró. Falta:", ...faltas.map((falta) => `- ${falta}`)].join("\n"));
 
@@ -339,8 +345,8 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
       procesoId = await crear(escritura, "proceso", {
         nombre: nuevo.nombre.trim(),
         estado: "publicado",
-        descripcion: nuevo.resumen,
-        definicion: { proceso: claveDeNombre(nuevo.nombre), ficha: { resumen: nuevo.resumen.slice(0, 200) }, requisitos: [], registro: [] },
+        descripcion: nuevo.ficha.resumen ?? "",
+        definicion: definicionNueva,
       }, "mcp:procesos");
     }
     const id = await crear(escritura, "iteracion", {
@@ -366,7 +372,7 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   return {
     ...resultado,
     mensaje: entrada.nuevo_proceso
-      ? "Quedó registrada, y el proceso quedó creado: falta que quien administra le complete requisitos y qué se registra."
+      ? "Quedó registrada, y el proceso quedó creado con su ficha."
       : "Quedó registrada.",
   };
 }
@@ -576,7 +582,58 @@ function definicionDesdeDatos(familia: string, datos: DatosDeProceso, anterior: 
   };
   const validacion = validarDefinicion(definicion);
   if (!validacion.ok) throw new Error(validacion.errores.join(" "));
+  const faltas = faltasDeFicha(validacion.definicion);
+  if (faltas.length) throw new Error(`Al proceso le falta: ${faltas.join("; ")}.`);
   return definicion;
+}
+
+/**
+ * Por qué un registro de procesos no se escribe con las herramientas genéricas
+ * (create_record, update_record, delete_record o el formulario de cualquier entidad), o
+ * null si se puede. Esas herramientas no saben qué tiene que tener un proceso completo ni
+ * una iteración: el motor sí. Editar o borrar una iteración ya registrada sigue siendo
+ * como con cualquier registro.
+ */
+export function motivoParaNoEscribirAMano(entidad: string, accion: "create" | "update" | "delete"): string | null {
+  if (!motorDisponible()) return null;
+  if (entidad === "proceso") {
+    return "Los procesos no se escriben a mano: se crean con registrar_iteracion (nuevo_proceso) o desde Procesos en el panel, y se cambian con editar_proceso o desde el panel. Así quedan completos.";
+  }
+  if (entidad === "iteracion" && accion === "create") {
+    return "Las iteraciones se registran con registrar_iteracion: es lo que comprueba que estén completas.";
+  }
+  return null;
+}
+
+/** Si quien opera —una persona o su agente— puede crear y cambiar procesos. */
+export function administraProcesos(agent: AgentPrincipal) {
+  try {
+    return agent.scopes.includes("records:write") && identidad(agent).administra;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cambia lo que se indica de un proceso y deja el resto como está. Es lo que usa el agente
+ * de quien administra para mejorarlo; el resultado tiene que quedar completo igual.
+ */
+export async function mejorarProceso(agent: AgentPrincipal, proceso: string, cambios: Partial<Omit<DatosDeProceso, "ficha">> & { ficha?: Partial<Ficha> }) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  exigirQueAdministre(quien);
+  const familia = await familiaPedida(proceso, quien);
+  const actual = vigente(await procesosDeLaFamilia(familia, quien));
+  if (!actual) throw new Error(`No hay ningún proceso «${proceso}».`);
+  const definicion = definicionDe(actual);
+  return editarProceso(agent, familia, {
+    nombre: cambios.nombre ?? nombreDeFamilia(actual.nombre),
+    ficha: { ...(definicion.ficha ?? {}), ...(cambios.ficha ?? {}) },
+    metodo: cambios.metodo ?? definicion.metodo,
+    requisitos: cambios.requisitos ?? definicion.requisitos,
+    registro: cambios.registro ?? definicion.registro,
+    carpeta: cambios.carpeta ?? definicion.carpeta,
+  });
 }
 
 export async function crearProceso(agent: AgentPrincipal, datos: DatosDeProceso) {

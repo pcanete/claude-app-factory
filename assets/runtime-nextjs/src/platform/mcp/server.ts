@@ -43,6 +43,7 @@ import {
 } from "@/platform/settings/store";
 import { withTransaction } from "@/lib/db";
 import { generatedCapabilities } from "@/generated/permissions";
+import { motivoParaNoEscribirAMano } from "@/platform/processes/engine";
 import { registrarHerramientasDeProcesos } from "@/platform/processes/tools";
 
 const entityKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
@@ -623,6 +624,8 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
       { entityKey, values, idempotencyKey },
       async (agentEventId) => {
         const entity = requireAgentPermission(agent, entityKey, "create");
+        const aMano = motivoParaNoEscribirAMano(entity.key, "create");
+        if (aMano) throw new Error(aMano);
         // El registro nace a nombre del responsable de la credencial, salvo que su
         // alcance sea total. Un agente no crea trabajo a nombre de terceros.
         const normalized = prepareRecordCreate(entity, recordInputFromObject(entity, values, "create"), alcanceDeRegistros);
@@ -679,6 +682,8 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
       { entityKey, id, values, idempotencyKey },
       async (agentEventId) => {
         const entity = requireAgentPermission(agent, entityKey, "update");
+        const aMano = motivoParaNoEscribirAMano(entity.key, "update");
+        if (aMano) throw new Error(aMano);
         const normalized = recordInputFromObject(entity, values, "update");
         assertRecordOwnershipChange(entity, normalized, alcanceDeRegistros);
         const mutation = await executeIdempotentMutation({
@@ -736,6 +741,8 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
       { entityKey, id, idempotencyKey, confirm },
       async (agentEventId) => {
         const entity = requireAgentPermission(agent, entityKey, "delete");
+        const aMano = motivoParaNoEscribirAMano(entity.key, "delete");
+        if (aMano) throw new Error(aMano);
         const mutation = await executeIdempotentMutation({
           agent,
           toolName: "delete_record",

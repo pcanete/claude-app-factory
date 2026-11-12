@@ -45,11 +45,13 @@ export const MARCAS = {
   update_record: REEMPLAZA,
   delete_record: BORRA,
 
-  // Procesos: leer cómo se hace y registrar una vez que se hizo. Nada borra.
+  // Procesos: leer cómo se hace y registrar una vez que se hizo. Nada borra. Mejorar un
+  // proceso reemplaza su ficha, y sólo lo ve quien administra.
   como_se_hace: LEE,
   iteraciones_de_proceso: LEE,
   registrar_iteracion: AGREGA,
   adjuntar_a_iteracion: AGREGA,
+  editar_proceso: REEMPLAZA,
 } satisfies Record<string, ToolAnnotations>;
 
 export type NombreDeHerramienta = keyof typeof MARCAS;

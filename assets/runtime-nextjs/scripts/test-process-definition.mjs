@@ -11,6 +11,7 @@
  *   - una iteración sin carpeta de Dropbox o sin archivos no se registra;
  *   - una iteración sin los datos que pide su proceso no se registra, y lo opcional no se exige;
  *   - la guía dice qué comprobar en la máquina, dónde guardar y qué registrar;
+ *   - un proceso no se guarda si le falta algo de la ficha, sea quien sea el que lo guarde;
  *   - requisitos y registro escritos por una persona, una línea por elemento, se entienden
  *     y vuelven a texto igual.
  */
@@ -19,6 +20,7 @@ import {
   datosFaltantes,
   esCarpetaDeDropbox,
   esEnlaceDeConversacion,
+  faltasDeFicha,
   faltasDeIteracion,
   faltasDeReceta,
   familiaDe,
@@ -157,6 +159,24 @@ comprobar("y vuelven a texto igual", requisitosDeTexto(requisitosATexto(leidos.r
 const registro = registroDeTexto("deportista | el deportista\nnota | algo | opcional\nCon Espacio | x");
 comprobar("el registro se lee de a una línea, con lo opcional", registro.registro.length === 2 && registro.registro[1].requerido === false && registro.errores.length === 1);
 comprobar("y vuelve a texto igual", registroATexto(registro.registro) === "deportista | el deportista\nnota | algo | opcional");
+
+// Un proceso completo: lo mínimo para que otra persona lo repita.
+const completo = {
+  ficha: { resumen: "Un carrusel", entrada: "Un deportista", entrega: "9 láminas", skill: { nombre: "carrusel-p3-negocios", repo: "https://github.com/pcanete/prc-skills" } },
+  carpeta: "/Clientes/www.p3planeta.com/p3-negocios/piezas/",
+  requisitos: [{ nombre: "Node", tipo: "programa", verificar: "node --version" }],
+  registro: [{ clave: "deportista", descripcion: "el deportista" }],
+};
+comprobar("un proceso completo no tiene faltas", faltasDeFicha(completo).length === 0, faltasDeFicha(completo).join("; "));
+const vacio = faltasDeFicha({ requisitos: [], registro: [] });
+comprobar("a un proceso vacío le faltan siete cosas", vacio.length === 7, vacio.join("; "));
+comprobar("sin requisitos ni registro, faltan los dos",
+  faltasDeFicha({ ...completo, requisitos: [], registro: [] }).some((f) => f.includes("requisito")) && faltasDeFicha({ ...completo, registro: [] }).some((f) => f.includes("registro")));
+const sinRepo = faltasDeFicha({ ...completo, ficha: { ...completo.ficha, skill: { nombre: "x" } } });
+comprobar("una skill sin repositorio falta, y lo dice", sinRepo.length === 1 && sinRepo[0].includes("repositorio"), sinRepo.join("; "));
+comprobar("sin skill, el método escrito alcanza", faltasDeFicha({ ...completo, ficha: { ...completo.ficha, skill: undefined }, metodo: "1. Hacer esto" }).length === 0);
+comprobar("sin skill ni método, falta uno de los dos", faltasDeFicha({ ...completo, ficha: { ...completo.ficha, skill: undefined } }).length === 1);
+comprobar("una carpeta que no es de Dropbox no cuenta", faltasDeFicha({ ...completo, carpeta: "C:/Users/x/Escritorio" }).some((f) => f.includes("Dropbox")));
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);
