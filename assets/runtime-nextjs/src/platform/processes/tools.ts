@@ -86,7 +86,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("registrar_iteracion", {
     annotations: marcas("registrar_iteracion"),
     description:
-      "Registra una vez que se hizo un proceso. Antes de llamarla, lo producido tiene que estar en Dropbox y tenés que haber comprobado con el conector de Dropbox que los archivos están en la carpeta: sin carpeta y archivos no se registra. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree.",
+      "Registra una vez que se hizo un proceso. Antes de llamarla, lo producido tiene que estar en Dropbox y tenés que haber comprobado con el conector de Dropbox que los archivos están en la carpeta: sin carpeta y archivos no se registra. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree. Registrar no termina acá: después adjuntá las láminas o la portada con adjuntar_a_iteracion, con el id que devuelve; sin imágenes la iteración queda incompleta.",
     inputSchema: z.object({
       proceso: z.string().max(200).optional().describe("El nombre o el id del proceso."),
       nuevo_proceso: z.object({
@@ -161,7 +161,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("adjuntar_a_iteracion", {
     annotations: marcas("adjuntar_a_iteracion"),
     description:
-      "Adjunta imágenes o PDF livianos a una iteración registrada —las láminas de un carrusel, la portada de un video— para que se vean en el panel y otra IA las mire. Lo pesado queda en Dropbox.",
+      "Adjunta imágenes o PDF livianos a una iteración registrada —las láminas de un carrusel, la portada de un video— para que se vean en el panel y otra IA las mire. Lo pesado queda en Dropbox. Es obligatorio para piezas visuales: es parte de registrar, no un paso opcional, y una iteración sin imágenes queda marcada incompleta. Para no pasar las imágenes en base64 por el chat, usá un script que lea los archivos del disco y llame a esta herramienta por HTTP contra este mismo servidor MCP, con la credencial ya configurada en la máquina (si el repositorio de skills de la organización tiene uno, usá ese). Después comprobá con iteraciones_de_proceso que aparecen.",
     inputSchema: z.object({
       iteracion: z.string().uuid().describe("El id que devolvió registrar_iteracion."),
       archivos: z.array(z.object({
@@ -193,7 +193,8 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     "2. Asegurate de que lo producido esté en la carpeta de Dropbox del proceso, y comprobalo con el conector de Dropbox: anotá los archivos que están.",
     "3. Armá la receta de esta conversación —pasos en orden, prompts que funcionaron textuales, herramientas, IA, decisiones y descartes— y los datos que pide el proceso.",
     "4. Anotá la skill con su commit, si se hizo con una, y el enlace de esta conversación.",
-    "5. Mostrame todo y, cuando lo apruebe, llamá registrar_iteracion. Si hay imágenes livianas, adjuntalas con adjuntar_a_iteracion.",
+    "5. Mostrame todo y, cuando lo apruebe, llamá registrar_iteracion.",
+    "6. Adjuntá las láminas o la portada con adjuntar_a_iteracion —es parte de registrar, no opcional— y comprobá con iteraciones_de_proceso que aparecen.",
   ].join("\n")));
 
   server.registerPrompt("reproducir", {

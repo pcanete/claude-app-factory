@@ -2,7 +2,7 @@ import "server-only";
 import { getSetting } from "@/platform/settings/store";
 import { runtimeSpec } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
-import { motorDisponible } from "@/platform/processes/engine";
+import { administraProcesos, motorDisponible } from "@/platform/processes/engine";
 import {
   CLAVE_INSTRUCCIONES,
   NAMESPACE_INSTRUCCIONES,
@@ -41,6 +41,7 @@ export async function instruccionesPara(principal: AgentPrincipal) {
       tipo: principal.kind,
       persona: principal.kind === "user" ? principal.id : principal.ownerUserId ?? null,
       motorDeProcesos: motorDisponible(),
+      administraProcesos: motorDisponible() && administraProcesos(principal),
     },
     valor,
   );

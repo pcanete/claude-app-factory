@@ -119,13 +119,15 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
         <div className="process-grid">
           {familias.map((familia) => (
             <Link className="process-card" href={`/procesos/${familia.familia}`} key={familia.familia}>
-              <div className={`process-cover${familia.miniaturas.length ? "" : " empty-cover"}`}>
+              <div className={`process-cover${familia.miniaturas.length ? "" : familia.iteraciones ? " empty-cover incomplete-cover" : " empty-cover"}`}>
                 {familia.miniaturas.length
                   ? familia.miniaturas.map((imagen) => (
                     // eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos
                     <img alt="" key={imagen.id} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
                   ))
-                  : <span>Sin piezas todavía</span>}
+                  : familia.iteraciones
+                    ? <span>Incompleta: falta adjuntar las láminas</span>
+                    : <span>Sin piezas todavía</span>}
               </div>
               <div className="process-card-body">
                 <h3 className="process-name">{familia.nombre}</h3>
@@ -134,6 +136,7 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
                   {familia.skill && <span className="badge accent">skill</span>}
                   {familia.requisitos > 0 && <span className="badge">{familia.requisitos} requisitos</span>}
                   {familia.estado !== "publicado" && <span className="badge warn">{ESTADOS[familia.estado] ?? familia.estado}</span>}
+                  {familia.ultimaIncompleta && <span className="badge warn" title="La última iteración no tiene imágenes adjuntas">última incompleta</span>}
                   <span>
                     {familia.iteraciones === 1 ? "1 iteración" : `${familia.iteraciones} iteraciones`}
                     {familia.ultima ? ` · ${fecha(familia.ultima)}` : ""}

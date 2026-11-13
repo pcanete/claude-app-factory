@@ -395,6 +395,28 @@ export function skillDeIteracion(valor: { skill?: unknown; receta?: unknown }) {
   return encontrada ? encontrada.trim().replace(/^skill\s+/i, "") : null;
 }
 
+/**
+ * Una iteración sin imágenes adjuntas está incompleta: en el panel no se ve qué salió y la
+ * próxima IA no tiene qué mirar antes de repetirla. Lo pesado queda en Dropbox; las láminas
+ * o la portada, livianas, van adjuntas.
+ */
+export function iteracionIncompleta(imagenes: number) {
+  return imagenes <= 0;
+}
+
+/** Lo que responde registrar_iteracion: nunca un «quedó registrada» a secas si faltan las imágenes. */
+export function mensajeDeRegistro(entrada: { iteracion: string; procesoNuevo: boolean; imagenes: number }) {
+  const registrada = entrada.procesoNuevo
+    ? "Quedó registrada, y el proceso quedó creado con su ficha."
+    : "Quedó registrada.";
+  if (!iteracionIncompleta(entrada.imagenes)) return registrada;
+  return [
+    `${registrada} Falta adjuntar las láminas con adjuntar_a_iteracion (iteracion ${entrada.iteracion}): hasta entonces queda incompleta.`,
+    "Adjuntar es parte de registrar, no un paso opcional: sin imágenes el panel la marca incompleta y la próxima IA no tiene qué mirar.",
+    "Adjuntá las láminas de un carrusel o la portada de un video, y comprobá con iteraciones_de_proceso que aparecen.",
+  ].join(" ");
+}
+
 // ---------------------------------------------------------------------------------------
 // Lo que lee la IA
 // ---------------------------------------------------------------------------------------
