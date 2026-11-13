@@ -318,6 +318,7 @@ tbody tr:hover { background: #1a1d25; }
 .process-cover { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 170px; background: var(--field); }
 .process-cover img { width: 100%; height: 170px; object-fit: cover; display: block; }
 .process-cover.empty-cover { place-items: center; color: var(--muted); font-size: 13px; height: 90px; }
+.process-cover.incomplete-cover { color: #f5d48f; border-bottom: 1px dashed color-mix(in srgb, #f0b34a 55%, var(--border)); }
 .process-card-body, .iteration-body { padding: 14px 16px 16px; display: grid; gap: 8px; }
 .process-summary { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
 .process-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; color: var(--muted); font-size: 12px; }

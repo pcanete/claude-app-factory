@@ -25,6 +25,8 @@ import {
   faltasDeIteracion,
   familiaDe,
   guiaDeProceso,
+  iteracionIncompleta,
+  mensajeDeRegistro,
   nombreDeFamilia,
   resumenCorto,
   skillDeIteracion,
@@ -259,6 +261,8 @@ export type Iteracion = {
   conversacion: string | null;
   receta: Record<string, unknown> | null;
   imagenes: Imagen[];
+  /** Sin imágenes adjuntas: el panel la marca y la IA sabe que falta adjuntarlas. */
+  incompleta: boolean;
 };
 
 async function iteracionesDe(procesos: Record<string, unknown>[], quien: Identidad, limite = 100): Promise<Iteracion[]> {
@@ -272,25 +276,29 @@ async function iteracionesDe(procesos: Record<string, unknown>[], quien: Identid
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
     .slice(0, limite);
   const nombres = await nombresDePersonas(registros.flatMap((r) => [r.autor, r.responsable]));
-  return Promise.all(registros.map(async (r) => ({
-    iteracion: String(r.id),
-    titulo: String(r.titulo),
-    fecha: r.created_at,
-    quien: typeof r.autor === "string" ? nombres.get(r.autor) ?? null : null,
-    persona: typeof r.autor === "string" ? r.autor : null,
-    responsable: typeof r.responsable === "string" ? nombres.get(r.responsable) ?? null : null,
-    estado: typeof r.estado === "string" ? r.estado : null,
-    origen: String(r.origen ?? "original"),
-    salio_igual: typeof r.salio_igual === "boolean" ? r.salio_igual : null,
-    que_falto: typeof r.que_falto === "string" ? r.que_falto : null,
-    carpeta: typeof r.carpeta === "string" ? r.carpeta : null,
-    archivos: Array.isArray(r.archivos) ? r.archivos.filter((a): a is string => typeof a === "string") : [],
-    datos: esObjeto(r.datos) ? r.datos : {},
-    skill: skillDeIteracion(r),
-    conversacion: typeof r.conversacion === "string" && r.conversacion ? r.conversacion : null,
-    receta: esObjeto(r.receta) ? r.receta : null,
-    imagenes: await imagenesDe(String(r.id)),
-  })));
+  return Promise.all(registros.map(async (r) => {
+    const imagenes = await imagenesDe(String(r.id));
+    return {
+      iteracion: String(r.id),
+      titulo: String(r.titulo),
+      fecha: r.created_at,
+      quien: typeof r.autor === "string" ? nombres.get(r.autor) ?? null : null,
+      persona: typeof r.autor === "string" ? r.autor : null,
+      responsable: typeof r.responsable === "string" ? nombres.get(r.responsable) ?? null : null,
+      estado: typeof r.estado === "string" ? r.estado : null,
+      origen: String(r.origen ?? "original"),
+      salio_igual: typeof r.salio_igual === "boolean" ? r.salio_igual : null,
+      que_falto: typeof r.que_falto === "string" ? r.que_falto : null,
+      carpeta: typeof r.carpeta === "string" ? r.carpeta : null,
+      archivos: Array.isArray(r.archivos) ? r.archivos.filter((a): a is string => typeof a === "string") : [],
+      datos: esObjeto(r.datos) ? r.datos : {},
+      skill: skillDeIteracion(r),
+      conversacion: typeof r.conversacion === "string" && r.conversacion ? r.conversacion : null,
+      receta: esObjeto(r.receta) ? r.receta : null,
+      imagenes,
+      incompleta: iteracionIncompleta(imagenes.length),
+    };
+  }));
 }
 
 /**
@@ -369,11 +377,14 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   });
   revalidateAfterWrite("iteracion", resultado.iteracion);
   revalidateAfterWrite("proceso", resultado.proceso);
+  // Recién creada no tiene imágenes: la respuesta lo dice, para que el agente no se quede
+  // en «quedó registrada» y deje la iteración sin láminas.
+  const imagenes = 0;
   return {
     ...resultado,
-    mensaje: entrada.nuevo_proceso
-      ? "Quedó registrada, y el proceso quedó creado con su ficha."
-      : "Quedó registrada.",
+    incompleta: iteracionIncompleta(imagenes),
+    falta: iteracionIncompleta(imagenes) ? ["adjuntar las láminas con adjuntar_a_iteracion"] : [],
+    mensaje: mensajeDeRegistro({ iteracion: resultado.iteracion, procesoNuevo: Boolean(entrada.nuevo_proceso), imagenes }),
   };
 }
 
@@ -536,8 +547,11 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
     const ids = new Set(registros.map((r) => String(r.id)));
     const propias = iteraciones.filter((it) => ids.has(String(it.proceso_id)));
     let miniaturas: Imagen[] = [];
-    for (const it of propias.slice(0, 5)) {
+    // Si la última iteración quedó sin imágenes, la tarjeta lo dice: es una iteración incompleta.
+    let ultimaIncompleta = false;
+    for (const [indice, it] of propias.slice(0, 5).entries()) {
       miniaturas = (await imagenesDe(String(it.id))).slice(0, 3);
+      if (indice === 0) ultimaIncompleta = iteracionIncompleta(miniaturas.length);
       if (miniaturas.length) break;
     }
     const definicion = definicionDe(actual);
@@ -551,6 +565,7 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
       actualizado: actual.updated_at ?? null,
       iteraciones: propias.length,
       ultima: propias[0]?.created_at ?? null,
+      ultimaIncompleta,
       miniaturas,
     };
   }));

@@ -8,7 +8,9 @@
  * Lo que tiene que valer:
  *   - la base sale siempre, aunque la configuración esté vacía o mal formada;
  *   - cada rol recibe lo general más lo suyo, y nunca lo de otro rol;
- *   - un texto largo no rompe el límite.
+ *   - un texto largo no rompe el límite;
+ *   - con procesos, adjuntar las imágenes es parte de registrar, para todos;
+ *   - sólo quien administra recibe los pasos para crear un proceso.
  */
 import {
   LIMITE_INSTRUCCIONES,
@@ -78,6 +80,25 @@ const conMotor = componerInstrucciones({ ...persona, motorDeProcesos: true }, nu
 comprobar("con procesos, manda a como_se_hace y a registrar_iteracion", conMotor.includes("como_se_hace") && conMotor.includes("registrar_iteracion") && !conMotor.includes("mis_pendientes"));
 comprobar("con motor de procesos, dice cómo reutilizar y registrar lo que salió bien", conMotor.includes("como_se_hace") && conMotor.includes("registrar_iteracion"));
 comprobar("sin motor, no nombra herramientas que no existen", !componerInstrucciones(persona, null).includes("como_se_hace"));
+
+comprobar("con procesos, adjuntar las imágenes es parte de registrar", conMotor.includes("adjuntar_a_iteracion") && conMotor.includes("no un paso opcional"));
+comprobar("sin conector de Dropbox, se pregunta a la persona", conMotor.includes("si no tenés conector, preguntale a la persona"));
+comprobar("quien no administra no recibe los pasos para crear un proceso", !conMotor.includes("crear el proceso es esto"));
+const administra = componerInstrucciones({ ...agente, motorDeProcesos: true, administraProcesos: true }, null);
+const pasos = [
+  "regenerá la pieza desde la skill",
+  "Commit y push",
+  "conector de Dropbox",
+  "que esté en la carpeta sincronizada de esta máquina no alcanza",
+  "nuevo_proceso y la ficha completa",
+  "Adjuntá las láminas con adjuntar_a_iteracion",
+  "iteraciones_de_proceso que la iteración aparece con sus imágenes",
+];
+for (const paso of pasos) comprobar(`quien administra recibe el paso «${paso}»`, administra.includes(paso));
+const bloquePasos = administra.slice(administra.indexOf("crear el proceso es esto"));
+const orden = pasos.map((paso) => bloquePasos.indexOf(paso));
+comprobar("y en orden", orden[0] > 0 && orden.every((posicion, i) => i === 0 || posicion > orden[i - 1]), orden.join(", "));
+comprobar("sin motor, administrar no agrega pasos de procesos", !componerInstrucciones({ ...agente, administraProcesos: true }, null).includes("nuevo_proceso"));
 
 const largo = componerInstrucciones(persona, "x".repeat(LIMITE_INSTRUCCIONES * 2));
 comprobar("respeta el límite", largo.length <= LIMITE_INSTRUCCIONES, `largo ${largo.length}`);

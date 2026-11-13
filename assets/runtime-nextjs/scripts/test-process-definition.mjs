@@ -12,6 +12,8 @@
  *   - una iteración sin los datos que pide su proceso no se registra, y lo opcional no se exige;
  *   - la guía dice qué comprobar en la máquina, dónde guardar y qué registrar;
  *   - un proceso no se guarda si le falta algo de la ficha, sea quien sea el que lo guarde;
+ *   - una iteración sin imágenes adjuntas está incompleta, y registrar_iteracion lo dice
+ *     en vez de responder sólo «quedó registrada»;
  *   - requisitos y registro escritos por una persona, una línea por elemento, se entienden
  *     y vuelven a texto igual.
  */
@@ -25,6 +27,8 @@ import {
   faltasDeReceta,
   familiaDe,
   guiaDeProceso,
+  iteracionIncompleta,
+  mensajeDeRegistro,
   nombreDeFamilia,
   registroATexto,
   registroDeTexto,
@@ -177,6 +181,20 @@ comprobar("una skill sin repositorio falta, y lo dice", sinRepo.length === 1 && 
 comprobar("sin skill, el método escrito alcanza", faltasDeFicha({ ...completo, ficha: { ...completo.ficha, skill: undefined }, metodo: "1. Hacer esto" }).length === 0);
 comprobar("sin skill ni método, falta uno de los dos", faltasDeFicha({ ...completo, ficha: { ...completo.ficha, skill: undefined } }).length === 1);
 comprobar("una carpeta que no es de Dropbox no cuenta", faltasDeFicha({ ...completo, carpeta: "C:/Users/x/Escritorio" }).some((f) => f.includes("Dropbox")));
+
+// Una iteración sin imágenes: la respuesta no puede ser «quedó registrada» a secas.
+const ID_IT = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+comprobar("sin imágenes, la iteración está incompleta", iteracionIncompleta(0) === true);
+comprobar("con una imagen, ya no", iteracionIncompleta(1) === false);
+const sinLaminas = mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: false, imagenes: 0 });
+comprobar("registrar sin imágenes avisa que falta adjuntar las láminas",
+  sinLaminas.includes("Falta adjuntar las láminas con adjuntar_a_iteracion"), sinLaminas);
+comprobar("y nombra la iteración a la que hay que adjuntarlas", sinLaminas.includes(ID_IT), sinLaminas);
+comprobar("y dice que adjuntar no es opcional", sinLaminas.includes("no un paso opcional"), sinLaminas);
+comprobar("y no termina en «Quedó registrada.» a secas", sinLaminas.trim() !== "Quedó registrada.", sinLaminas);
+const nuevoSinLaminas = mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: true, imagenes: 0 });
+comprobar("al crear el proceso también avisa", nuevoSinLaminas.includes("proceso quedó creado") && nuevoSinLaminas.includes("adjuntar_a_iteracion"), nuevoSinLaminas);
+comprobar("con imágenes, no hay advertencia", mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: false, imagenes: 7 }) === "Quedó registrada.");
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);
