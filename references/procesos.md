@@ -115,8 +115,17 @@ conversación (`https://…` o `claude://…`). Si el proceso no existe y quien 
 Si quien registra no administra, se rechaza: tiene que pedirle a quien administra que lo cree.
 Lo producido ya está en Dropbox, así que no se pierde nada.
 
+Registrar no termina con `registrar_iteracion`: las láminas o la portada se adjuntan después con
+`adjuntar_a_iteracion`, con el id que devolvió. Una iteración sin imágenes está **incompleta**:
+la respuesta de `registrar_iteracion` lo dice —«Falta adjuntar las láminas con
+adjuntar_a_iteracion…»— en vez de un «Quedó registrada» a secas, `iteraciones_de_proceso`
+devuelve `incompleta: true` y el panel la marca. Para no pasar las imágenes en base64 por el
+chat, conviene un script que lea los archivos del disco y llame a `adjuntar_a_iteracion` por
+HTTP contra el mismo servidor MCP, con la credencial ya configurada en la máquina.
+
 La plataforma no lee Dropbox: la comprobación la hace la IA con el conector, antes de
-registrar. Si alguna vez una carpeta registrada resulta vacía, el paso siguiente es que el
+registrar. Si la IA no tiene conector, le pregunta a la persona; que el archivo esté en la
+carpeta sincronizada de la máquina no alcanza. Si alguna vez una carpeta registrada resulta vacía, el paso siguiente es que el
 servidor lo verifique con una credencial de Dropbox propia.
 
 ## Las herramientas
@@ -126,17 +135,26 @@ servidor lo verifique con una credencial de Dropbox propia.
 | `como_se_hace` | Requisitos, skill, carpeta, qué registrar y la guía completa, con las últimas veces que se hizo y sus imágenes |
 | `registrar_iteracion` | Guarda una vez que se hizo, si está completa |
 | `iteraciones_de_proceso` | Todas las veces que se hizo, con todo lo registrado |
-| `adjuntar_a_iteracion` | Adjunta imágenes o PDF livianos para verlos en el panel |
+| `adjuntar_a_iteracion` | Adjunta imágenes o PDF livianos para verlos en el panel. Obligatorio en piezas visuales: sin imágenes, la iteración queda incompleta |
 | `editar_proceso` | Sólo para quien administra (los demás no la ven): cambia lo que se manda de un proceso y deja el resto; tiene que quedar completo |
 
 Comandos (prompts MCP): `registrar`, `reproducir` y `mejorar_proceso`.
+
+Las instrucciones del servidor le dicen a toda IA que adjuntar es parte de registrar. A la de
+quien administra le agregan los pasos para crear un proceso, en orden: skill en el repositorio
+de la organización, enlazada y probada regenerando la pieza desde la skill; commit y push;
+pieza en Dropbox comprobada con el conector (o preguntando a la persona); `registrar_iteracion`
+con `nuevo_proceso` y la ficha completa; adjuntar las láminas; comprobar con
+`iteraciones_de_proceso` que aparecen.
 
 Toda credencial que registra tiene que tener una persona responsable: la iteración queda a su
 nombre.
 
 ## El panel
 
-**Procesos** lista lo que el equipo sabe hacer, con la portada de la última pieza. La página de
+**Procesos** lista lo que el equipo sabe hacer, con la portada de la última pieza. Si la
+última iteración no tiene imágenes, la tarjeta lo marca («última incompleta»), y si ninguna
+tiene, la portada dice «Incompleta: falta adjuntar las láminas» en vez de «Sin piezas todavía». La página de
 cada proceso muestra qué hace, con qué skill, qué necesita la máquina, qué se registra, dónde
 se guarda y las iteraciones como galería o lista. Quien administra, desde ahí:
 

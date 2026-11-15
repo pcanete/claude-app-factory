@@ -253,7 +253,7 @@ export default async function ProcesoPage({
               <tbody>
                 {iteraciones.map((it) => (
                   <tr key={it.iteracion}>
-                    <td data-label="Pieza">{it.titulo} <Origen it={it} /></td>
+                    <td data-label="Pieza">{it.titulo} <Origen it={it} />{it.incompleta && <span className="badge warn" title="No tiene imágenes adjuntas">incompleta</span>}</td>
                     <td data-label="Fecha">{fecha(it.fecha)}</td>
                     <td data-label="Quién">{it.quien ?? "—"}</td>
                     <td data-label="Skill">{it.skill ?? "—"}</td>
@@ -274,13 +274,13 @@ export default async function ProcesoPage({
           <div className="iteration-grid">
             {iteraciones.map((it) => (
               <article className="iteration" key={it.iteracion}>
-                <div className={`process-cover${it.imagenes.length ? "" : " empty-cover"}`}>
-                  {it.imagenes.length
-                    ? it.imagenes.slice(0, 3).map((imagen) => (
+                <div className={`process-cover${it.incompleta ? " empty-cover incomplete-cover" : ""}`}>
+                  {it.incompleta
+                    ? <span>Incompleta: falta adjuntar las láminas</span>
+                    : it.imagenes.slice(0, 3).map((imagen) => (
                       // eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos
                       <img alt="" key={imagen.id} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
-                    ))
-                    : <span>Sin imágenes</span>}
+                    ))}
                 </div>
                 <div className="iteration-body">
                   <h3>{it.titulo}</h3>

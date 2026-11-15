@@ -23,7 +23,23 @@ export type ContextoInstrucciones = {
   persona?: string | null;
   /** Si la aplicación tiene motor de procesos: cambia por dónde se empieza a trabajar. */
   motorDeProcesos?: boolean;
+  /** Si quien opera crea y edita procesos: recibe además los pasos para crear uno completo. */
+  administraProcesos?: boolean;
 };
+
+/**
+ * Los pasos para crear un proceso, para quien administra. Un proceso que nace a medias
+ * —sin skill probada, sin pieza en Dropbox o sin láminas— no lo puede repetir nadie.
+ */
+export const PASOS_PARA_CREAR_UN_PROCESO = [
+  "Si administrás y algo se hizo por primera vez, crear el proceso es esto, en este orden, y no se saltea ningún paso:",
+  "1. La skill vive en el repositorio de skills de la organización, enlazada en esta máquina, y está probada: regenerá la pieza desde la skill, no desde lo que quedó en la conversación.",
+  "2. Commit y push de la skill. El commit que vas a registrar es ese, no uno local que nadie más tiene.",
+  "3. La pieza está en la carpeta de Dropbox del proceso, comprobada con el conector de Dropbox. Si no tenés conector, preguntale a la persona si la ve en Dropbox; que esté en la carpeta sincronizada de esta máquina no alcanza.",
+  "4. registrar_iteracion con nuevo_proceso y la ficha completa.",
+  "5. Adjuntá las láminas con adjuntar_a_iteracion.",
+  "6. Comprobá con iteraciones_de_proceso que la iteración aparece con sus imágenes. Recién ahí está creado.",
+];
 
 function texto(valor: unknown) {
   return typeof valor === "string" && valor.trim() ? valor.trim() : null;
@@ -54,10 +70,12 @@ export function componerInstrucciones(contexto: ContextoInstrucciones, valor: un
       "",
       "Esta aplicación guarda lo que el equipo sabe hacer como procesos, y cada vez que se hizo como iteraciones.",
       "- Si te piden algo que el equipo ya sabe hacer, traé cómo se hace con como_se_hace. Comprobá primero en esta máquina los requisitos que lista; lo que falte, instalalo como dice o avisá, y no lo reemplaces por otra cosa.",
-      "- Lo producido va a la carpeta de Dropbox del proceso. Comprobá con el conector de Dropbox que quedó ahí antes de registrar.",
+      "- Lo producido va a la carpeta de Dropbox del proceso. Comprobá con el conector de Dropbox que quedó ahí antes de registrar; si no tenés conector, preguntale a la persona en vez de dar por buena la carpeta sincronizada.",
       "- Al terminar, registralo con registrar_iteracion: carpeta, archivos, los datos que pide el proceso, la receta, la skill con su commit y el enlace a la conversación.",
+      "- Adjuntar las imágenes es parte de registrar, no un paso opcional: después de registrar_iteracion, adjuntá las láminas o la portada con adjuntar_a_iteracion. Una iteración sin imágenes queda incompleta.",
       "- No crees ni edites procesos ni iteraciones con create_record o update_record.",
     );
+    if (contexto.administraProcesos) partes.push("", ...PASOS_PARA_CREAR_UN_PROCESO);
   }
 
   let general: string | null = null;
