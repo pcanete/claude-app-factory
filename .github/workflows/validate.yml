@@ -95,6 +95,10 @@ jobs:
       - name: The menu groups views by entity
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-view-groups.mjs
+      # Una firma que difiere en un carácter hace que el almacén rechace todas las subidas.
+      - name: Storage signatures match the published AWS example
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-almacen.mjs
       # El tablero mide con la bitácora: un error acá hace que se mejore la etapa equivocada.
       - name: Build the generated application
         working-directory: /tmp/reference-app

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { recordAuditEvent } from "@/lib/audit";
 import { deleteAttachmentsForRecord } from "@/lib/attachments";
+import { borrarDelAlmacen, soltarDelRegistro } from "@/platform/storage/archivos";
 import { hasPermission, requirePermission } from "@/lib/auth";
 import {
   assertRecordOwnershipChange,
@@ -88,20 +89,24 @@ export async function deleteRecordAction(entityKey: string, id: string) {
   requireEntity(entityKey);
   let blockedMessage: string | null = null;
   try {
-    await withTransaction(async (client) => {
+    // Lo producido en el almacén se borra recién después de confirmar la transacción.
+    const soltados = await withTransaction(async (client) => {
       const before = await getRecord(entityKey, id, client, true, access);
       if (!before) throw new Error("El registro que intentás eliminar ya no existe.");
       const evaluated = applyRules({ entityKey, event: "before_delete", values: {}, before });
       const deletedAttachments = await deleteAttachmentsForRecord(client, entityKey, id);
+      const stored = await soltarDelRegistro(client, entityKey, id);
       await deleteRecord(entityKey, id, client, access);
       await recordAuditEvent(client, {
         actorId: user.id,
         entityKey,
         recordId: id,
         action: "delete",
-        changes: { before, attachments: deletedAttachments, rules: evaluated.applied },
+        changes: { before, attachments: deletedAttachments, ...(stored.length ? { stored } : {}), rules: evaluated.applied },
       });
+      return stored.map((archivo) => archivo.object_key);
     });
+    await borrarDelAlmacen(soltados);
   } catch (error) {
     if (error instanceof RuleBlockedError) blockedMessage = error.message;
     // Otro registro apunta a este y la base no deja borrarlo. Antes esto terminaba en la

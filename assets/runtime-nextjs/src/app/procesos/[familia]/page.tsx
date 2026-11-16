@@ -8,6 +8,7 @@ import { borrarIteracionAction, borrarProcesoAction, reactivarProcesoAction, ret
 import { canManageUsers, hasPermission, requireUser } from "@/lib/auth";
 import { USER_SCOPES } from "@/platform/mcp/store";
 import { iteracionesDeProceso, motorDisponible, type Iteracion } from "@/platform/processes/engine";
+import { almacenConfigurado } from "@/platform/storage/almacen";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,34 @@ function Carpeta({ carpeta }: { carpeta: string | null }) {
   return esWeb(carpeta)
     ? <a className="record-link" href={carpeta} rel="noreferrer" target="_blank">Carpeta en Dropbox</a>
     : <span className="table-secondary">Dropbox: <code>{carpeta}</code></span>;
+}
+
+function tamano(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+/** Lo producido guardado en la aplicación: cada archivo se baja con los permisos de quien mira. */
+function Producido({ it }: { it: Iteracion }) {
+  if (!it.producido?.length) return null;
+  return (
+    <ul className="case-list produced-list">
+      {it.producido.map((archivo) => (
+        <li key={archivo.id}>
+          <a className="record-link" href={`/producido/${archivo.id}`}>{archivo.nombre}</a> <span className="table-secondary">{tamano(archivo.tamano)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Qué le falta a una iteración incompleta, en palabras de quien mira el panel. */
+function queFalta(it: Iteracion) {
+  const partes: string[] = [];
+  if (it.producido && !it.producido.length) partes.push("subir lo producido");
+  if (!it.imagenes.length) partes.push("adjuntar las láminas");
+  return partes.length ? `Incompleta: falta ${partes.join(" y ")}` : "";
 }
 
 function Origen({ it }: { it: Iteracion }) {
@@ -73,6 +102,7 @@ export default async function ProcesoPage({
     notFound();
   }
   const gestiona = canManageUsers(user);
+  const almacen = almacenConfigurado();
   const retirado = datos.estado === "retirado";
   const ficha = datos.ficha;
   const filtros = {
@@ -137,7 +167,7 @@ export default async function ProcesoPage({
       {fallo && <div className="notice error">{fallo}</div>}
       {gestiona && sinCompletar && (
         <div className="notice">
-          A este proceso le falta {[!datos.requisitos.length && "decir qué necesita la máquina", !datos.registro.length && "qué se registra cada vez", !datos.carpeta && "la carpeta de Dropbox"].filter(Boolean).join(", ")}. Sin eso, quien lo repita no tiene cómo comprobar ni qué dejar. <Link className="record-link" href={`/procesos/${familia}/editar`}>Completarlo</Link>
+          A este proceso le falta {[!datos.requisitos.length && "decir qué necesita la máquina", !datos.registro.length && "qué se registra cada vez", !almacen && !datos.carpeta && "la carpeta de Dropbox"].filter(Boolean).join(", ")}. Sin eso, quien lo repita no tiene cómo comprobar ni qué dejar. <Link className="record-link" href={`/procesos/${familia}/editar`}>Completarlo</Link>
         </div>
       )}
 
@@ -201,7 +231,9 @@ export default async function ProcesoPage({
 
       <section className="work-section">
         <h2>Qué se registra cada vez</h2>
-        <p className="subtitle">Además de la carpeta en Dropbox, los archivos, la receta, la skill con su commit y la conversación.</p>
+        <p className="subtitle">{almacen
+          ? "Además de lo producido, que se sube a la aplicación, la receta, la skill con su commit y la conversación."
+          : "Además de la carpeta en Dropbox, los archivos, la receta, la skill con su commit y la conversación."}</p>
         {datos.registro.length ? (
           <ul className="case-list">
             {datos.registro.map((campo) => (
@@ -253,7 +285,7 @@ export default async function ProcesoPage({
               <tbody>
                 {iteraciones.map((it) => (
                   <tr key={it.iteracion}>
-                    <td data-label="Pieza">{it.titulo} <Origen it={it} />{it.incompleta && <span className="badge warn" title="No tiene imágenes adjuntas">incompleta</span>}</td>
+                    <td data-label="Pieza">{it.titulo} <Origen it={it} />{it.incompleta && <span className="badge warn" title={queFalta(it)}>incompleta</span>}</td>
                     <td data-label="Fecha">{fecha(it.fecha)}</td>
                     <td data-label="Quién">{it.quien ?? "—"}</td>
                     <td data-label="Skill">{it.skill ?? "—"}</td>
@@ -276,7 +308,7 @@ export default async function ProcesoPage({
               <article className="iteration" key={it.iteracion}>
                 <div className={`process-cover${it.incompleta ? " empty-cover incomplete-cover" : ""}`}>
                   {it.incompleta
-                    ? <span>Incompleta: falta adjuntar las láminas</span>
+                    ? <span>{queFalta(it)}</span>
                     : it.imagenes.slice(0, 3).map((imagen) => (
                       // eslint-disable-next-line @next/next/no-img-element -- adjunto privado, servido con permisos
                       <img alt="" key={imagen.id} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
@@ -294,6 +326,7 @@ export default async function ProcesoPage({
                     <Origen it={it} />
                   </div>
                   {it.salio_igual === false && it.que_falto && <p className="iteration-missing">Qué faltó: {it.que_falto}</p>}
+                  <Producido it={it} />
                   <div className="iteration-links">
                     <Carpeta carpeta={it.carpeta} />
                     {it.conversacion && (esWeb(it.conversacion)
@@ -314,7 +347,7 @@ export default async function ProcesoPage({
                     )}
                     {Object.keys(it.datos).length > 0 && <Salidas salidas={it.datos} />}
                     {it.archivos.length > 0 && (
-                      <p className="table-secondary">Archivos en Dropbox: {it.archivos.join(", ")}</p>
+                      <p className="table-secondary">Archivos en la carpeta: {it.archivos.join(", ")}</p>
                     )}
                     {it.receta && <Receta receta={it.receta} />}
                     {(gestiona || it.persona === user.id) && it.imagenes.length < 20 && <SubirLaminas iteracion={it.iteracion} />}
@@ -328,7 +361,7 @@ export default async function ProcesoPage({
                           <input name="iteracion" type="hidden" value={it.iteracion} />
                           <input name="familia" type="hidden" value={familia} />
                           <button className="button danger" type="submit">Borrar esta iteración</button>
-                          <span className="field-help">Con sus imágenes. Lo que está en Dropbox no se toca.</span>
+                          <span className="field-help">{it.producido?.length ? "Con sus imágenes y lo producido que tiene guardado. No se deshace." : "Con sus imágenes. Lo que está en Dropbox no se toca."}</span>
                         </form>
                       </details>
                     </div>

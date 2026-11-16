@@ -1,6 +1,6 @@
 import "server-only";
 import type { PoolClient } from "pg";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { generatedCapabilities } from "@/generated/permissions";
 import {
   contentTypeAllowed,
@@ -20,9 +20,27 @@ import { applyRules } from "@/lib/rules";
 import { getEntity, relationFields, requireEntity } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
+  almacenConfigurado,
+  consultarObjeto,
+  direccionDeDescarga,
+  direccionDeSubida,
+  MAXIMO_POR_ARCHIVO,
+} from "@/platform/storage/almacen";
+import {
+  archivoPorId,
+  archivosDelRegistro,
+  borrarDelAlmacen,
+  contarDelRegistro,
+  descartarPendiente,
+  insertarPendiente,
+  marcarGuardado,
+  soltarDelRegistro,
+} from "@/platform/storage/archivos";
+import {
   claveDeNombre,
   faltasDeFicha,
   faltasDeIteracion,
+  faltasParaCompletar,
   familiaDe,
   guiaDeProceso,
   iteracionIncompleta,
@@ -224,6 +242,12 @@ function resumenDe(proceso: Record<string, unknown>) {
 // ---------------------------------------------------------------------------------------
 
 type Imagen = { id: string; nombre: string; tipo: string };
+export type Producido = { id: string; nombre: string; tipo: string; tamano: number; guardado: unknown };
+
+async function producidoDe(iteracion: string): Promise<Producido[]> {
+  const archivos = await archivosDelRegistro("iteracion", iteracion).catch(() => []);
+  return archivos.map((a) => ({ id: a.id, nombre: a.original_name, tipo: a.content_type, tamano: a.size_bytes, guardado: a.stored_at }));
+}
 
 async function imagenesDe(iteracion: string): Promise<Imagen[]> {
   const adjuntos = await listAttachments("iteracion", iteracion).catch(() => []);
@@ -261,8 +285,11 @@ export type Iteracion = {
   conversacion: string | null;
   receta: Record<string, unknown> | null;
   imagenes: Imagen[];
-  /** Sin imágenes adjuntas: el panel la marca y la IA sabe que falta adjuntarlas. */
+  /** Lo producido guardado en el almacén de la aplicación. Null si la aplicación no tiene almacén. */
+  producido: Producido[] | null;
+  /** Sin imágenes adjuntas, o sin lo producido si hay almacén: el panel la marca y la IA sabe qué falta. */
   incompleta: boolean;
+  falta: string[];
 };
 
 async function iteracionesDe(procesos: Record<string, unknown>[], quien: Identidad, limite = 100): Promise<Iteracion[]> {
@@ -276,8 +303,10 @@ async function iteracionesDe(procesos: Record<string, unknown>[], quien: Identid
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
     .slice(0, limite);
   const nombres = await nombresDePersonas(registros.flatMap((r) => [r.autor, r.responsable]));
+  const almacen = almacenConfigurado();
   return Promise.all(registros.map(async (r) => {
     const imagenes = await imagenesDe(String(r.id));
+    const producido = almacen ? await producidoDe(String(r.id)) : null;
     return {
       iteracion: String(r.id),
       titulo: String(r.titulo),
@@ -296,7 +325,9 @@ async function iteracionesDe(procesos: Record<string, unknown>[], quien: Identid
       conversacion: typeof r.conversacion === "string" && r.conversacion ? r.conversacion : null,
       receta: esObjeto(r.receta) ? r.receta : null,
       imagenes,
-      incompleta: iteracionIncompleta(imagenes.length),
+      producido,
+      incompleta: iteracionIncompleta(imagenes.length, producido?.length),
+      falta: faltasParaCompletar(imagenes.length, producido?.length),
     };
   }));
 }
@@ -310,8 +341,8 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   proceso?: string;
   nuevo_proceso?: DatosDeProceso;
   titulo: string;
-  carpeta: string;
-  archivos: string[];
+  carpeta?: string;
+  archivos?: string[];
   datos?: Record<string, unknown>;
   receta: Receta;
   skill?: string;
@@ -333,7 +364,7 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
     if (!proceso) throw new Error(`No hay ningún proceso «${entrada.proceso}». Si es la primera vez, usá nuevo_proceso.`);
   } else {
     if (!quien.administra) {
-      throw new Error("Este proceso no existe, y crearlo lo hace quien administra. Pedile que lo cree, desde el panel o con su agente; lo producido ya está en Dropbox y se registra cuando exista.");
+      throw new Error("Este proceso no existe, y crearlo lo hace quien administra. Pedile que lo cree, desde el panel o con su agente; lo producido se registra cuando exista.");
     }
     const familia = claveDeNombre(entrada.nuevo_proceso!.nombre);
     const existente = vigente(await procesosDeLaFamilia(familia, quien));
@@ -342,7 +373,8 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
 
   const definicionNueva = entrada.nuevo_proceso ? definicionDesdeDatos(claveDeNombre(entrada.nuevo_proceso.nombre), entrada.nuevo_proceso) : null;
   const definicion: Definicion = proceso ? definicionDe(proceso) : (definicionNueva as Definicion);
-  const faltas = faltasDeIteracion(definicion, entrada);
+  const almacen = almacenConfigurado();
+  const faltas = faltasDeIteracion(definicion, entrada, { almacen });
   if (faltas.length) throw new Error(["No se registró. Falta:", ...faltas.map((falta) => `- ${falta}`)].join("\n"));
 
   const resultado = await withTransaction(async (client) => {
@@ -360,8 +392,8 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
     const id = await crear(escritura, "iteracion", {
       titulo: entrada.titulo,
       proceso: procesoId,
-      carpeta: entrada.carpeta.trim(),
-      archivos: entrada.archivos,
+      carpeta: entrada.carpeta?.trim() || null,
+      archivos: entrada.archivos ?? [],
       datos: entrada.datos ?? {},
       receta: entrada.receta,
       skill: entrada.skill?.trim() || skillDeIteracion({ receta: entrada.receta }) || null,
@@ -377,14 +409,15 @@ export async function registrarIteracion(agent: AgentPrincipal, entrada: {
   });
   revalidateAfterWrite("iteracion", resultado.iteracion);
   revalidateAfterWrite("proceso", resultado.proceso);
-  // Recién creada no tiene imágenes: la respuesta lo dice, para que el agente no se quede
-  // en «quedó registrada» y deje la iteración sin láminas.
+  // Recién creada no tiene imágenes ni, con almacén, lo producido: la respuesta lo dice, para
+  // que el agente no se quede en «quedó registrada» y deje la iteración a medias.
   const imagenes = 0;
+  const guardados = almacen ? 0 : undefined;
   return {
     ...resultado,
-    incompleta: iteracionIncompleta(imagenes),
-    falta: iteracionIncompleta(imagenes) ? ["adjuntar las láminas con adjuntar_a_iteracion"] : [],
-    mensaje: mensajeDeRegistro({ iteracion: resultado.iteracion, procesoNuevo: Boolean(entrada.nuevo_proceso), imagenes }),
+    incompleta: iteracionIncompleta(imagenes, guardados),
+    falta: faltasParaCompletar(imagenes, guardados),
+    mensaje: mensajeDeRegistro({ iteracion: resultado.iteracion, procesoNuevo: Boolean(entrada.nuevo_proceso), imagenes, guardados }),
   };
 }
 
@@ -445,26 +478,198 @@ export async function adjuntarAIteracion(agent: AgentPrincipal, iteracion: strin
   return { iteracion, adjuntados: ids.length, archivos: ids, mensaje: `Quedaron ${ids.length} archivo${ids.length === 1 ? "" : "s"} en la iteración.` };
 }
 
-/** Borra una iteración y sus archivos adjuntos. Lo que está en Dropbox no se toca. */
+// ---------------------------------------------------------------------------------------
+// Lo producido, en el almacén de la aplicación
+// ---------------------------------------------------------------------------------------
+
+/** Cuántos archivos de lo producido admite una iteración, contando los pendientes. */
+const MAXIMO_PRODUCIDO_POR_ITERACION = 200;
+
+/** El MD5 en hexadecimal o en base64, como lo dé la herramienta de quien sube. */
+function md5Normalizado(valor: string) {
+  const texto = valor.trim();
+  if (/^[0-9a-f]{32}$/i.test(texto)) return { hex: texto.toLowerCase(), base64: Buffer.from(texto, "hex").toString("base64") };
+  if (/^[A-Za-z0-9+/]{22}==$/.test(texto)) return { hex: Buffer.from(texto, "base64").toString("hex"), base64: texto };
+  return null;
+}
+
+/** Un nombre de archivo sin carpetas ni caracteres de control: la carpeta la pone la aplicación. */
+function nombreDeArchivo(valor: string) {
+  return valor.replace(/[\u0000-\u001f\u007f]/g, "").replace(/[\\/]+/g, "_").trim();
+}
+
+function exigirAlmacen() {
+  if (!almacenConfigurado()) {
+    throw new Error("Esta aplicación no tiene almacén propio: lo producido va a la carpeta de Dropbox del proceso.");
+  }
+}
+
+/** Sube lo producido quien hizo la iteración, quien responde por ella o quien administra. */
+async function exigirIteracionPropia(iteracion: string, quien: Identidad, client?: PoolClient) {
+  const registro = await getRecord("iteracion", iteracion, client, Boolean(client), quien.access);
+  if (!registro) throw new Error("Esa iteración no existe o no está a tu alcance.");
+  const propia = registro.autor === quien.persona || registro.responsable === quien.persona;
+  if (!propia && !quien.administra) throw new Error("Sube lo producido quien hizo la iteración, quien responde por ella o quien administra.");
+  return registro;
+}
+
+/**
+ * Prepara la subida de lo producido: por cada archivo, una dirección firmada que vale una
+ * hora y sirve sólo para ese archivo. Quien sube no necesita ninguna cuenta: el PUT va
+ * directo al almacén, sin pasar el archivo por el chat ni por este servidor. El Content-MD5
+ * va dentro de la firma, así que el almacén rechaza un archivo distinto del declarado.
+ */
+export async function subirProducido(agent: AgentPrincipal, iteracion: string, archivos: Array<{ nombre: string; tipo: string; tamano: number; md5: string }>) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  exigirAlmacen();
+  if (!archivos.length) throw new Error("No llegó ningún archivo.");
+  const preparados = archivos.map((archivo) => {
+    const nombre = nombreDeArchivo(archivo.nombre);
+    if (!nombre || nombre.length > 255) throw new Error("Cada archivo necesita un nombre de hasta 255 caracteres.");
+    const tipo = archivo.tipo.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(tipo) || tipo.length > 127) {
+      throw new Error(`«${nombre}»: el tipo tiene que ser un tipo MIME, por ejemplo video/mp4 o image/jpeg.`);
+    }
+    if (!Number.isInteger(archivo.tamano) || archivo.tamano <= 0) throw new Error(`«${nombre}»: el tamaño va en bytes, mayor que cero.`);
+    if (archivo.tamano > MAXIMO_POR_ARCHIVO) throw new Error(`«${nombre}» supera los 5 GB que admite una subida.`);
+    const md5 = md5Normalizado(archivo.md5);
+    if (!md5) throw new Error(`«${nombre}»: el MD5 va en hexadecimal (32 caracteres) o en base64.`);
+    const id = randomUUID();
+    return { id, nombre, tipo, tamano: archivo.tamano, md5, clave: `iteracion/${iteracion}/${id}/${nombre}` };
+  });
+  await withTransaction(async (client) => {
+    await exigirIteracionPropia(iteracion, quien, client);
+    await lockAttachmentSet(client, "iteracion", iteracion);
+    const actuales = await contarDelRegistro(client, "iteracion", iteracion);
+    if (actuales + preparados.length > MAXIMO_PRODUCIDO_POR_ITERACION) {
+      throw new Error(`Una iteración admite hasta ${MAXIMO_PRODUCIDO_POR_ITERACION} archivos de lo producido y esta ya tiene ${actuales}.`);
+    }
+    for (const archivo of preparados) {
+      await insertarPendiente(client, {
+        id: archivo.id,
+        entityKey: "iteracion",
+        recordId: iteracion,
+        objectKey: archivo.clave,
+        nombre: archivo.nombre,
+        tipo: archivo.tipo,
+        tamano: archivo.tamano,
+        md5: archivo.md5.hex,
+        persona: quien.persona,
+      });
+    }
+  });
+  return {
+    iteracion,
+    subidas: preparados.map((archivo) => {
+      const direccion = direccionDeSubida(archivo.clave, { md5Base64: archivo.md5.base64, tipo: archivo.tipo });
+      return { id: archivo.id, nombre: archivo.nombre, metodo: "PUT", url: direccion.url, cabeceras: direccion.cabeceras, vence: direccion.vence };
+    }),
+    como: [
+      "Subí cada archivo con un PUT a su url, con esas cabeceras exactas y el archivo como cuerpo, desde un script o una terminal de esta máquina: no lo pases por el chat.",
+      "Por ejemplo: curl -sS --fail -X PUT -H \"Content-MD5: <md5 en base64>\" -H \"Content-Type: <tipo>\" --upload-file \"<archivo>\" \"<url>\"",
+      "Cuando terminen, llamá confirmar_producido con la iteración: la aplicación comprueba en el almacén que cada archivo llegó entero. Las direcciones vencen en una hora; si vence, pedí otra.",
+    ].join(" "),
+  };
+}
+
+/**
+ * Comprueba en el almacén lo que se pidió subir: lo que llegó con el tamaño y el MD5
+ * declarados queda guardado; lo que todavía no llegó sigue pendiente. Es la aplicación la
+ * que comprueba: no hace falta preguntarle a nadie si lo ve.
+ */
+export async function confirmarProducido(agent: AgentPrincipal, iteracion: string) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  exigirAlmacen();
+  await exigirIteracionPropia(iteracion, quien);
+  const todos = await archivosDelRegistro("iteracion", iteracion, false);
+  const confirmados: string[] = [];
+  const noLlegaron: string[] = [];
+  const distintos: string[] = [];
+  for (const archivo of todos.filter((a) => a.status === "pendiente")) {
+    const objeto = await consultarObjeto(archivo.object_key);
+    if (!objeto) {
+      noLlegaron.push(archivo.original_name);
+      continue;
+    }
+    // En una subida de una vez el ETag es el MD5. Con Content-MD5 firmado no debería
+    // diferir nunca; si difiere, el objeto no es el declarado y no se da por guardado.
+    const mismo = objeto.tamano === archivo.size_bytes && (objeto.etag === archivo.md5 || objeto.etag.includes("-"));
+    await withTransaction(async (client) => {
+      if (!mismo) {
+        await descartarPendiente(client, archivo.id);
+        return;
+      }
+      await marcarGuardado(client, archivo.id);
+      await recordAuditEvent(client, {
+        ...autoria({ agent, quien, client }),
+        entityKey: "iteracion",
+        recordId: iteracion,
+        action: "attachment_create",
+        changes: {
+          stored: { id: archivo.id, originalName: archivo.original_name, contentType: archivo.content_type, sizeBytes: archivo.size_bytes, md5: archivo.md5 },
+          source: "mcp:procesos",
+        },
+      });
+    });
+    if (mismo) confirmados.push(archivo.original_name);
+    else {
+      distintos.push(archivo.original_name);
+      await borrarDelAlmacen([archivo.object_key]);
+    }
+  }
+  revalidateAfterWrite("iteracion", iteracion);
+  const guardados = (await archivosDelRegistro("iteracion", iteracion)).map((a) => a.original_name);
+  const imagenes = (await imagenesDe(iteracion)).length;
+  const falta = faltasParaCompletar(imagenes, guardados.length);
+  const partes = [
+    confirmados.length ? `Quedaron guardados ${confirmados.length}: ${confirmados.join(", ")}.` : "No se guardó nada nuevo.",
+    noLlegaron.length ? `Todavía no llegaron: ${noLlegaron.join(", ")}. Subilos y volvé a confirmar.` : "",
+    distintos.length ? `No coinciden con lo declarado y se descartaron: ${distintos.join(", ")}. Pedí la subida de nuevo con subir_producido.` : "",
+    falta.length ? `Para que la iteración quede completa falta ${falta.join(" y ")}.` : "La iteración quedó completa.",
+  ];
+  return { iteracion, confirmados, no_llegaron: noLlegaron, descartados: distintos, guardados, falta, mensaje: partes.filter(Boolean).join(" ") };
+}
+
+/** Una dirección para bajar un archivo de lo producido, que vale una hora. */
+export async function descargarProducido(agent: AgentPrincipal, id: string) {
+  exigirAlcance(agent, "records:read");
+  const quien = identidad(agent);
+  exigirAlmacen();
+  const archivo = await archivoPorId(id);
+  // Lo que no se puede entregar responde igual que lo que no existe: no confirma que existe.
+  const noEsta = new Error("Ese archivo no existe o no está a tu alcance.");
+  if (!archivo || archivo.status !== "guardado") throw noEsta;
+  const padre = await getRecord(archivo.entity_key, archivo.record_id, undefined, false, quien.access);
+  if (!padre) throw noEsta;
+  const direccion = direccionDeDescarga(archivo.object_key, { nombre: archivo.original_name, tipo: archivo.content_type });
+  return { id: archivo.id, nombre: archivo.original_name, tipo: archivo.content_type, tamano: archivo.size_bytes, url: direccion.url, vence: direccion.vence };
+}
+
+/** Borra una iteración, sus adjuntos y lo producido en el almacén. Lo que está en Dropbox no se toca. */
 export async function borrarIteracion(agent: AgentPrincipal, iteracion: string) {
   exigirAlcance(agent, "records:write");
   const quien = identidad(agent);
   exigirQueAdministre(quien);
-  await withTransaction(async (client) => {
+  const claves = await withTransaction(async (client) => {
     const antes = await getRecord("iteracion", iteracion, client, true, quien.access);
     if (!antes) throw new Error("Esa iteración ya no existe.");
     const adjuntos = await deleteAttachmentsForRecord(client, "iteracion", iteracion);
+    const guardados = await soltarDelRegistro(client, "iteracion", iteracion);
     await deleteRecord("iteracion", iteracion, client, quien.access);
     await recordAuditEvent(client, {
       ...autoria({ agent, quien, client }),
       entityKey: "iteracion",
       recordId: iteracion,
       action: "delete",
-      changes: { before: antes, attachments: adjuntos, source: "panel:procesos" },
+      changes: { before: antes, attachments: adjuntos, stored: guardados, source: "panel:procesos" },
     });
+    return guardados.map((g) => g.object_key);
   });
+  await borrarDelAlmacen(claves);
   revalidateAfterWrite("iteracion");
-  return { mensaje: "Iteración borrada. Lo que estaba en Dropbox sigue ahí." };
+  return { mensaje: claves.length ? "Iteración borrada, con lo producido que tenía guardado." : "Iteración borrada. Lo que estaba en Dropbox sigue ahí." };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -525,6 +730,7 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
       nombre: nombreDeFamilia(actual.nombre),
       definicion,
       recientes: recientes.map((it) => ({ titulo: it.titulo, skill: it.skill, receta: it.receta, carpeta: it.carpeta, imagenes: it.imagenes })),
+      almacen: almacenConfigurado(),
     }),
     referencias: recientes
       .filter((it) => it.imagenes.length)
@@ -551,7 +757,10 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
     let ultimaIncompleta = false;
     for (const [indice, it] of propias.slice(0, 5).entries()) {
       miniaturas = (await imagenesDe(String(it.id))).slice(0, 3);
-      if (indice === 0) ultimaIncompleta = iteracionIncompleta(miniaturas.length);
+      if (indice === 0) {
+        const guardados = almacenConfigurado() ? (await producidoDe(String(it.id))).length : undefined;
+        ultimaIncompleta = iteracionIncompleta(miniaturas.length, guardados);
+      }
       if (miniaturas.length) break;
     }
     const definicion = definicionDe(actual);
@@ -597,7 +806,7 @@ function definicionDesdeDatos(familia: string, datos: DatosDeProceso, anterior: 
   };
   const validacion = validarDefinicion(definicion);
   if (!validacion.ok) throw new Error(validacion.errores.join(" "));
-  const faltas = faltasDeFicha(validacion.definicion);
+  const faltas = faltasDeFicha(validacion.definicion, { almacen: almacenConfigurado() });
   if (faltas.length) throw new Error(`Al proceso le falta: ${faltas.join("; ")}.`);
   return definicion;
 }
@@ -724,21 +933,26 @@ export async function borrarProceso(agent: AgentPrincipal, familia: string) {
   const procesos = await procesosDeLaFamilia(familia, quien);
   if (!procesos.length) throw new Error("Ese proceso no existe.");
   const nombre = nombreDeFamilia(vigente(procesos)!.nombre);
-  await withTransaction(async (client) => {
+  const claves = await withTransaction(async (client) => {
     const escritura: Escritura = { agent, quien, client };
+    const soltadas: string[] = [];
     for (const proceso of procesos) {
       const iteraciones = await listRecords("iteracion", { filters: { proceso_id: String(proceso.id) }, limit: 500, access: quien.access });
       for (const it of iteraciones) {
         const idIteracion = String(it.id);
         const adjuntos = await deleteAttachmentsForRecord(client, "iteracion", idIteracion);
+        const guardados = await soltarDelRegistro(client, "iteracion", idIteracion);
+        soltadas.push(...guardados.map((g) => g.object_key));
         await deleteRecord("iteracion", idIteracion, client, quien.access);
-        await recordAuditEvent(client, { ...autoria(escritura), entityKey: "iteracion", recordId: idIteracion, action: "delete", changes: { before: it, attachments: adjuntos, source: "panel:procesos" } });
+        await recordAuditEvent(client, { ...autoria(escritura), entityKey: "iteracion", recordId: idIteracion, action: "delete", changes: { before: it, attachments: adjuntos, stored: guardados, source: "panel:procesos" } });
       }
       const idProceso = String(proceso.id);
       await deleteRecord("proceso", idProceso, client, quien.access);
       await recordAuditEvent(client, { ...autoria(escritura), entityKey: "proceso", recordId: idProceso, action: "delete", changes: { before: proceso, source: "panel:procesos" } });
     }
+    return soltadas;
   });
+  await borrarDelAlmacen(claves);
   revalidateAfterWrite("proceso");
   revalidateAfterWrite("iteracion");
   return { mensaje: `«${nombre}» quedó borrado, con sus iteraciones. Lo que estaba en Dropbox sigue ahí.` };

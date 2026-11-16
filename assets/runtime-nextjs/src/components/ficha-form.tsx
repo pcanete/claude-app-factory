@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { registroATexto, requisitosATexto, type Definicion } from "@/platform/processes/definition";
 import { guardarProcesoAction } from "@/app/procesos/actions";
+import { almacenConfigurado } from "@/platform/storage/almacen";
 
 /**
  * El formulario de un proceso, el mismo para el alta y para la modificación. Sin `familia`
@@ -16,6 +17,8 @@ export function FichaForm({ familia, nombre, proceso, cancelarHref }: {
   cancelarHref: string;
 }) {
   const ficha = proceso?.ficha;
+  // Con almacén propio lo producido se sube a la aplicación: la carpeta es una referencia.
+  const almacen = almacenConfigurado();
   return (
     <form action={guardarProcesoAction} className="form-card">
       {familia && <input name="familia" type="hidden" value={familia} />}
@@ -49,9 +52,11 @@ export function FichaForm({ familia, nombre, proceso, cancelarHref }: {
           <input className="control" defaultValue={ficha?.skill?.repo ?? ""} name="skill_repo" placeholder="https://github.com/…" type="url" />
         </label>
         <label className="field full">
-          <span className="field-label">Carpeta de Dropbox *</span>
-          <input className="control" defaultValue={proceso?.carpeta ?? ""} maxLength={500} name="carpeta" placeholder="/Clientes/www.p3planeta.com/p3-negocios/piezas/" required />
-          <span className="field-help">Donde va cada iteración, una carpeta por vez. Sin carpeta en Dropbox no se registra nada.</span>
+          <span className="field-label">{almacen ? "Carpeta de referencia" : "Carpeta de Dropbox *"}</span>
+          <input className="control" defaultValue={proceso?.carpeta ?? ""} maxLength={500} name="carpeta" placeholder="/Clientes/www.p3planeta.com/p3-negocios/piezas/" required={!almacen} />
+          <span className="field-help">{almacen
+            ? "Opcional. Lo producido se sube a la aplicación en cada iteración; si además el equipo lo guarda en una carpeta, va acá."
+            : "Donde va cada iteración, una carpeta por vez. Sin carpeta en Dropbox no se registra nada."}</span>
         </label>
         <label className="field full">
           <span className="field-label">Qué necesita la máquina *</span>

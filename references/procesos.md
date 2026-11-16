@@ -11,8 +11,9 @@ otra persona lo repita en otra máquina, con otra IA.
 - **El proceso sabe qué hace falta.** Qué tiene que tener la máquina, con cómo comprobarlo y
   cómo instalarlo; qué hay que registrar cada vez; dónde se guarda lo producido. La persona no
   tiene que inventarlo ni recordarlo.
-- **Lo producido queda en Dropbox.** Una iteración sin carpeta de Dropbox y sin la lista de
-  archivos que quedaron ahí no se registra.
+- **Lo producido queda guardado.** Con [almacén propio](#lo-producido-en-el-almacén-propio)
+  (2.4), en la aplicación, que comprueba que llegó; sin almacén, en Dropbox: una iteración sin
+  carpeta de Dropbox y sin la lista de archivos que quedaron ahí no se registra.
 - **Un proceso nace completo.** Sin ficha, skill (o método), carpeta, requisitos y registro no
   se guarda, lo cree una persona en el panel o su agente por MCP.
 - **Quien administra define; el resto registra.** Crear y cambiar procesos lo hace quien
@@ -128,6 +129,45 @@ registrar. Si la IA no tiene conector, le pregunta a la persona; que el archivo 
 carpeta sincronizada de la máquina no alcanza. Si alguna vez una carpeta registrada resulta vacía, el paso siguiente es que el
 servidor lo verifique con una credencial de Dropbox propia.
 
+## Lo producido en el almacén propio
+
+**Plataforma 2.4.** Con Dropbox, sumar a alguien a un proceso exigía darle acceso a la cuenta
+donde se guarda lo producido. Con almacén propio, quien opera sólo necesita entrar a la
+aplicación: ella guarda los archivos y decide quién los ve, con los mismos permisos que el
+resto de sus registros.
+
+Se activa con cinco variables (`.env.example`): `ALMACEN_S3_ENDPOINT`, `ALMACEN_S3_BUCKET`,
+`ALMACEN_S3_ACCESS_KEY_ID`, `ALMACEN_S3_SECRET_ACCESS_KEY` y, opcional, `ALMACEN_S3_REGION`
+(`auto` en R2). Cualquier bucket privado compatible con S3 sirve: Cloudflare R2, Amazon S3,
+Supabase Storage. Sin ellas todo sigue como antes. La firma es Signature V4 propia, sin SDK
+(`src/platform/storage/firma.ts`), probada contra el ejemplo publicado por AWS en
+`scripts/test-almacen.mjs`.
+
+Con almacén:
+
+- La `carpeta` deja de ser obligatoria en el proceso y en la iteración; si viene, es una
+  referencia (Dropbox, Drive o lo que el equipo use además). `archivos` también es opcional.
+  En la AppSpec, `iteracion.carpeta` tiene que ser opcional.
+- Después de `registrar_iteracion`, la IA llama `subir_producido` con nombre, tipo, tamaño y
+  MD5 de cada archivo, y recibe una dirección firmada por archivo que vale una hora. Sube con
+  un PUT desde la máquina —el archivo no pasa por el chat ni por el servidor—; el
+  `Content-MD5` va firmado, así que el almacén rechaza un archivo distinto del declarado.
+  Hasta 5 GB por archivo y 200 por iteración.
+- `confirmar_producido` consulta el almacén: lo que llegó con el tamaño y el MD5 declarados
+  queda **guardado** (`app_stored_file`, con auditoría); lo que no llegó sigue pendiente. Es
+  la aplicación la que comprueba, no la persona.
+- Una iteración sin lo producido guardado está **incompleta**, igual que sin láminas, y la
+  respuesta de `registrar_iteracion` y `confirmar_producido` dice qué falta.
+- `iteraciones_de_proceso` devuelve `producido` por iteración; `descargar_producido` da una
+  dirección de descarga que vale una hora, a quien puede leer la iteración. En el panel, cada
+  archivo se baja desde `/producido/<id>`, que comprueba permisos y redirige a una dirección
+  de cinco minutos.
+- Borrar una iteración, por el motor o por las herramientas genéricas, borra también lo
+  producido del almacén, después de confirmar la transacción.
+
+Las láminas siguen yendo con `adjuntar_a_iteracion`: son lo que se mira en el panel y lo que
+lee otra IA con `read_attachment`.
+
 ## Las herramientas
 
 | Herramienta | Hace |
@@ -137,6 +177,9 @@ servidor lo verifique con una credencial de Dropbox propia.
 | `iteraciones_de_proceso` | Todas las veces que se hizo, con todo lo registrado |
 | `adjuntar_a_iteracion` | Adjunta imágenes o PDF livianos para verlos en el panel. Obligatorio en piezas visuales: sin imágenes, la iteración queda incompleta |
 | `editar_proceso` | Sólo para quien administra (los demás no la ven): cambia lo que se manda de un proceso y deja el resto; tiene que quedar completo |
+| `subir_producido` | Sólo con almacén: una dirección firmada por archivo para subir lo producido |
+| `confirmar_producido` | Sólo con almacén: comprueba en el almacén lo subido y lo da por guardado |
+| `descargar_producido` | Sólo con almacén: una dirección para bajar un archivo de lo producido |
 
 Comandos (prompts MCP): `registrar`, `reproducir` y `mejorar_proceso`.
 

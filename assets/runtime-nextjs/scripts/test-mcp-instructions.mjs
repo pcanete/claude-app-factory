@@ -100,6 +100,13 @@ const orden = pasos.map((paso) => bloquePasos.indexOf(paso));
 comprobar("y en orden", orden[0] > 0 && orden.every((posicion, i) => i === 0 || posicion > orden[i - 1]), orden.join(", "));
 comprobar("sin motor, administrar no agrega pasos de procesos", !componerInstrucciones({ ...agente, administraProcesos: true }, null).includes("nuevo_proceso"));
 
+// Con almacén propio, a nadie se le pide Dropbox: lo producido se sube a la aplicación.
+const conAlmacen = componerInstrucciones({ ...agente, motorDeProcesos: true, administraProcesos: true, almacen: true }, null);
+comprobar("con almacén, se sube con subir_producido y se confirma", conAlmacen.includes("subir_producido") && conAlmacen.includes("confirmar_producido"));
+comprobar("con almacén, no se pide el conector de Dropbox", !conAlmacen.includes("conector de Dropbox"), conAlmacen);
+comprobar("con almacén, los pasos para crear un proceso también suben la pieza", conAlmacen.includes("Subí la pieza con subir_producido"));
+comprobar("sin almacén, sigue el camino de Dropbox", componerInstrucciones({ ...agente, motorDeProcesos: true }, null).includes("conector de Dropbox"));
+
 const largo = componerInstrucciones(persona, "x".repeat(LIMITE_INSTRUCCIONES * 2));
 comprobar("respeta el límite", largo.length <= LIMITE_INSTRUCCIONES, `largo ${largo.length}`);
 comprobar("avisa que recortó", largo.endsWith("[Instrucciones recortadas: superan el límite de la plataforma.]"));

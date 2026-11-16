@@ -8,11 +8,15 @@ import {
   adjuntarAIteracion,
   comoSeHace,
   administraProcesos,
+  confirmarProducido,
+  descargarProducido,
   iteracionesDeProceso,
   mejorarProceso,
   motorDisponible,
   registrarIteracion,
+  subirProducido,
 } from "@/platform/processes/engine";
+import { almacenConfigurado } from "@/platform/storage/almacen";
 import { TIPOS_DE_REQUISITO, type TipoRequisito } from "@/platform/processes/definition";
 
 type ResultadoMcp = {
@@ -52,7 +56,7 @@ const registro = z.array(z.object({
   descripcion: z.string().min(1).max(500),
   requerido: z.boolean().optional().describe("Por defecto, sí."),
 })).min(1).max(50).describe("Los datos que cada iteración tiene que dejar. Carpeta, archivos, receta, skill y conversación se registran siempre.");
-const carpeta = z.string().max(500).describe("La carpeta de Dropbox donde va cada iteración: «/Clientes/<cliente>/…/piezas/».");
+const carpeta = z.string().max(500).describe("La carpeta de Dropbox donde va cada iteración: «/Clientes/<cliente>/…/piezas/». Con almacén propio es opcional, una referencia.");
 const metodo = z.string().max(20_000).describe("Cómo se hace, en markdown. Sólo si no hay skill.");
 
 function acotado(valor: unknown, limite: number, etiqueta: string) {
@@ -70,11 +74,14 @@ function acotado(valor: unknown, limite: number, etiqueta: string) {
  */
 export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentPrincipal, rastreo: Rastreo) {
   if (!motorDisponible()) return;
+  // Con almacén propio lo producido se sube a la aplicación y Dropbox deja de ser obligatorio:
+  // las descripciones dicen lo que vale en esta aplicación, no las dos cosas.
+  const almacen = almacenConfigurado();
 
   server.registerTool("como_se_hace", {
     annotations: marcas("como_se_hace"),
     description:
-      "Cómo se hace algo que el equipo ya sabe hacer: qué tiene que tener esta máquina (requisitos con cómo comprobarlos y cómo instalarlos), con qué skill se hace, dónde se guarda en Dropbox, qué hay que registrar al terminar y las últimas veces que se hizo. Usalo antes de empezar cuando la persona pide algo que el equipo ya hizo, comprobá los requisitos en esta máquina y recién después ejecutá.",
+      `Cómo se hace algo que el equipo ya sabe hacer: qué tiene que tener esta máquina (requisitos con cómo comprobarlos y cómo instalarlos), con qué skill se hace, ${almacen ? "cómo se sube lo producido a la aplicación" : "dónde se guarda en Dropbox"}, qué hay que registrar al terminar y las últimas veces que se hizo. Usalo antes de empezar cuando la persona pide algo que el equipo ya hizo, comprobá los requisitos en esta máquina y recién después ejecutá.`,
     inputSchema: z.object({
       proceso: z.string().min(2).max(200).describe("El nombre del proceso, por ejemplo «Carrusel P3 Negocios», o su id."),
     }),
@@ -85,8 +92,9 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
 
   server.registerTool("registrar_iteracion", {
     annotations: marcas("registrar_iteracion"),
-    description:
-      "Registra una vez que se hizo un proceso. Antes de llamarla, lo producido tiene que estar en Dropbox y tenés que haber comprobado con el conector de Dropbox que los archivos están en la carpeta: sin carpeta y archivos no se registra. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree. Registrar no termina acá: después adjuntá las láminas o la portada con adjuntar_a_iteracion, con el id que devuelve; sin imágenes la iteración queda incompleta.",
+    description: almacen
+      ? "Registra una vez que se hizo un proceso. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación; carpeta y archivos son opcionales. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree. Registrar no termina acá: con el id que devuelve, subí lo producido con subir_producido y confirmar_producido, y adjuntá las láminas o la portada con adjuntar_a_iteracion. Hasta entonces la iteración queda incompleta."
+      : "Registra una vez que se hizo un proceso. Antes de llamarla, lo producido tiene que estar en Dropbox y tenés que haber comprobado con el conector de Dropbox que los archivos están en la carpeta: sin carpeta y archivos no se registra. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree. Registrar no termina acá: después adjuntá las láminas o la portada con adjuntar_a_iteracion, con el id que devuelve; sin imágenes la iteración queda incompleta.",
     inputSchema: z.object({
       proceso: z.string().max(200).optional().describe("El nombre o el id del proceso."),
       nuevo_proceso: z.object({
@@ -98,8 +106,12 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
         metodo: metodo.optional(),
       }).optional().describe("Sólo si es la primera vez que se hace, y sólo si quien registra administra: crea el proceso con su ficha completa en el mismo paso. Los datos de esta iteración tienen que cumplir el registro que declares."),
       titulo: z.string().min(3).max(200).describe("Qué se hizo esta vez, por ejemplo «Federer y On»."),
-      carpeta: z.string().max(1_000).describe("La carpeta de Dropbox donde quedó lo producido: https://www.dropbox.com/… o /Clientes/…"),
-      archivos: textos.min(1).describe("Los archivos que quedaron en esa carpeta, como los devolvió el conector de Dropbox al comprobarlos."),
+      carpeta: almacen
+        ? z.string().max(1_000).optional().describe("Opcional: si además quedó en una carpeta (Dropbox, Drive), su ruta o enlace. Lo producido se sube igual con subir_producido.")
+        : z.string().max(1_000).describe("La carpeta de Dropbox donde quedó lo producido: https://www.dropbox.com/… o /Clientes/…"),
+      archivos: almacen
+        ? textos.optional().describe("Opcional: los archivos de esa carpeta.")
+        : textos.min(1).describe("Los archivos que quedaron en esa carpeta, como los devolvió el conector de Dropbox al comprobarlos."),
       datos: z.record(z.string(), z.unknown()).optional().describe("Los datos que pide el registro del proceso, con su clave."),
       receta: z.object({
         pasos: textos.min(1).describe("Qué se hizo, en orden, para que otra persona lo repita."),
@@ -148,7 +160,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("iteraciones_de_proceso", {
     annotations: marcas("iteraciones_de_proceso"),
     description:
-      "Las veces que se hizo un proceso: quién, cuándo, dónde quedó en Dropbox, con qué skill y commit, la receta, los datos y, en las reproducciones, si salió igual y qué faltó. Es lo que se mira para mejorar el proceso o su skill.",
+      `Las veces que se hizo un proceso: quién, cuándo, ${almacen ? "lo producido guardado en la aplicación (bajalo con descargar_producido)" : "dónde quedó en Dropbox"}, con qué skill y commit, la receta, los datos, qué le falta a cada una y, en las reproducciones, si salió igual y qué faltó. Es lo que se mira para mejorar el proceso o su skill.`,
     inputSchema: z.object({
       proceso: z.string().min(2).max(200).describe("El nombre o el id del proceso."),
       limite: z.number().int().min(1).max(100).optional(),
@@ -161,7 +173,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("adjuntar_a_iteracion", {
     annotations: marcas("adjuntar_a_iteracion"),
     description:
-      "Adjunta imágenes o PDF livianos a una iteración registrada —las láminas de un carrusel, la portada de un video— para que se vean en el panel y otra IA las mire. Lo pesado queda en Dropbox. Es obligatorio para piezas visuales: es parte de registrar, no un paso opcional, y una iteración sin imágenes queda marcada incompleta. Para no pasar las imágenes en base64 por el chat, usá un script que lea los archivos del disco y llame a esta herramienta por HTTP contra este mismo servidor MCP, con la credencial ya configurada en la máquina (si el repositorio de skills de la organización tiene uno, usá ese). Después comprobá con iteraciones_de_proceso que aparecen.",
+      `Adjunta imágenes o PDF livianos a una iteración registrada —las láminas de un carrusel, la portada de un video— para que se vean en el panel y otra IA las mire. ${almacen ? "Lo pesado va con subir_producido." : "Lo pesado queda en Dropbox."} Es obligatorio para piezas visuales: es parte de registrar, no un paso opcional, y una iteración sin imágenes queda marcada incompleta. Para no pasar las imágenes en base64 por el chat, usá un script que lea los archivos del disco y llame a esta herramienta por HTTP contra este mismo servidor MCP, con la credencial ya configurada en la máquina (si el repositorio de skills de la organización tiene uno, usá ese). Después comprobá con iteraciones_de_proceso que aparecen.`,
     inputSchema: z.object({
       iteracion: z.string().uuid().describe("El id que devolvió registrar_iteracion."),
       archivos: z.array(z.object({
@@ -179,6 +191,52 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     return { value, resultCount: value.adjuntados };
   }));
 
+  // Lo producido en el almacén propio. Sin almacén estas herramientas no existen: lo
+  // producido va a Dropbox, como antes.
+  if (almacen) {
+    server.registerTool("subir_producido", {
+      annotations: marcas("subir_producido"),
+      description:
+        "Prepara la subida de lo producido en una iteración registrada —el video final, el PDF, los JPG de un carrusel— al almacén de la aplicación, sin que haga falta Dropbox ni otra cuenta. Devuelve, por cada archivo, una dirección que vale una hora: subilo con un PUT desde un script o una terminal de esta máquina, con las cabeceras que te da, sin pasar el archivo por el chat. Antes calculá el tamaño en bytes y el MD5 de cada archivo en esta máquina (por ejemplo certutil -hashfile <archivo> MD5, Get-FileHash -Algorithm MD5 o md5sum). Después llamá confirmar_producido.",
+      inputSchema: z.object({
+        iteracion: z.string().uuid().describe("El id que devolvió registrar_iteracion."),
+        archivos: z.array(z.object({
+          nombre: z.string().min(1).max(255).describe("El nombre del archivo, con su extensión: «federer-on-final.mp4»."),
+          tipo: z.string().min(3).max(127).describe("El tipo MIME: video/mp4, image/jpeg, application/pdf, application/zip…"),
+          tamano: z.number().int().positive().describe("El tamaño en bytes, medido en esta máquina."),
+          md5: z.string().min(22).max(32).describe("El MD5 del archivo, en hexadecimal o en base64."),
+        })).min(1).max(50),
+      }),
+    }, async (entrada) => rastreo("subir_producido", { iteracion: entrada.iteracion, archivos: entrada.archivos.map((a) => a.nombre) }, async () => {
+      const value = await subirProducido(agent, entrada.iteracion, entrada.archivos);
+      return { value, resultCount: value.subidas.length };
+    }));
+
+    server.registerTool("confirmar_producido", {
+      annotations: marcas("confirmar_producido"),
+      description:
+        "Después de subir con las direcciones de subir_producido: la aplicación comprueba en su almacén que cada archivo llegó con el tamaño y el MD5 declarados y lo deja guardado. Lo que todavía no llegó sigue pendiente; podés volver a llamarla. Dice qué le falta a la iteración para quedar completa.",
+      inputSchema: z.object({
+        iteracion: z.string().uuid().describe("El id de la iteración."),
+      }),
+    }, async (entrada) => rastreo("confirmar_producido", entrada, async () => {
+      const value = await confirmarProducido(agent, entrada.iteracion);
+      return { value, resultCount: value.confirmados.length };
+    }));
+
+    server.registerTool("descargar_producido", {
+      annotations: marcas("descargar_producido"),
+      description:
+        "Una dirección para bajar un archivo de lo producido —su id sale de iteraciones_de_proceso, en «producido»—, que vale una hora. Bajalo a esta máquina con un script o una terminal, no por el chat.",
+      inputSchema: z.object({
+        archivo: z.string().uuid().describe("El id del archivo."),
+      }),
+    }, async (entrada) => rastreo("descargar_producido", entrada, async () => ({
+      value: await descargarProducido(agent, entrada.archivo),
+      resultCount: 1,
+    })));
+  }
+
   // Los prompts aparecen como comandos en los clientes que los muestran: quien no sabe qué
   // pedirle a su IA elige uno.
   const aplicacion = runtimeSpec.app.name;
@@ -190,11 +248,15 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   }, () => mensaje([
     `Quiero registrar en «${aplicacion}» lo que hicimos en esta conversación.`,
     "1. Fijate a qué proceso pertenece con como_se_hace (o query_records sobre proceso). Si no existe y administro, proponeme la ficha completa —qué hace, qué entra, qué entrega, skill y repositorio, carpeta, requisitos con cómo comprobarlos y qué se registra— para crearlo con nuevo_proceso. Si no administro, decímelo: lo tiene que crear quien administra.",
-    "2. Asegurate de que lo producido esté en la carpeta de Dropbox del proceso, y comprobalo con el conector de Dropbox: anotá los archivos que están.",
+    almacen
+      ? "2. Juntá los archivos finales de lo producido: después de registrar los subís a la aplicación con subir_producido y confirmar_producido. No hace falta Dropbox."
+      : "2. Asegurate de que lo producido esté en la carpeta de Dropbox del proceso, y comprobalo con el conector de Dropbox: anotá los archivos que están.",
     "3. Armá la receta de esta conversación —pasos en orden, prompts que funcionaron textuales, herramientas, IA, decisiones y descartes— y los datos que pide el proceso.",
     "4. Anotá la skill con su commit, si se hizo con una, y el enlace de esta conversación.",
     "5. Mostrame todo y, cuando lo apruebe, llamá registrar_iteracion.",
-    "6. Adjuntá las láminas o la portada con adjuntar_a_iteracion —es parte de registrar, no opcional— y comprobá con iteraciones_de_proceso que aparecen.",
+    almacen
+      ? "6. Subí lo producido con subir_producido y confirmalo con confirmar_producido; adjuntá las láminas o la portada con adjuntar_a_iteracion. Las dos cosas son parte de registrar: comprobá con iteraciones_de_proceso que la iteración no quedó incompleta."
+      : "6. Adjuntá las láminas o la portada con adjuntar_a_iteracion —es parte de registrar, no opcional— y comprobá con iteraciones_de_proceso que aparecen.",
   ].join("\n")));
 
   server.registerPrompt("reproducir", {
@@ -205,7 +267,9 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     `Quiero hacer «${proceso}». Traé cómo se hace con como_se_hace.`,
     "Primero comprobá en esta máquina cada requisito, uno por uno, y decime cuáles están y cuáles faltan. Lo que falte, instalalo con lo que dice el proceso o decime qué hacer; no lo reemplaces por otra cosa.",
     "Después seguí la skill o el método, mirando antes las imágenes de referencia con read_attachment.",
-    "Al terminar, guardá en Dropbox, comprobalo, mostrame el resultado, preguntame si salió igual y registralo con registrar_iteracion como reproducción.",
+    almacen
+      ? "Al terminar, mostrame el resultado, preguntame si salió igual, registralo con registrar_iteracion como reproducción y subí lo producido con subir_producido y confirmar_producido."
+      : "Al terminar, guardá en Dropbox, comprobalo, mostrame el resultado, preguntame si salió igual y registralo con registrar_iteracion como reproducción.",
   ].join(" ")));
 
   server.registerPrompt("mejorar_proceso", {
