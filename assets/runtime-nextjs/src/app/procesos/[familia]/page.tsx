@@ -62,7 +62,7 @@ function Producido({ it }: { it: Iteracion }) {
 /** Qué le falta a una iteración incompleta, en palabras de quien mira el panel. */
 function queFalta(it: Iteracion) {
   const partes: string[] = [];
-  if (it.producido && !it.producido.length) partes.push("subir lo producido");
+  if (it.falta.some((falta) => falta.startsWith("subir"))) partes.push("subir lo producido");
   if (!it.imagenes.length) partes.push("adjuntar las láminas");
   return partes.length ? `Incompleta: falta ${partes.join(" y ")}` : "";
 }

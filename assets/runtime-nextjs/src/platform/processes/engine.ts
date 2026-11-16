@@ -38,6 +38,7 @@ import {
 } from "@/platform/storage/archivos";
 import {
   claveDeNombre,
+  esCarpetaDeDropbox,
   faltasDeFicha,
   faltasDeIteracion,
   faltasParaCompletar,
@@ -244,6 +245,19 @@ function resumenDe(proceso: Record<string, unknown>) {
 type Imagen = { id: string; nombre: string; tipo: string };
 export type Producido = { id: string; nombre: string; tipo: string; tamano: number; guardado: unknown };
 
+/**
+ * Cuánto cuenta como producido para decidir si una iteración está completa. Con almacén, lo
+ * guardado en él; pero una iteración registrada con su carpeta de Dropbox y la lista de
+ * archivos comprobados —todas las de antes del almacén— ya cumplió con lo que se pedía y no
+ * pasa a estar incompleta por encender el almacén. Sin almacén, no cuenta (undefined).
+ */
+function producidoQueCuenta(producido: Producido[] | null, registro: Record<string, unknown>) {
+  if (!producido) return undefined;
+  if (producido.length) return producido.length;
+  const archivos = Array.isArray(registro.archivos) ? registro.archivos.filter((a) => typeof a === "string" && a.trim()) : [];
+  return esCarpetaDeDropbox(registro.carpeta) && archivos.length ? archivos.length : 0;
+}
+
 async function producidoDe(iteracion: string): Promise<Producido[]> {
   const archivos = await archivosDelRegistro("iteracion", iteracion).catch(() => []);
   return archivos.map((a) => ({ id: a.id, nombre: a.original_name, tipo: a.content_type, tamano: a.size_bytes, guardado: a.stored_at }));
@@ -326,8 +340,8 @@ async function iteracionesDe(procesos: Record<string, unknown>[], quien: Identid
       receta: esObjeto(r.receta) ? r.receta : null,
       imagenes,
       producido,
-      incompleta: iteracionIncompleta(imagenes.length, producido?.length),
-      falta: faltasParaCompletar(imagenes.length, producido?.length),
+      incompleta: iteracionIncompleta(imagenes.length, producidoQueCuenta(producido, r)),
+      falta: faltasParaCompletar(imagenes.length, producidoQueCuenta(producido, r)),
     };
   }));
 }
@@ -758,7 +772,7 @@ export async function familiasDeProcesos(agent: AgentPrincipal) {
     for (const [indice, it] of propias.slice(0, 5).entries()) {
       miniaturas = (await imagenesDe(String(it.id))).slice(0, 3);
       if (indice === 0) {
-        const guardados = almacenConfigurado() ? (await producidoDe(String(it.id))).length : undefined;
+        const guardados = producidoQueCuenta(almacenConfigurado() ? await producidoDe(String(it.id)) : null, it);
         ultimaIncompleta = iteracionIncompleta(miniaturas.length, guardados);
       }
       if (miniaturas.length) break;
