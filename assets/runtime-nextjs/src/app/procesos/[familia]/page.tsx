@@ -208,6 +208,23 @@ export default async function ProcesoPage({
         {datos.saben.length > 0 && <p className="sheet-foot">Lo {datos.saben.length === 1 ? "sabe" : "saben"} hacer: {datos.saben.join(", ")}</p>}
       </section>
 
+      {datos.recursos.length > 0 && (
+        <section className="work-section">
+          <h2>Lo que trae</h2>
+          <p className="subtitle">Quien repite el proceso lo instala desde la aplicación, con como_se_hace: no necesita acceso al repositorio ni a carpetas compartidas.</p>
+          <ul className="case-list">
+            {datos.recursos.map((recurso) => (
+              <li key={recurso.nombre}>
+                <code>{recurso.nombre}</code>{" "}
+                <span className="table-secondary">{recurso.version
+                  ? `${recurso.tipo === "skill" ? "Skill" : "Archivos"} · versión ${recurso.version} · ${tamano(recurso.tamano ?? 0)}`
+                  : "Todavía no publicado"}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="work-section">
         <h2>Qué necesita la máquina</h2>
         {requisitos.length ? (

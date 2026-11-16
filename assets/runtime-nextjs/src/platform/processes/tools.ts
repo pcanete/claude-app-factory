@@ -9,15 +9,17 @@ import {
   comoSeHace,
   administraProcesos,
   confirmarProducido,
+  confirmarRecurso,
   descargarProducido,
   iteracionesDeProceso,
   mejorarProceso,
   motorDisponible,
+  publicarRecurso,
   registrarIteracion,
   subirProducido,
 } from "@/platform/processes/engine";
 import { almacenConfigurado } from "@/platform/storage/almacen";
-import { TIPOS_DE_REQUISITO, type TipoRequisito } from "@/platform/processes/definition";
+import { NOMBRE_DE_RECURSO, TIPOS_DE_RECURSO, TIPOS_DE_REQUISITO, type TipoRecurso, type TipoRequisito } from "@/platform/processes/definition";
 
 type ResultadoMcp = {
   content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
@@ -58,6 +60,7 @@ const registro = z.array(z.object({
 })).min(1).max(50).describe("Los datos que cada iteración tiene que dejar. Carpeta, archivos, receta, skill y conversación se registran siempre.");
 const carpeta = z.string().max(500).describe("La carpeta de Dropbox donde va cada iteración: «/Clientes/<cliente>/…/piezas/». Con almacén propio es opcional, una referencia.");
 const metodo = z.string().max(20_000).describe("Cómo se hace, en markdown. Sólo si no hay skill.");
+const recursos = z.array(z.string().regex(NOMBRE_DE_RECURSO)).max(30).describe("Los recursos publicados que el proceso trae (skills y carpetas de archivos), por nombre: quien lo repite los instala desde como_se_hace. Se reemplaza la lista entera.");
 
 function acotado(valor: unknown, limite: number, etiqueta: string) {
   if (JSON.stringify(valor ?? null).length > limite) throw new Error(`${etiqueta} supera ${Math.round(limite / 1024)} KB.`);
@@ -104,6 +107,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
         registro,
         carpeta,
         metodo: metodo.optional(),
+        recursos: recursos.optional(),
       }).optional().describe("Sólo si es la primera vez que se hace, y sólo si quien registra administra: crea el proceso con su ficha completa en el mismo paso. Los datos de esta iteración tienen que cumplir el registro que declares."),
       titulo: z.string().min(3).max(200).describe("Qué se hizo esta vez, por ejemplo «Federer y On»."),
       carpeta: almacen
@@ -150,6 +154,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
         registro: registro.optional(),
         carpeta: carpeta.optional(),
         metodo: metodo.optional(),
+        recursos: recursos.optional(),
       }),
     }, async ({ proceso, ...cambios }) => rastreo("editar_proceso", { proceso, cambios: Object.keys(cambios) }, async () => ({
       value: await mejorarProceso(agent, proceso, cambios),
@@ -190,6 +195,39 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     })));
     return { value, resultCount: value.adjuntados };
   }));
+
+  // Publicar recursos: sólo quien administra, y sólo con almacén.
+  if (almacen && administraProcesos(agent)) {
+    server.registerTool("publicar_recurso", {
+      annotations: marcas("publicar_recurso"),
+      description:
+        "Publica una versión de un recurso que los procesos traen —una skill o una carpeta de archivos de entrada— para que cualquiera con acceso al proceso la instale sin acceso al repositorio ni a carpetas compartidas. El recurso es un .zip con un archivo .version en la raíz que dice la versión. Devuelve una dirección para subirlo con un PUT desde esta máquina; después llamá confirmar_recurso. Para que un proceso lo traiga, sumalo a su lista recursos con editar_proceso.",
+      inputSchema: z.object({
+        nombre: z.string().regex(NOMBRE_DE_RECURSO).describe("En minúsculas, sin espacios: es el nombre de su carpeta en la máquina («carousel-builder»)."),
+        tipo: z.enum(TIPOS_DE_RECURSO as unknown as [TipoRecurso, ...TipoRecurso[]]).describe("skill: se instala en ~/.claude/skills/<nombre>. archivos: en ~/.claude/recursos/<nombre>."),
+        version: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).describe("El commit de la skill («ad5df58») o algo que identifique el contenido. Una versión publicada no se pisa."),
+        tamano: z.number().int().positive().describe("El tamaño del .zip en bytes."),
+        md5: z.string().min(22).max(32).describe("El MD5 del .zip, en hexadecimal o en base64."),
+        sha256: z.string().length(64).describe("El SHA-256 del .zip, en hexadecimal: con él comprueba quien lo instala."),
+      }),
+    }, async (entrada) => rastreo("publicar_recurso", { nombre: entrada.nombre, version: entrada.version }, async () => ({
+      value: await publicarRecurso(agent, entrada),
+      resultCount: 1,
+    })));
+
+    server.registerTool("confirmar_recurso", {
+      annotations: marcas("confirmar_recurso"),
+      description:
+        "Después de subir el .zip con la dirección de publicar_recurso: la aplicación comprueba en su almacén que llegó entero y deja esa versión publicada. Desde ahí es la que instalan todos.",
+      inputSchema: z.object({
+        nombre: z.string().regex(NOMBRE_DE_RECURSO),
+        version: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
+      }),
+    }, async (entrada) => rastreo("confirmar_recurso", entrada, async () => ({
+      value: await confirmarRecurso(agent, entrada.nombre, entrada.version),
+      resultCount: 1,
+    })));
+  }
 
   // Lo producido en el almacén propio. Sin almacén estas herramientas no existen: lo
   // producido va a Dropbox, como antes.

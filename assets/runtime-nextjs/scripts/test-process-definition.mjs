@@ -17,11 +17,15 @@
  *   - requisitos y registro escritos por una persona, una línea por elemento, se entienden
  *     y vuelven a texto igual;
  *   - con almacén propio, Dropbox deja de exigirse en el proceso y en la iteración, la
- *     iteración sin lo producido guardado está incompleta y la guía dice cómo subirlo.
+ *     iteración sin lo producido guardado está incompleta y la guía dice cómo subirlo;
+ *   - un proceso declara los recursos que trae; cada uno se instala en una carpeta que fija
+ *     la plataforma, y la guía dice cómo, sin tocar nunca una carpeta enlazada o con .git.
  */
 import {
   claveDeNombre,
   datosFaltantes,
+  destinoDeRecurso,
+  instruccionesDeInstalacion,
   esCarpetaDeDropbox,
   esEnlaceDeConversacion,
   faltasDeFicha,
@@ -230,6 +234,29 @@ const guiaConAlmacen = guiaDeProceso({ nombre: "Carrusel P3 Negocios", definicio
 comprobar("la guía con almacén dice que se sube a la aplicación", guiaConAlmacen.includes("subir_producido") && guiaConAlmacen.includes("confirmar_producido"), guiaConAlmacen);
 comprobar("y no pide el conector de Dropbox", !guiaConAlmacen.includes("conector de Dropbox"), guiaConAlmacen);
 const guiaSinAlmacen = guiaDeProceso({ nombre: "Carrusel P3 Negocios", definicion: dv, recientes: [] });
+// --- Recursos que trae el proceso -----------------------------------------------------
+const conRecursos = validarDefinicion({ ...completo, recursos: ["carrusel-p3-negocios", "carousel-builder", "marca-p3-carrusel"] });
+comprobar("un proceso declara los recursos que trae", conRecursos.ok && conRecursos.definicion.recursos?.length === 3, JSON.stringify(conRecursos));
+const malos = validarDefinicion({ ...completo, recursos: ["Carousel Builder", "../afuera", "x", "x"] });
+comprobar("un nombre con espacios, una ruta o uno repetido se rechazan",
+  !malos.ok && malos.errores.some((e) => e.includes("Carousel Builder")) && malos.errores.some((e) => e.includes("../afuera")) && malos.errores.some((e) => e.includes("repite")),
+  JSON.stringify(malos));
+comprobar("sin recursos, la definición no inventa la lista", validarDefinicion(completo).ok && validarDefinicion(completo).definicion.recursos === undefined);
+comprobar("una skill se instala entre las skills", destinoDeRecurso("skill", "carousel-builder") === "$HOME/.claude/skills/carousel-builder");
+comprobar("una carpeta de archivos, entre los recursos", destinoDeRecurso("archivos", "marca-p3-carrusel") === "$HOME/.claude/recursos/marca-p3-carrusel");
+
+const recurso = { nombre: "carrusel-p3-negocios", tipo: "skill", version: "ad5df58", sha256: "a".repeat(64), tamano: 24_000, destino: "$HOME/.claude/skills/carrusel-p3-negocios", url: "https://almacen.example/x.zip?firma", vence: "2026-11-16T18:00:00Z" };
+const instrucciones = instruccionesDeInstalacion([recurso]);
+comprobar("instalar nunca toca una carpeta enlazada o con .git", instrucciones.includes("enlace") && instrucciones.includes(".git") && instrucciones.includes("no la toques"), instrucciones);
+comprobar("e instala comprobando la versión y el SHA-256", instrucciones.includes(".version") && instrucciones.includes("SHA-256") && instrucciones.includes(recurso.sha256) && instrucciones.includes(recurso.url));
+const guiaRecursos = guiaDeProceso({ nombre: "Carrusel P3 Negocios", definicion: { ...dv, recursos: ["carrusel-p3-negocios", "marca-p3-carrusel"] }, recientes: [], almacen: true, recursos: [recurso], recursosFaltantes: ["marca-p3-carrusel"] });
+comprobar("la guía empieza por instalar lo que trae el proceso",
+  guiaRecursos.indexOf("Instalá lo que trae el proceso") > 0 && guiaRecursos.indexOf("Instalá lo que trae el proceso") < guiaRecursos.indexOf("Antes de empezar"), guiaRecursos);
+comprobar("y avisa lo que todavía no se publicó", guiaRecursos.includes("Todavía no se publicaron: marca-p3-carrusel"));
+comprobar("la skill que viene con el proceso ya no se instala clonando el repositorio",
+  !guiaRecursos.includes("clonar https://github.com/x/prc-skills y enlazar") && guiaRecursos.includes("viene con el proceso"), guiaRecursos);
+comprobar("sin recursos la guía no tiene esa sección", !guiaConAlmacen.includes("Instalá lo que trae el proceso"));
+
 comprobar("sin almacén la guía sigue pidiendo Dropbox", guiaSinAlmacen.includes("conector de Dropbox") && !guiaSinAlmacen.includes("subir_producido"));
 
 if (fallos) {

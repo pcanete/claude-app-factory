@@ -68,6 +68,38 @@ export type Definicion = {
   registro?: CampoDeRegistro[];
   /** La carpeta de Dropbox donde va cada iteración, por ejemplo «/Clientes/x/piezas/». */
   carpeta?: string;
+  /**
+   * Los recursos que el proceso trae (2.5): skills y carpetas de archivos publicados en el
+   * almacén, por nombre. Quien lo repite los instala desde como_se_hace, sin acceso a
+   * ningún repositorio ni carpeta compartida.
+   */
+  recursos?: string[];
+};
+
+/** Lo que es un recurso publicado: una skill o una carpeta de archivos de entrada. */
+export type TipoRecurso = "skill" | "archivos";
+export const TIPOS_DE_RECURSO: readonly TipoRecurso[] = ["skill", "archivos"];
+/** El nombre de un recurso: es también el nombre de su carpeta en la máquina. */
+export const NOMBRE_DE_RECURSO = /^[a-z0-9][a-z0-9._-]{0,59}$/;
+
+/**
+ * Dónde queda un recurso en la máquina de quien lo instala. No lo elige quien publica: así
+ * un recurso no puede escribir fuera de su carpeta. `$HOME` sirve igual en bash y en PowerShell.
+ */
+export function destinoDeRecurso(tipo: TipoRecurso, nombre: string) {
+  return tipo === "skill" ? `$HOME/.claude/skills/${nombre}` : `$HOME/.claude/recursos/${nombre}`;
+}
+
+/** Un recurso listo para instalar, como lo entrega como_se_hace. */
+export type RecursoParaInstalar = {
+  nombre: string;
+  tipo: TipoRecurso;
+  version: string;
+  sha256: string;
+  tamano: number;
+  destino: string;
+  url: string;
+  vence: string;
 };
 
 export type Receta = {
@@ -140,6 +172,19 @@ export function validarDefinicion(valor: unknown): { ok: true; definicion: Defin
   if (valor.metodo !== undefined && typeof valor.metodo !== "string") errores.push("metodo tiene que ser un texto.");
   if (valor.carpeta !== undefined && !textoNoVacio(valor.carpeta)) errores.push("carpeta tiene que ser la ruta de Dropbox, por ejemplo «/Clientes/x/piezas/».");
 
+  if (valor.recursos !== undefined) {
+    if (!Array.isArray(valor.recursos)) errores.push("recursos tiene que ser una lista de nombres.");
+    else {
+      const vistos = new Set<string>();
+      for (const nombre of valor.recursos) {
+        if (typeof nombre !== "string" || !NOMBRE_DE_RECURSO.test(nombre)) {
+          errores.push(`El recurso «${String(nombre)}» tiene que ser un nombre en minúsculas, sin espacios: «carousel-builder».`);
+        } else if (vistos.has(nombre)) errores.push(`recursos repite «${nombre}».`);
+        else vistos.add(nombre);
+      }
+    }
+  }
+
   if (valor.requisitos !== undefined) {
     if (!Array.isArray(valor.requisitos)) errores.push("requisitos tiene que ser una lista.");
     else {
@@ -183,6 +228,7 @@ export function validarDefinicion(valor: unknown): { ok: true; definicion: Defin
       requisitos: (valor.requisitos as Requisito[] | undefined) ?? [],
       registro: (valor.registro as CampoDeRegistro[] | undefined) ?? [],
       ...(textoNoVacio(valor.carpeta) ? { carpeta: valor.carpeta } : {}),
+      ...(Array.isArray(valor.recursos) && valor.recursos.length ? { recursos: valor.recursos as string[] } : {}),
     },
   };
 }
@@ -463,6 +509,31 @@ function lista(items: readonly string[], numerada = false) {
 }
 
 /**
+ * Cómo instala la IA los recursos de un proceso. Cada recurso es un .zip con un archivo
+ * `.version` adentro; la carpeta de destino la fija la plataforma.
+ *
+ * La regla que no se negocia: una carpeta que es un enlace o que tiene `.git` es la de quien
+ * edita ese recurso, y borrarla para reemplazarla borraría el original. Esa no se toca.
+ */
+export function instruccionesDeInstalacion(recursos: readonly RecursoParaInstalar[]) {
+  const pasos = [
+    "Cada recurso se instala en su carpeta de esta máquina, sin acceso a ningún repositorio ni carpeta compartida. Para cada uno:",
+    "1. Si la carpeta de destino es un enlace (symlink o junction) o tiene una carpeta .git adentro, no la toques: en esta máquina se edita ese recurso. Seguí con el siguiente.",
+    "2. Si existe <destino>/.version y dice la versión indicada, ya está instalado.",
+    "3. Si no, bajá el .zip de su url desde un script o una terminal (no por el chat; la url vence en una hora), comprobá que su SHA-256 sea el indicado, borrá la carpeta de destino si existe, creala y descomprimí ahí el .zip. En Windows, con PowerShell: `Expand-Archive <archivo.zip> -DestinationPath <destino>` (el `tar` de Git Bash no abre .zip; el de Windows sí: `C:\\Windows\\System32\\tar.exe -xf <archivo.zip> -C <destino>`). En Mac y Linux: `unzip <archivo.zip> -d <destino>`. El .zip ya trae su .version.",
+    "4. Si la descarga falla o el SHA-256 no coincide, pará y avisá: no instales a medias.",
+    "Las skills recién instaladas se usan en una conversación nueva.",
+  ];
+  if (recursos.length) {
+    pasos.push(
+      "",
+      ...recursos.map((r) => `- **${r.nombre}** (${r.tipo}) versión ${r.version}, ${Math.max(1, Math.round(r.tamano / 1024))} KB → ${r.destino} — SHA-256 ${r.sha256} — ${r.url}`),
+    );
+  }
+  return pasos.join("\n");
+}
+
+/**
  * La guía para repetir un proceso en otra máquina: qué comprobar antes, cómo se hace, qué
  * hay que registrar y dónde guardar. Es texto para la IA de quien lo va a hacer.
  */
@@ -471,20 +542,37 @@ export function guiaDeProceso(entrada: {
   definicion: Definicion;
   recientes: Array<{ titulo: string; skill?: string | null; receta: unknown; carpeta: unknown; imagenes?: Array<{ id: string; nombre: string }> }>;
   almacen?: boolean;
+  /** Los recursos publicados que el proceso trae, con su dirección de descarga. */
+  recursos?: RecursoParaInstalar[];
+  /** Los que el proceso declara y todavía no tienen ninguna versión publicada. */
+  recursosFaltantes?: string[];
 }) {
   const { definicion } = entrada;
   const partes = [`# ${entrada.nombre}`];
   if (definicion.ficha?.resumen) partes.push("", definicion.ficha.resumen);
 
+  const recursos = entrada.recursos ?? [];
+  if (recursos.length || entrada.recursosFaltantes?.length) {
+    partes.push("", "## 0. Instalá lo que trae el proceso", "", instruccionesDeInstalacion(recursos));
+    if (entrada.recursosFaltantes?.length) {
+      partes.push("", `Todavía no se publicaron: ${entrada.recursosFaltantes.join(", ")}. Avisale a quien administra; mientras tanto, usá lo que dicen los requisitos.`);
+    }
+  }
+  const traidos = new Set(recursos.map((r) => r.nombre));
+
   partes.push("", "## 1. Antes de empezar: comprobá la máquina");
   const skill = definicion.ficha?.skill;
-  const requisitos = [...(definicion.requisitos ?? [])];
+  const requisitos = [...(definicion.requisitos ?? [])].map((r) => (traidos.has(r.nombre)
+    ? { ...r, instalar: "viene con el proceso: instalalo como dice «Instalá lo que trae el proceso»" }
+    : r));
   if (skill?.nombre && !requisitos.some((r) => r.tipo === "skill" && r.nombre === skill.nombre)) {
     requisitos.unshift({
       nombre: skill.nombre,
       tipo: "skill",
       verificar: `que la skill ${skill.nombre} esté instalada en esta máquina`,
-      ...(skill.repo ? { instalar: `clonar ${skill.repo} y enlazar la skill` } : {}),
+      ...(traidos.has(skill.nombre)
+        ? { instalar: "viene con el proceso: instalalo como dice «Instalá lo que trae el proceso»" }
+        : skill.repo ? { instalar: `clonar ${skill.repo} y enlazar la skill` } : {}),
     });
   }
   if (requisitos.length) {
