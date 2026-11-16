@@ -744,9 +744,10 @@ export async function publicarRecurso(agent: AgentPrincipal, entrada: {
   const sha256 = entrada.sha256.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error("El SHA-256 va en hexadecimal (64 caracteres).");
   const existente = await versionDeRecurso(entrada.nombre, entrada.version);
+  // La versión identifica el contenido (el commit de una skill, un resumen de una carpeta); el
+  // .zip de la misma versión puede diferir en fechas de archivo. Una versión publicada no se pisa.
   if (existente?.status === "publicado") {
-    if (existente.sha256 === sha256) return { nombre: entrada.nombre, version: entrada.version, ya_publicada: true, mensaje: "Esa versión ya está publicada, con el mismo contenido: no hay nada que subir." };
-    throw new Error(`La versión ${entrada.version} de «${entrada.nombre}» ya está publicada con otro contenido. Una versión publicada no se pisa: usá otra.`);
+    return { nombre: entrada.nombre, version: entrada.version, ya_publicada: true, mensaje: `La versión ${entrada.version} ya está publicada y no se pisa: no hay nada que subir. Si el contenido cambió, publicalo con otra versión.` };
   }
   const clave = `recursos/${entrada.nombre}/${entrada.version}/${entrada.nombre}.zip`;
   await insertarVersionPendiente({
