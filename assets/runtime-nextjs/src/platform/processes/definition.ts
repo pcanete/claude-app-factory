@@ -520,7 +520,7 @@ export function instruccionesDeInstalacion(recursos: readonly RecursoParaInstala
     "Cada recurso se instala en su carpeta de esta máquina, sin acceso a ningún repositorio ni carpeta compartida. Para cada uno:",
     "1. Si la carpeta de destino es un enlace (symlink o junction) o tiene una carpeta .git adentro, no la toques: en esta máquina se edita ese recurso. Seguí con el siguiente.",
     "2. Si existe <destino>/.version y dice la versión indicada, ya está instalado.",
-    "3. Si no, bajá el .zip de su url desde un script o una terminal (no por el chat; la url vence en una hora), comprobá que su SHA-256 sea el indicado, borrá la carpeta de destino si existe, creala y descomprimí ahí el .zip con `tar -xf <archivo.zip> -C <destino>` (sirve en Windows, Mac y Linux). El .zip ya trae su .version.",
+    "3. Si no, bajá el .zip de su url desde un script o una terminal (no por el chat; la url vence en una hora), comprobá que su SHA-256 sea el indicado, borrá la carpeta de destino si existe, creala y descomprimí ahí el .zip. En Windows, con PowerShell: `Expand-Archive <archivo.zip> -DestinationPath <destino>` (el `tar` de Git Bash no abre .zip; el de Windows sí: `C:\\Windows\\System32\\tar.exe -xf <archivo.zip> -C <destino>`). En Mac y Linux: `unzip <archivo.zip> -d <destino>`. El .zip ya trae su .version.",
     "4. Si la descarga falla o el SHA-256 no coincide, pará y avisá: no instales a medias.",
     "Las skills recién instaladas se usan en una conversación nueva.",
   ];
