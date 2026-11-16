@@ -81,6 +81,8 @@ export async function guardarProcesoAction(formData: FormData) {
     requisitos: requisitos.requisitos,
     registro: registro.registro,
     carpeta: texto(formData, "carpeta"),
+    // Uno por línea. Sin esto, guardar desde el panel borraría los recursos del proceso.
+    recursos: String(formData.get("recursos") ?? "").split(/\r?\n/).map((linea) => linea.trim()).filter(Boolean),
   };
   let destino = formulario;
   let error: string | null = null;

@@ -168,6 +168,30 @@ Con almacén:
 Las láminas siguen yendo con `adjuntar_a_iteracion`: son lo que se mira en el panel y lo que
 lee otra IA con `read_attachment`.
 
+## Lo que trae el proceso
+
+**Plataforma 2.5.** Repetir un proceso exigía además clonar el repositorio privado de skills y
+sincronizar las carpetas compartidas donde viven sus archivos de entrada (una marca, unos
+modelos, un canon). Con almacén propio, el proceso **trae** esas cosas:
+
+- Quien administra publica cada **recurso** —una skill o una carpeta de archivos— como un
+  `.zip` versionado, con un archivo `.version` en la raíz: `publicar_recurso` da una dirección
+  firmada para subirlo y `confirmar_recurso` comprueba tamaño y MD5 y lo deja publicado
+  (`app_resource`, migración 220). Una versión publicada no se pisa; la vigente es la última.
+- El proceso declara la lista `recursos` (nombres) en su definición, desde `editar_proceso`,
+  `nuevo_proceso` o el panel.
+- `como_se_hace` devuelve cada recurso con su versión, su SHA-256, una dirección de descarga
+  que vale una hora y su destino, que fija la plataforma: `$HOME/.claude/skills/<nombre>` para
+  una skill y `$HOME/.claude/recursos/<nombre>` para archivos. La guía empieza por
+  «Instalá lo que trae el proceso».
+- La IA instala sólo si la versión cambió, comprobando el SHA-256 y descomprimiendo con `tar`.
+  **Nunca toca una carpeta que es un enlace o tiene `.git`**: es la máquina donde se edita
+  ese recurso, y reemplazarla borraría el original.
+
+Las skills tienen que leer sus entradas de `$HOME/.claude/recursos/<nombre>` y no de rutas
+de una carpeta compartida, para que funcionen igual en cualquier máquina. Quien edita los
+recursos enlaza esas carpetas a sus originales.
+
 ## Las herramientas
 
 | Herramienta | Hace |
@@ -180,6 +204,8 @@ lee otra IA con `read_attachment`.
 | `subir_producido` | Sólo con almacén: una dirección firmada por archivo para subir lo producido |
 | `confirmar_producido` | Sólo con almacén: comprueba en el almacén lo subido y lo da por guardado |
 | `descargar_producido` | Sólo con almacén: una dirección para bajar un archivo de lo producido |
+| `publicar_recurso` | Sólo quien administra, con almacén: una dirección para subir una versión de un recurso |
+| `confirmar_recurso` | Sólo quien administra, con almacén: comprueba la versión subida y la deja publicada |
 
 Comandos (prompts MCP): `registrar`, `reproducir` y `mejorar_proceso`.
 

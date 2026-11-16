@@ -51,6 +51,13 @@ export function FichaForm({ familia, nombre, proceso, cancelarHref }: {
           <span className="field-label">Repositorio de la skill **</span>
           <input className="control" defaultValue={ficha?.skill?.repo ?? ""} name="skill_repo" placeholder="https://github.com/…" type="url" />
         </label>
+        {almacen && (
+          <label className="field full">
+            <span className="field-label">Recursos que trae</span>
+            <textarea className="control mono" defaultValue={(proceso?.recursos ?? []).join("\n")} name="recursos" placeholder={"carrusel-p3-negocios\ncarousel-builder\nmarca-p3-carrusel"} rows={3} />
+            <span className="field-help">Uno por línea: skills y carpetas publicadas con publicar_recurso. Quien repite el proceso los instala desde la aplicación, sin acceso al repositorio ni a carpetas compartidas.</span>
+          </label>
+        )}
         <label className="field full">
           <span className="field-label">{almacen ? "Carpeta de referencia" : "Carpeta de Dropbox *"}</span>
           <input className="control" defaultValue={proceso?.carpeta ?? ""} maxLength={500} name="carpeta" placeholder="/Clientes/www.p3planeta.com/p3-negocios/piezas/" required={!almacen} />

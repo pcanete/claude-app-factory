@@ -27,6 +27,13 @@ import {
   MAXIMO_POR_ARCHIVO,
 } from "@/platform/storage/almacen";
 import {
+  descartarVersion,
+  insertarVersionPendiente,
+  marcarPublicada,
+  versionDeRecurso,
+  versionesVigentes,
+} from "@/platform/storage/recursos";
+import {
   archivoPorId,
   archivosDelRegistro,
   borrarDelAlmacen,
@@ -38,7 +45,10 @@ import {
 } from "@/platform/storage/archivos";
 import {
   claveDeNombre,
+  destinoDeRecurso,
   esCarpetaDeDropbox,
+  NOMBRE_DE_RECURSO,
+  TIPOS_DE_RECURSO,
   faltasDeFicha,
   faltasDeIteracion,
   faltasParaCompletar,
@@ -52,6 +62,8 @@ import {
   validarDefinicion,
   type Definicion,
   type Ficha,
+  type RecursoParaInstalar,
+  type TipoRecurso,
   type Receta,
   type Reproduccion,
 } from "@/platform/processes/definition";
@@ -661,6 +673,123 @@ export async function descargarProducido(agent: AgentPrincipal, id: string) {
   return { id: archivo.id, nombre: archivo.original_name, tipo: archivo.content_type, tamano: archivo.size_bytes, url: direccion.url, vence: direccion.vence };
 }
 
+// ---------------------------------------------------------------------------------------
+// Recursos: lo que un proceso trae para que otra persona lo repita
+// ---------------------------------------------------------------------------------------
+
+/** Hasta 1 GB por recurso: una skill pesa kilobytes; una carpeta de modelos, decenas de megas. */
+const MAXIMO_POR_RECURSO = 1024 * 1024 * 1024;
+
+/** La versión vigente de cada recurso, con una dirección de descarga que vale una hora. */
+async function recursosParaInstalar(nombres: readonly string[]) {
+  if (!nombres.length || !almacenConfigurado()) return { recursos: [] as RecursoParaInstalar[], faltantes: [...nombres] };
+  const vigentes = await versionesVigentes(nombres);
+  const recursos: RecursoParaInstalar[] = [];
+  const faltantes: string[] = [];
+  for (const nombre of nombres) {
+    const version = vigentes.get(nombre);
+    if (!version) {
+      faltantes.push(nombre);
+      continue;
+    }
+    const descarga = direccionDeDescarga(version.object_key, { nombre: `${nombre}-${version.version}.zip`, tipo: "application/zip" });
+    recursos.push({
+      nombre,
+      tipo: version.tipo,
+      version: version.version,
+      sha256: version.sha256,
+      tamano: version.size_bytes,
+      destino: destinoDeRecurso(version.tipo, nombre),
+      url: descarga.url,
+      vence: descarga.vence,
+    });
+  }
+  return { recursos, faltantes };
+}
+
+/** Para mostrar: qué versión de cada recurso está publicada, sin direcciones de descarga. */
+async function recursosPublicados(nombres: readonly string[]) {
+  const vigentes = almacenConfigurado() ? await versionesVigentes(nombres).catch(() => new Map()) : new Map();
+  return nombres.map((nombre) => {
+    const version = vigentes.get(nombre);
+    return version
+      ? { nombre, tipo: version.tipo as TipoRecurso, version: version.version, tamano: version.size_bytes, publicado: version.published_at as unknown }
+      : { nombre, tipo: null, version: null, tamano: null, publicado: null };
+  });
+}
+
+/**
+ * Prepara la publicación de una versión de un recurso: una dirección firmada para subir el
+ * .zip. Sólo quien administra publica. La versión la elige quien publica —el commit de una
+ * skill, un resumen del contenido de una carpeta— y no se pisa: una versión publicada es fija.
+ */
+export async function publicarRecurso(agent: AgentPrincipal, entrada: {
+  nombre: string;
+  tipo: string;
+  version: string;
+  tamano: number;
+  md5: string;
+  sha256: string;
+}) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  exigirQueAdministre(quien);
+  exigirAlmacen();
+  if (!NOMBRE_DE_RECURSO.test(entrada.nombre)) throw new Error("El nombre va en minúsculas, sin espacios: «carousel-builder».");
+  if (!TIPOS_DE_RECURSO.includes(entrada.tipo as TipoRecurso)) throw new Error(`El tipo es ${TIPOS_DE_RECURSO.join(" o ")}.`);
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(entrada.version)) throw new Error("La versión va sin espacios: un commit («ad5df58») o una fecha.");
+  if (!Number.isInteger(entrada.tamano) || entrada.tamano <= 0 || entrada.tamano > MAXIMO_POR_RECURSO) throw new Error("El tamaño va en bytes, hasta 1 GB.");
+  const md5 = md5Normalizado(entrada.md5);
+  if (!md5) throw new Error("El MD5 va en hexadecimal (32 caracteres) o en base64.");
+  const sha256 = entrada.sha256.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error("El SHA-256 va en hexadecimal (64 caracteres).");
+  const existente = await versionDeRecurso(entrada.nombre, entrada.version);
+  if (existente?.status === "publicado") {
+    if (existente.sha256 === sha256) return { nombre: entrada.nombre, version: entrada.version, ya_publicada: true, mensaje: "Esa versión ya está publicada, con el mismo contenido: no hay nada que subir." };
+    throw new Error(`La versión ${entrada.version} de «${entrada.nombre}» ya está publicada con otro contenido. Una versión publicada no se pisa: usá otra.`);
+  }
+  const clave = `recursos/${entrada.nombre}/${entrada.version}/${entrada.nombre}.zip`;
+  await insertarVersionPendiente({
+    nombre: entrada.nombre,
+    tipo: entrada.tipo as TipoRecurso,
+    version: entrada.version,
+    objectKey: clave,
+    tamano: entrada.tamano,
+    md5: md5.hex,
+    sha256,
+    persona: quien.persona,
+  });
+  const subida = direccionDeSubida(clave, { md5Base64: md5.base64, tipo: "application/zip" });
+  return {
+    nombre: entrada.nombre,
+    version: entrada.version,
+    ya_publicada: false,
+    subida: { metodo: "PUT", url: subida.url, cabeceras: subida.cabeceras, vence: subida.vence },
+    mensaje: "Subí el .zip con un PUT a esa url y esas cabeceras, y después llamá confirmar_recurso.",
+  };
+}
+
+/** Comprueba en el almacén que la versión llegó entera y la deja publicada: desde ahí, es la vigente. */
+export async function confirmarRecurso(agent: AgentPrincipal, nombre: string, version: string) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  exigirQueAdministre(quien);
+  exigirAlmacen();
+  const fila = await versionDeRecurso(nombre, version);
+  if (!fila) throw new Error(`No hay ninguna versión ${version} de «${nombre}». Pedila con publicar_recurso.`);
+  if (fila.status === "publicado") return { nombre, version, publicado: true, mensaje: "Ya estaba publicada." };
+  const objeto = await consultarObjeto(fila.object_key);
+  if (!objeto) return { nombre, version, publicado: false, mensaje: "Todavía no llegó: subila y volvé a confirmar." };
+  if (objeto.tamano !== fila.size_bytes || (objeto.etag !== fila.md5 && !objeto.etag.includes("-"))) {
+    await descartarVersion(fila.id);
+    await borrarDelAlmacen([fila.object_key]);
+    throw new Error("Lo que llegó no coincide con lo declarado y se descartó. Volvé a pedirla con publicar_recurso.");
+  }
+  await marcarPublicada(fila.id);
+  revalidateAfterWrite("proceso");
+  return { nombre, version, publicado: true, mensaje: `«${nombre}» ${version} quedó publicada: es la versión que se instala desde ahora.` };
+}
+
 /** Borra una iteración, sus adjuntos y lo producido en el almacén. Lo que está en Dropbox no se toca. */
 export async function borrarIteracion(agent: AgentPrincipal, iteracion: string) {
   exigirAlcance(agent, "records:write");
@@ -715,6 +844,7 @@ export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: strin
     requisitos: definicion.requisitos ?? [],
     registro: definicion.registro ?? [],
     carpeta: definicion.carpeta ?? null,
+    recursos: await recursosPublicados(definicion.recursos ?? []),
     // Quién ya lo hizo: a quién preguntarle.
     saben: [...new Set(iteraciones
       .filter((it) => it.salio_igual !== false && it.quien)
@@ -733,6 +863,7 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
   const recientes = (await iteracionesDe(procesos, quien, 10))
     .filter((it) => it.salio_igual !== false && it.receta)
     .slice(0, 3);
+  const { recursos, faltantes } = await recursosParaInstalar(definicion.recursos ?? []);
   return {
     proceso: String(actual.id),
     nombre: nombreDeFamilia(actual.nombre),
@@ -740,11 +871,15 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
     registro: definicion.registro ?? [],
     carpeta: definicion.carpeta ?? null,
     skill: definicion.ficha?.skill ?? null,
+    recursos,
+    recursos_faltantes: faltantes,
     guia: guiaDeProceso({
       nombre: nombreDeFamilia(actual.nombre),
       definicion,
       recientes: recientes.map((it) => ({ titulo: it.titulo, skill: it.skill, receta: it.receta, carpeta: it.carpeta, imagenes: it.imagenes })),
       almacen: almacenConfigurado(),
+      recursos,
+      recursosFaltantes: faltantes,
     }),
     referencias: recientes
       .filter((it) => it.imagenes.length)
@@ -805,6 +940,7 @@ export type DatosDeProceso = {
   requisitos: Definicion["requisitos"];
   registro: Definicion["registro"];
   carpeta?: string;
+  recursos?: string[];
 };
 
 function definicionDesdeDatos(familia: string, datos: DatosDeProceso, anterior: Record<string, unknown> = {}) {
@@ -817,6 +953,7 @@ function definicionDesdeDatos(familia: string, datos: DatosDeProceso, anterior: 
     requisitos: datos.requisitos ?? [],
     registro: datos.registro ?? [],
     ...(datos.carpeta?.trim() ? { carpeta: datos.carpeta.trim() } : {}),
+    ...(datos.recursos?.length ? { recursos: datos.recursos } : {}),
   };
   const validacion = validarDefinicion(definicion);
   if (!validacion.ok) throw new Error(validacion.errores.join(" "));
@@ -871,6 +1008,7 @@ export async function mejorarProceso(agent: AgentPrincipal, proceso: string, cam
     requisitos: cambios.requisitos ?? definicion.requisitos,
     registro: cambios.registro ?? definicion.registro,
     carpeta: cambios.carpeta ?? definicion.carpeta,
+    recursos: cambios.recursos ?? definicion.recursos,
   });
 }
 

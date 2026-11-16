@@ -60,6 +60,11 @@ export const MARCAS = {
   subir_producido: AGREGA,
   confirmar_producido: CONFIRMA,
   descargar_producido: LEE,
+
+  // Recursos, sólo para quien administra: publicar agrega una versión pendiente; confirmar la
+  // da por publicada y repetirla no cambia nada más.
+  publicar_recurso: AGREGA,
+  confirmar_recurso: CONFIRMA,
 } satisfies Record<string, ToolAnnotations>;
 
 export type NombreDeHerramienta = keyof typeof MARCAS;
