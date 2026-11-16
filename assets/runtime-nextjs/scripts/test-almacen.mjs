@@ -43,7 +43,7 @@ const R2 = { accessKeyId: "id", secretAccessKey: "secreto", region: "auto" };
 const subida = urlFirmada({
   metodo: "PUT",
   origen: "https://cuenta.r2.cloudflarestorage.com",
-  ruta: rutaDeObjeto("prc-operacion", "iteracion/abc/def/Federer y On – final.mp4"),
+  ruta: rutaDeObjeto("mi-bucket", "iteracion/abc/def/Federer y On – final.mp4"),
   credenciales: R2,
   segundos: 3600,
   cabeceras: { "content-md5": "1B2M2Y8AsgTpgAmY7PhCfg==", "content-type": "video/mp4" },
@@ -51,15 +51,15 @@ const subida = urlFirmada({
 comprobar("una subida firma el Content-MD5 y el tipo", subida.includes("X-Amz-SignedHeaders=content-md5%3Bcontent-type%3Bhost"), subida);
 comprobar("con una firma de 64 hexadecimales", /X-Amz-Signature=[0-9a-f]{64}$/.test(subida), subida);
 
-const ruta = rutaDeObjeto("prc-operacion", "iteracion/abc/Peña año (1).jpg");
+const ruta = rutaDeObjeto("mi-bucket", "iteracion/abc/Peña año (1).jpg");
 comprobar("la clave se codifica por tramos y conserva las barras",
-  ruta === "/prc-operacion/iteracion/abc/Pe%C3%B1a%20a%C3%B1o%20%281%29.jpg", ruta);
+  ruta === "/mi-bucket/iteracion/abc/Pe%C3%B1a%20a%C3%B1o%20%281%29.jpg", ruta);
 comprobar("codificar sigue RFC 3986", codificar("a b!*'()~-_.") === "a%20b%21%2A%27%28%29~-_.");
 
 const larga = urlFirmada({ metodo: "GET", origen: "https://x.example", ruta: "/b/k", credenciales: R2, segundos: 99_999_999 });
 comprobar("una dirección no vale más de siete días", larga.includes("X-Amz-Expires=604800"), larga);
 
-const cabeceras = cabecerasFirmadas({ metodo: "HEAD", origen: "https://cuenta.r2.cloudflarestorage.com", ruta: "/prc-operacion/k", credenciales: R2, ahora: new Date("2026-11-16T12:00:00Z") });
+const cabeceras = cabecerasFirmadas({ metodo: "HEAD", origen: "https://cuenta.r2.cloudflarestorage.com", ruta: "/mi-bucket/k", credenciales: R2, ahora: new Date("2026-11-16T12:00:00Z") });
 comprobar("consultar un objeto firma host, fecha y hash vacío",
   cabeceras.authorization.startsWith("AWS4-HMAC-SHA256 Credential=id/20261116/auto/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=")
   && cabeceras["x-amz-date"] === "20261116T120000Z"
