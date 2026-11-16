@@ -25,6 +25,8 @@ export type ContextoInstrucciones = {
   motorDeProcesos?: boolean;
   /** Si quien opera crea y edita procesos: recibe además los pasos para crear uno completo. */
   administraProcesos?: boolean;
+  /** Si la aplicación guarda lo producido en su almacén propio: entonces Dropbox no se exige. */
+  almacen?: boolean;
 };
 
 /**
@@ -39,6 +41,17 @@ export const PASOS_PARA_CREAR_UN_PROCESO = [
   "4. registrar_iteracion con nuevo_proceso y la ficha completa.",
   "5. Adjuntá las láminas con adjuntar_a_iteracion.",
   "6. Comprobá con iteraciones_de_proceso que la iteración aparece con sus imágenes. Recién ahí está creado.",
+];
+
+/** Los mismos pasos con almacén propio: la pieza se sube a la aplicación, sin Dropbox. */
+export const PASOS_PARA_CREAR_UN_PROCESO_CON_ALMACEN = [
+  PASOS_PARA_CREAR_UN_PROCESO[0],
+  PASOS_PARA_CREAR_UN_PROCESO[1],
+  PASOS_PARA_CREAR_UN_PROCESO[2],
+  "3. registrar_iteracion con nuevo_proceso y la ficha completa.",
+  "4. Subí la pieza con subir_producido y confirmala con confirmar_producido: la aplicación comprueba que llegó entera.",
+  "5. Adjuntá las láminas con adjuntar_a_iteracion.",
+  "6. Comprobá con iteraciones_de_proceso que la iteración no quedó incompleta. Recién ahí está creado.",
 ];
 
 function texto(valor: unknown) {
@@ -70,12 +83,20 @@ export function componerInstrucciones(contexto: ContextoInstrucciones, valor: un
       "",
       "Esta aplicación guarda lo que el equipo sabe hacer como procesos, y cada vez que se hizo como iteraciones.",
       "- Si te piden algo que el equipo ya sabe hacer, traé cómo se hace con como_se_hace. Comprobá primero en esta máquina los requisitos que lista; lo que falte, instalalo como dice o avisá, y no lo reemplaces por otra cosa.",
-      "- Lo producido va a la carpeta de Dropbox del proceso. Comprobá con el conector de Dropbox que quedó ahí antes de registrar; si no tenés conector, preguntale a la persona en vez de dar por buena la carpeta sincronizada.",
-      "- Al terminar, registralo con registrar_iteracion: carpeta, archivos, los datos que pide el proceso, la receta, la skill con su commit y el enlace a la conversación.",
-      "- Adjuntar las imágenes es parte de registrar, no un paso opcional: después de registrar_iteracion, adjuntá las láminas o la portada con adjuntar_a_iteracion. Una iteración sin imágenes queda incompleta.",
+      ...(contexto.almacen
+        ? [
+          "- Lo producido se guarda en la aplicación, no en Dropbox ni en una carpeta personal: no hace falta acceso a ninguna otra cuenta.",
+          "- Al terminar, registralo con registrar_iteracion: los datos que pide el proceso, la receta, la skill con su commit y el enlace a la conversación.",
+          "- Después subí lo producido con subir_producido (un PUT por archivo desde esta máquina, sin pasarlo por el chat) y confirmalo con confirmar_producido, y adjuntá las láminas o la portada con adjuntar_a_iteracion. Las dos cosas son parte de registrar: hasta entonces la iteración queda incompleta.",
+        ]
+        : [
+          "- Lo producido va a la carpeta de Dropbox del proceso. Comprobá con el conector de Dropbox que quedó ahí antes de registrar; si no tenés conector, preguntale a la persona en vez de dar por buena la carpeta sincronizada.",
+          "- Al terminar, registralo con registrar_iteracion: carpeta, archivos, los datos que pide el proceso, la receta, la skill con su commit y el enlace a la conversación.",
+          "- Adjuntar las imágenes es parte de registrar, no un paso opcional: después de registrar_iteracion, adjuntá las láminas o la portada con adjuntar_a_iteracion. Una iteración sin imágenes queda incompleta.",
+        ]),
       "- No crees ni edites procesos ni iteraciones con create_record o update_record.",
     );
-    if (contexto.administraProcesos) partes.push("", ...PASOS_PARA_CREAR_UN_PROCESO);
+    if (contexto.administraProcesos) partes.push("", ...(contexto.almacen ? PASOS_PARA_CREAR_UN_PROCESO_CON_ALMACEN : PASOS_PARA_CREAR_UN_PROCESO));
   }
 
   let general: string | null = null;

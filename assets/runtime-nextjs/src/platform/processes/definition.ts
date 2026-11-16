@@ -13,7 +13,16 @@
  *   proceso pide, la receta, la skill con su commit y la conversación.
  *
  * No hay etapas, colas, revisiones ni aprobaciones. Estado y responsable son opcionales.
+ *
+ * Desde la 2.4, si la aplicación tiene **almacén** propio (un bucket compatible con S3), lo
+ * producido se sube a la aplicación y es ella la que comprueba que llegó: la carpeta de
+ * Dropbox pasa a ser una referencia opcional y quien opera sólo necesita entrar a la
+ * aplicación. Las funciones que dependen de eso reciben `{ almacen: true }`; sin esa opción
+ * todo sigue como antes.
  */
+
+/** Si la aplicación guarda lo producido en su almacén propio. */
+export type Opciones = { almacen?: boolean };
 
 export type TipoRequisito = "skill" | "libreria" | "programa" | "conector" | "variable" | "archivo";
 
@@ -185,7 +194,7 @@ export function validarDefinicion(valor: unknown): { ok: true; definicion: Defin
  * Ésta es la vara para guardar: un proceso no se crea ni se edita si le falta algo de esto,
  * lo haga una persona en el panel o su agente por MCP.
  */
-export function faltasDeFicha(definicion: Definicion): string[] {
+export function faltasDeFicha(definicion: Definicion, opciones: Opciones = {}): string[] {
   const ficha = definicion.ficha ?? {};
   const faltas: string[] = [];
   if (!textoNoVacio(ficha.resumen)) faltas.push("qué hace, en una línea (ficha.resumen)");
@@ -197,7 +206,8 @@ export function faltasDeFicha(definicion: Definicion): string[] {
       ? "el repositorio de la skill (ficha.skill.repo)"
       : "la skill con su repositorio (ficha.skill) o, si no hay skill, cómo se hace (metodo)");
   }
-  if (!esCarpetaDeDropbox(definicion.carpeta)) faltas.push("la carpeta de Dropbox donde va cada iteración (carpeta)");
+  // Con almacén, lo producido se sube a la aplicación: la carpeta es opcional.
+  if (!opciones.almacen && !esCarpetaDeDropbox(definicion.carpeta)) faltas.push("la carpeta de Dropbox donde va cada iteración (carpeta)");
   if (!(definicion.requisitos ?? []).length) faltas.push("al menos un requisito, con cómo comprobarlo (requisitos)");
   if (!(definicion.registro ?? []).length) faltas.push("al menos un dato que se registra cada vez (registro)");
   return faltas;
@@ -352,8 +362,10 @@ export function datosFaltantes(registro: readonly CampoDeRegistro[], datos: unkn
 /**
  * Todo lo que una iteración necesita para registrarse. Vacío: se puede guardar.
  *
- * Lo que no se negocia es la carpeta de Dropbox con lo producido y la lista de archivos que
- * quedaron ahí: es lo que otra persona va a abrir. Lo demás lo pide el proceso.
+ * Sin almacén, lo que no se negocia es la carpeta de Dropbox con lo producido y la lista de
+ * archivos que quedaron ahí: es lo que otra persona va a abrir. Con almacén, lo producido se
+ * sube después de registrar (la iteración queda incompleta hasta entonces) y la carpeta, si
+ * viene, es una referencia más. Lo demás lo pide el proceso.
  */
 export function faltasDeIteracion(definicion: Definicion, entrada: {
   titulo?: unknown;
@@ -363,14 +375,21 @@ export function faltasDeIteracion(definicion: Definicion, entrada: {
   receta?: unknown;
   conversacion?: unknown;
   reproduccion?: unknown;
-}) {
+}, opciones: Opciones = {}) {
   const faltas: string[] = [];
   if (!textoNoVacio(entrada.titulo)) faltas.push("titulo: qué se hizo esta vez.");
-  if (!esCarpetaDeDropbox(entrada.carpeta)) {
-    faltas.push("carpeta: la carpeta de Dropbox donde quedó lo producido (https://www.dropbox.com/… o /Clientes/…).");
-  }
-  if (!listaDeTextos(entrada.archivos) || !entrada.archivos.length) {
-    faltas.push("archivos: los archivos que quedaron en esa carpeta, comprobados con el conector de Dropbox. Sin archivos en Dropbox no hay iteración.");
+  if (opciones.almacen) {
+    if (entrada.carpeta !== undefined && entrada.carpeta !== null && entrada.carpeta !== "" && !textoNoVacio(entrada.carpeta)) {
+      faltas.push("carpeta: si mandás una, que sea un texto con la ruta o el enlace.");
+    }
+    if (entrada.archivos !== undefined && !listaDeTextos(entrada.archivos)) faltas.push("archivos: una lista de nombres.");
+  } else {
+    if (!esCarpetaDeDropbox(entrada.carpeta)) {
+      faltas.push("carpeta: la carpeta de Dropbox donde quedó lo producido (https://www.dropbox.com/… o /Clientes/…).");
+    }
+    if (!listaDeTextos(entrada.archivos) || !entrada.archivos.length) {
+      faltas.push("archivos: los archivos que quedaron en esa carpeta, comprobados con el conector de Dropbox. Sin archivos en Dropbox no hay iteración.");
+    }
   }
   faltas.push(...faltasDeReceta(entrada.receta));
   faltas.push(...datosFaltantes(definicion.registro ?? [], entrada.datos));
@@ -400,21 +419,39 @@ export function skillDeIteracion(valor: { skill?: unknown; receta?: unknown }) {
  * próxima IA no tiene qué mirar antes de repetirla. Lo pesado queda en Dropbox; las láminas
  * o la portada, livianas, van adjuntas.
  */
-export function iteracionIncompleta(imagenes: number) {
-  return imagenes <= 0;
+export function iteracionIncompleta(imagenes: number, guardados?: number) {
+  return faltasParaCompletar(imagenes, guardados).length > 0;
 }
 
-/** Lo que responde registrar_iteracion: nunca un «quedó registrada» a secas si faltan las imágenes. */
-export function mensajeDeRegistro(entrada: { iteracion: string; procesoNuevo: boolean; imagenes: number }) {
+/**
+ * Qué le falta a una iteración ya registrada. `guardados` es cuántos archivos de lo producido
+ * están comprobados en el almacén; sin almacén no se pasa y no cuenta.
+ */
+export function faltasParaCompletar(imagenes: number, guardados?: number) {
+  const faltas: string[] = [];
+  if (guardados !== undefined && guardados <= 0) faltas.push("subir lo producido con subir_producido y confirmarlo con confirmar_producido");
+  if (imagenes <= 0) faltas.push("adjuntar las láminas con adjuntar_a_iteracion");
+  return faltas;
+}
+
+/** Lo que responde registrar_iteracion: nunca un «quedó registrada» a secas si falta algo. */
+export function mensajeDeRegistro(entrada: { iteracion: string; procesoNuevo: boolean; imagenes: number; guardados?: number }) {
   const registrada = entrada.procesoNuevo
     ? "Quedó registrada, y el proceso quedó creado con su ficha."
     : "Quedó registrada.";
-  if (!iteracionIncompleta(entrada.imagenes)) return registrada;
-  return [
-    `${registrada} Falta adjuntar las láminas con adjuntar_a_iteracion (iteracion ${entrada.iteracion}): hasta entonces queda incompleta.`,
-    "Adjuntar es parte de registrar, no un paso opcional: sin imágenes el panel la marca incompleta y la próxima IA no tiene qué mirar.",
-    "Adjuntá las láminas de un carrusel o la portada de un video, y comprobá con iteraciones_de_proceso que aparecen.",
-  ].join(" ");
+  const faltas = faltasParaCompletar(entrada.imagenes, entrada.guardados);
+  if (!faltas.length) return registrada;
+  const partes = [`${registrada} Falta ${faltas.join(" y ")} (iteracion ${entrada.iteracion}): hasta entonces queda incompleta.`];
+  if (entrada.guardados !== undefined && entrada.guardados <= 0) {
+    partes.push("Lo producido se guarda en la aplicación, no en una carpeta personal: subí los archivos finales con las direcciones que da subir_producido y confirmalos; sin eso nadie más los puede abrir.");
+  }
+  if (entrada.imagenes <= 0) {
+    partes.push(
+      "Adjuntar es parte de registrar, no un paso opcional: sin imágenes el panel la marca incompleta y la próxima IA no tiene qué mirar.",
+      "Adjuntá las láminas de un carrusel o la portada de un video, y comprobá con iteraciones_de_proceso que aparecen.",
+    );
+  }
+  return partes.join(" ");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -433,6 +470,7 @@ export function guiaDeProceso(entrada: {
   nombre: string;
   definicion: Definicion;
   recientes: Array<{ titulo: string; skill?: string | null; receta: unknown; carpeta: unknown; imagenes?: Array<{ id: string; nombre: string }> }>;
+  almacen?: boolean;
 }) {
   const { definicion } = entrada;
   const partes = [`# ${entrada.nombre}`];
@@ -469,19 +507,29 @@ export function guiaDeProceso(entrada: {
   if (!skill?.nombre && !definicion.metodo) partes.push("", "Seguí la receta de las últimas veces que salió bien, más abajo.");
 
   partes.push("", "## 3. Dónde guardar lo producido");
-  partes.push(
-    "",
-    definicion.carpeta
-      ? `En Dropbox, dentro de ${definicion.carpeta}, una carpeta por iteración.`
-      : "En la carpeta compartida del cliente en Dropbox, una carpeta por iteración.",
-    "Antes de registrar, comprobá con el conector de Dropbox que los archivos están en esa carpeta. Sin eso, no se registra.",
-  );
+  if (entrada.almacen) {
+    partes.push(
+      "",
+      "En la aplicación: no hace falta acceso a Dropbox ni a otra cuenta. Después de registrar, pedí con subir_producido una dirección por cada archivo final, subilo con un PUT desde esta máquina (con las cabeceras que te da) y confirmalo con confirmar_producido. La aplicación comprueba que llegó entero; hasta entonces la iteración queda incompleta.",
+    );
+    if (definicion.carpeta) partes.push(`Si además lo guardás en ${definicion.carpeta}, anotalo en carpeta: es una referencia, no reemplaza la subida.`);
+  } else {
+    partes.push(
+      "",
+      definicion.carpeta
+        ? `En Dropbox, dentro de ${definicion.carpeta}, una carpeta por iteración.`
+        : "En la carpeta compartida del cliente en Dropbox, una carpeta por iteración.",
+      "Antes de registrar, comprobá con el conector de Dropbox que los archivos están en esa carpeta. Sin eso, no se registra.",
+    );
+  }
 
   partes.push("", "## 4. Al terminar, registrá la iteración");
   const registro = definicion.registro ?? [];
   partes.push(
     "",
-    "Llamá registrar_iteracion con la carpeta, la lista de archivos comprobados, la receta (pasos, prompts que funcionaron, herramientas, modelo, decisiones, descartes), la skill con su commit y el enlace a esta conversación.",
+    entrada.almacen
+      ? "Llamá registrar_iteracion con la receta (pasos, prompts que funcionaron, herramientas, modelo, decisiones, descartes), la skill con su commit y el enlace a esta conversación. Después subí lo producido y adjuntá las láminas: registrar no termina hasta que la iteración está completa."
+      : "Llamá registrar_iteracion con la carpeta, la lista de archivos comprobados, la receta (pasos, prompts que funcionaron, herramientas, modelo, decisiones, descartes), la skill con su commit y el enlace a esta conversación.",
   );
   if (registro.length) {
     partes.push("", "Este proceso pide además estos datos, en «datos»:", "", lista(registro.map((c) => `${c.clave}: ${c.descripcion}${c.requerido === false ? " (opcional)" : ""}`)));

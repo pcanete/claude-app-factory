@@ -24,6 +24,8 @@ const LEE: ToolAnnotations = { readOnlyHint: true, openWorldHint: false };
 const AGREGA: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 const REEMPLAZA: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
 const BORRA: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+// Da por hecho algo que ya se hizo afuera (una subida): no pisa nada y repetirla no cambia más.
+const CONFIRMA: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
 export const MARCAS = {
   // Esquema y configuración.
@@ -52,6 +54,12 @@ export const MARCAS = {
   registrar_iteracion: AGREGA,
   adjuntar_a_iteracion: AGREGA,
   editar_proceso: REEMPLAZA,
+
+  // Lo producido en el almacén propio: pedir la subida agrega archivos pendientes; confirmar
+  // los da por guardados y repetirla no cambia nada más; descargar sólo entrega una dirección.
+  subir_producido: AGREGA,
+  confirmar_producido: CONFIRMA,
+  descargar_producido: LEE,
 } satisfies Record<string, ToolAnnotations>;
 
 export type NombreDeHerramienta = keyof typeof MARCAS;

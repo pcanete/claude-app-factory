@@ -15,7 +15,9 @@
  *   - una iteración sin imágenes adjuntas está incompleta, y registrar_iteracion lo dice
  *     en vez de responder sólo «quedó registrada»;
  *   - requisitos y registro escritos por una persona, una línea por elemento, se entienden
- *     y vuelven a texto igual.
+ *     y vuelven a texto igual;
+ *   - con almacén propio, Dropbox deja de exigirse en el proceso y en la iteración, la
+ *     iteración sin lo producido guardado está incompleta y la guía dice cómo subirlo.
  */
 import {
   claveDeNombre,
@@ -25,6 +27,7 @@ import {
   faltasDeFicha,
   faltasDeIteracion,
   faltasDeReceta,
+  faltasParaCompletar,
   familiaDe,
   guiaDeProceso,
   iteracionIncompleta,
@@ -195,6 +198,39 @@ comprobar("y no termina en «Quedó registrada.» a secas", sinLaminas.trim() !=
 const nuevoSinLaminas = mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: true, imagenes: 0 });
 comprobar("al crear el proceso también avisa", nuevoSinLaminas.includes("proceso quedó creado") && nuevoSinLaminas.includes("adjuntar_a_iteracion"), nuevoSinLaminas);
 comprobar("con imágenes, no hay advertencia", mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: false, imagenes: 7 }) === "Quedó registrada.");
+
+// --- Con almacén propio -----------------------------------------------------------------
+// Lo producido se sube a la aplicación: nadie necesita acceso a Dropbox para registrar.
+const conAlmacen = { almacen: true };
+const sinCarpeta = { ...completa, carpeta: undefined, archivos: undefined };
+comprobar("con almacén, una iteración sin carpeta ni archivos se registra",
+  faltasDeIteracion(dv, sinCarpeta, conAlmacen).length === 0, JSON.stringify(faltasDeIteracion(dv, sinCarpeta, conAlmacen)));
+comprobar("sin almacén, la misma iteración no se registra", faltasDeIteracion(dv, sinCarpeta).some((f) => f.startsWith("carpeta")));
+comprobar("con almacén, una carpeta de otro lado vale como referencia",
+  faltasDeIteracion(dv, { ...completa, carpeta: "https://drive.google.com/x" }, conAlmacen).length === 0);
+comprobar("con almacén, lo demás se sigue exigiendo",
+  faltasDeIteracion(dv, { ...sinCarpeta, receta: { pasos: [] } }, conAlmacen).some((f) => f.startsWith("receta.pasos"))
+  && faltasDeIteracion(dv, { ...sinCarpeta, datos: {} }, conAlmacen).some((f) => f.startsWith("datos.")));
+comprobar("con almacén, un proceso sin carpeta está completo",
+  faltasDeFicha({ ...completo, carpeta: undefined }, conAlmacen).length === 0, faltasDeFicha({ ...completo, carpeta: undefined }, conAlmacen).join("; "));
+comprobar("sin almacén, le falta la carpeta", faltasDeFicha({ ...completo, carpeta: undefined }).some((f) => f.includes("Dropbox")));
+
+comprobar("con almacén, sin lo producido guardado está incompleta aunque tenga imágenes", iteracionIncompleta(3, 0) === true);
+comprobar("con lo producido y las imágenes, completa", iteracionIncompleta(3, 2) === false);
+comprobar("sin almacén, lo producido no cuenta", iteracionIncompleta(3) === false && iteracionIncompleta(3, undefined) === false);
+comprobar("a una recién registrada con almacén le faltan las dos cosas", faltasParaCompletar(0, 0).length === 2, faltasParaCompletar(0, 0).join("; "));
+const recienConAlmacen = mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: false, imagenes: 0, guardados: 0 });
+comprobar("registrar con almacén avisa que falta subir lo producido",
+  recienConAlmacen.includes("subir_producido") && recienConAlmacen.includes("confirmar_producido"), recienConAlmacen);
+comprobar("y también las láminas", recienConAlmacen.includes("adjuntar_a_iteracion"), recienConAlmacen);
+comprobar("con lo producido y las láminas, no hay advertencia",
+  mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: false, imagenes: 2, guardados: 1 }) === "Quedó registrada.");
+
+const guiaConAlmacen = guiaDeProceso({ nombre: "Carrusel P3 Negocios", definicion: dv, recientes: [], almacen: true });
+comprobar("la guía con almacén dice que se sube a la aplicación", guiaConAlmacen.includes("subir_producido") && guiaConAlmacen.includes("confirmar_producido"), guiaConAlmacen);
+comprobar("y no pide el conector de Dropbox", !guiaConAlmacen.includes("conector de Dropbox"), guiaConAlmacen);
+const guiaSinAlmacen = guiaDeProceso({ nombre: "Carrusel P3 Negocios", definicion: dv, recientes: [] });
+comprobar("sin almacén la guía sigue pidiendo Dropbox", guiaSinAlmacen.includes("conector de Dropbox") && !guiaSinAlmacen.includes("subir_producido"));
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);

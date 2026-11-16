@@ -3,6 +3,7 @@ import { getSetting } from "@/platform/settings/store";
 import { runtimeSpec } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import { administraProcesos, motorDisponible } from "@/platform/processes/engine";
+import { almacenConfigurado } from "@/platform/storage/almacen";
 import {
   CLAVE_INSTRUCCIONES,
   NAMESPACE_INSTRUCCIONES,
@@ -42,6 +43,7 @@ export async function instruccionesPara(principal: AgentPrincipal) {
       persona: principal.kind === "user" ? principal.id : principal.ownerUserId ?? null,
       motorDeProcesos: motorDisponible(),
       administraProcesos: motorDisponible() && administraProcesos(principal),
+      almacen: almacenConfigurado(),
     },
     valor,
   );

@@ -45,6 +45,7 @@ import { withTransaction } from "@/lib/db";
 import { generatedCapabilities } from "@/generated/permissions";
 import { motivoParaNoEscribirAMano } from "@/platform/processes/engine";
 import { registrarHerramientasDeProcesos } from "@/platform/processes/tools";
+import { borrarDelAlmacen, soltarDelRegistro } from "@/platform/storage/archivos";
 
 const entityKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
 const settingNameSchema = z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/);
@@ -743,6 +744,8 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
         const entity = requireAgentPermission(agent, entityKey, "delete");
         const aMano = motivoParaNoEscribirAMano(entity.key, "delete");
         if (aMano) throw new Error(aMano);
+        // Lo producido en el almacén se borra recién después de confirmar la transacción.
+        let soltados: string[] = [];
         const mutation = await executeIdempotentMutation({
           agent,
           toolName: "delete_record",
@@ -754,6 +757,8 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
             if (!before) throw new Error("El registro que intentás eliminar no existe.");
             const evaluated = applyRules({ entityKey: entity.key, event: "before_delete", values: {}, before });
             const deletedAttachments = await deleteAttachmentsForRecord(client, entity.key, id);
+            const stored = await soltarDelRegistro(client, entity.key, id);
+            soltados = stored.map((archivo) => archivo.object_key);
             await deleteRecord(entity.key, id, client, alcanceDeRegistros);
             await recordAuditEvent(client, {
               ...(agent.kind === "user" ? { actorId: agent.id } : { agentId: agent.id }),
@@ -761,7 +766,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
               entityKey: entity.key,
               recordId: id,
               action: "delete",
-              changes: { before, attachments: deletedAttachments, rules: evaluated.applied, source: "mcp" },
+              changes: { before, attachments: deletedAttachments, ...(stored.length ? { stored } : {}), rules: evaluated.applied, source: "mcp" },
             });
             return {
               recordId: id,
@@ -769,6 +774,7 @@ export function createFactoryMcpServer(agent: AgentPrincipal, instructions?: str
             };
           },
         });
+        await borrarDelAlmacen(soltados);
         // Un agente escribe fuera de la interfaz: sin esto, las vistas y los
         // listados siguen sirviendo la copia anterior.
         revalidateAfterWrite(entity.key, id);
