@@ -96,7 +96,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("registrar_iteracion", {
     annotations: marcas("registrar_iteracion"),
     description: almacen
-      ? "Registra una vez que se hizo un proceso. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación; carpeta y archivos son opcionales. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree. Registrar no termina acá: con el id que devuelve, subí lo producido con subir_producido y confirmar_producido, y adjuntá las láminas o la portada con adjuntar_a_iteracion. Hasta entonces la iteración queda incompleta."
+      ? "Registra una vez que se hizo un proceso. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación; carpeta y archivos son opcionales. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree. Registrar no termina acá: con el id que devuelve, subí lo producido con subir_producido y confirmar_producido; las láminas que subas quedan solas como vista previa. Sólo si lo producido no tiene imágenes (un video), adjuntá la portada con adjuntar_a_iteracion. Hasta entonces la iteración queda incompleta."
       : "Registra una vez que se hizo un proceso. Antes de llamarla, lo producido tiene que estar en Dropbox y tenés que haber comprobado con el conector de Dropbox que los archivos están en la carpeta: sin carpeta y archivos no se registra. Mandá los datos que el proceso pide (como_se_hace los lista en «registro»), la receta armada de esta conversación, la skill con su commit y el enlace a la conversación. Si el proceso todavía no existe y administrás, mandá nuevo_proceso con la ficha completa; si no administrás, pedile a quien administra que lo cree. Registrar no termina acá: después adjuntá las láminas o la portada con adjuntar_a_iteracion, con el id que devuelve; sin imágenes la iteración queda incompleta.",
     inputSchema: z.object({
       proceso: z.string().max(200).optional().describe("El nombre o el id del proceso."),
@@ -178,7 +178,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
   server.registerTool("adjuntar_a_iteracion", {
     annotations: marcas("adjuntar_a_iteracion"),
     description:
-      `Adjunta imágenes o PDF livianos a una iteración registrada —las láminas de un carrusel, la portada de un video— para que se vean en el panel y otra IA las mire. ${almacen ? "Lo pesado va con subir_producido." : "Lo pesado queda en Dropbox."} Es obligatorio para piezas visuales: es parte de registrar, no un paso opcional, y una iteración sin imágenes queda marcada incompleta. Para no pasar las imágenes en base64 por el chat, usá un script que lea los archivos del disco y llame a esta herramienta por HTTP contra este mismo servidor MCP, con la credencial ya configurada en la máquina (si el repositorio de skills de la organización tiene uno, usá ese). Después comprobá con iteraciones_de_proceso que aparecen.`,
+      `Adjunta imágenes o PDF livianos a una iteración registrada —las láminas de un carrusel, la portada de un video— para que se vean en el panel y otra IA las mire. ${almacen ? "Lo pesado va con subir_producido, y las imágenes que se suben con subir_producido quedan solas como vista previa al confirmarlas: esta herramienta hace falta sólo si lo producido no tiene imágenes (la portada de un video) o para reemplazar la vista previa. Una iteración sin imágenes queda marcada incompleta." : "Lo pesado queda en Dropbox. Es obligatorio para piezas visuales: es parte de registrar, no un paso opcional, y una iteración sin imágenes queda marcada incompleta."} Para no pasar las imágenes en base64 por el chat, usá un script que lea los archivos del disco y llame a esta herramienta por HTTP contra este mismo servidor MCP, con la credencial ya configurada en la máquina (si el repositorio de skills de la organización tiene uno, usá ese). Después comprobá con iteraciones_de_proceso que aparecen.`,
     inputSchema: z.object({
       iteracion: z.string().uuid().describe("El id que devolvió registrar_iteracion."),
       archivos: z.array(z.object({
@@ -253,7 +253,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     server.registerTool("confirmar_producido", {
       annotations: marcas("confirmar_producido"),
       description:
-        "Después de subir con las direcciones de subir_producido: la aplicación comprueba en su almacén que cada archivo llegó con el tamaño y el MD5 declarados y lo deja guardado. Lo que todavía no llegó sigue pendiente; podés volver a llamarla. Dice qué le falta a la iteración para quedar completa.",
+        "Después de subir con las direcciones de subir_producido: la aplicación comprueba en su almacén que cada archivo llegó con el tamaño y el MD5 declarados y lo deja guardado. Si la iteración todavía no tiene imágenes, las que se subieron (las láminas) quedan como vista previa en el panel: no hace falta adjuntarlas. Lo que todavía no llegó sigue pendiente; podés volver a llamarla. Dice qué le falta a la iteración para quedar completa.",
       inputSchema: z.object({
         iteracion: z.string().uuid().describe("El id de la iteración."),
       }),
@@ -293,7 +293,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     "4. Anotá la skill con su commit, si se hizo con una, y el enlace de esta conversación.",
     "5. Mostrame todo y, cuando lo apruebe, llamá registrar_iteracion.",
     almacen
-      ? "6. Subí lo producido con subir_producido y confirmalo con confirmar_producido; adjuntá las láminas o la portada con adjuntar_a_iteracion. Las dos cosas son parte de registrar: comprobá con iteraciones_de_proceso que la iteración no quedó incompleta."
+      ? "6. Subí lo producido con subir_producido y confirmalo con confirmar_producido: las láminas quedan solas como vista previa. Si lo producido no tiene imágenes (un video), adjuntá la portada con adjuntar_a_iteracion. Comprobá con iteraciones_de_proceso que la iteración no quedó incompleta."
       : "6. Adjuntá las láminas o la portada con adjuntar_a_iteracion —es parte de registrar, no opcional— y comprobá con iteraciones_de_proceso que aparecen.",
   ].join("\n")));
 

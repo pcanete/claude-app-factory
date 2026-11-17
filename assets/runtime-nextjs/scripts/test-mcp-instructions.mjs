@@ -105,6 +105,10 @@ const conAlmacen = componerInstrucciones({ ...agente, motorDeProcesos: true, adm
 comprobar("con almacén, se sube con subir_producido y se confirma", conAlmacen.includes("subir_producido") && conAlmacen.includes("confirmar_producido"));
 comprobar("con almacén, no se pide el conector de Dropbox", !conAlmacen.includes("conector de Dropbox"), conAlmacen);
 comprobar("con almacén, los pasos para crear un proceso también suben la pieza", conAlmacen.includes("Subí la pieza con subir_producido"));
+comprobar("con almacén, las láminas subidas quedan como vista previa sin adjuntarlas",
+  conAlmacen.includes("quedan solas como vista previa") && conAlmacen.includes("ya las dejó como vista previa"), conAlmacen);
+comprobar("con almacén, adjuntar queda sólo para lo que no tiene imágenes",
+  conAlmacen.includes("si lo producido no tiene imágenes (un video), adjuntá la portada"), conAlmacen);
 comprobar("sin almacén, sigue el camino de Dropbox", componerInstrucciones({ ...agente, motorDeProcesos: true }, null).includes("conector de Dropbox"));
 
 const largo = componerInstrucciones(persona, "x".repeat(LIMITE_INSTRUCCIONES * 2));

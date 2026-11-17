@@ -50,7 +50,7 @@ export const PASOS_PARA_CREAR_UN_PROCESO_CON_ALMACEN = [
   PASOS_PARA_CREAR_UN_PROCESO[2],
   "3. registrar_iteracion con nuevo_proceso y la ficha completa.",
   "4. Subí la pieza con subir_producido y confirmala con confirmar_producido: la aplicación comprueba que llegó entera.",
-  "5. Adjuntá las láminas con adjuntar_a_iteracion.",
+  "5. Si subiste las láminas, confirmar_producido ya las dejó como vista previa. Si lo producido no tiene imágenes (un video), adjuntá la portada con adjuntar_a_iteracion.",
   "6. Comprobá con iteraciones_de_proceso que la iteración no quedó incompleta. Recién ahí está creado.",
 ];
 
@@ -87,7 +87,7 @@ export function componerInstrucciones(contexto: ContextoInstrucciones, valor: un
         ? [
           "- Lo producido se guarda en la aplicación, no en Dropbox ni en una carpeta personal: no hace falta acceso a ninguna otra cuenta.",
           "- Al terminar, registralo con registrar_iteracion: los datos que pide el proceso, la receta, la skill con su commit y el enlace a la conversación.",
-          "- Después subí lo producido con subir_producido (un PUT por archivo desde esta máquina, sin pasarlo por el chat) y confirmalo con confirmar_producido, y adjuntá las láminas o la portada con adjuntar_a_iteracion. Las dos cosas son parte de registrar: hasta entonces la iteración queda incompleta.",
+          "- Después subí lo producido con subir_producido (un PUT por archivo desde esta máquina, sin pasarlo por el chat) y confirmalo con confirmar_producido. Es parte de registrar: hasta entonces la iteración queda incompleta. Las imágenes que subas (las láminas) quedan solas como vista previa en el panel; sólo si lo producido no tiene imágenes (un video), adjuntá la portada con adjuntar_a_iteracion.",
         ]
         : [
           "- Lo producido va a la carpeta de Dropbox del proceso. Comprobá con el conector de Dropbox que quedó ahí antes de registrar; si no tenés conector, preguntale a la persona en vez de dar por buena la carpeta sincronizada.",

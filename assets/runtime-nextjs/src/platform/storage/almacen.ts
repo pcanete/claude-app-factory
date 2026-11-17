@@ -93,6 +93,26 @@ export async function consultarObjeto(clave: string): Promise<{ tamano: number; 
   return datosDeConsulta(respuesta.headers);
 }
 
+/**
+ * Lee un objeto entero, sin compresión. Para archivos chicos que el servidor necesita
+ * tener (las imágenes que pasan a vista previa): lo pesado se baja con una dirección
+ * firmada, no a través del servidor.
+ */
+export async function leerObjeto(clave: string): Promise<Buffer> {
+  const config = exigir();
+  const ruta = rutaDeObjeto(config.bucket, clave);
+  const respuesta = await fetch(`${config.origen}${ruta}`, {
+    method: "GET",
+    headers: {
+      ...cabecerasFirmadas({ metodo: "GET", origen: config.origen, ruta, credenciales: config.credenciales }),
+      "accept-encoding": "identity",
+    },
+    cache: "no-store",
+  });
+  if (!respuesta.ok) throw new Error(`El almacén respondió ${respuesta.status} al leer un archivo.`);
+  return Buffer.from(await respuesta.arrayBuffer());
+}
+
 /** Borra un objeto. Que ya no esté no es un error. */
 export async function borrarObjeto(clave: string) {
   const config = exigir();
