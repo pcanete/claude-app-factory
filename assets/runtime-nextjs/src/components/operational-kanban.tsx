@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { moveRecordAction } from "@/app/record-operations/actions";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import type { RawSearchParams } from "@/lib/view-query";
 
 function pageHref(baseHref: string, query: RawSearchParams, page: number) {

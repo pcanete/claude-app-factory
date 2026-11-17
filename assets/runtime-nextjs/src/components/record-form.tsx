@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { createRecordAction, updateRecordAction } from "@/app/actions";
 import type { EntitySpec, FieldSpec } from "@/lib/spec";
 

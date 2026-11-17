@@ -14,6 +14,7 @@
  *   - una dirección no vale más de lo que se pidió, ni más de siete días.
  */
 import { cabecerasDeConsulta, cabecerasFirmadas, codificar, datosDeConsulta, rutaDeObjeto, urlFirmada } from "../src/platform/storage/firma.ts";
+import { enParalelo } from "../src/lib/en-paralelo.ts";
 
 let fallos = 0;
 function comprobar(nombre, condicion, detalle = "") {
@@ -80,6 +81,26 @@ comprobar("una respuesta en gzip queda marcada como alterada", gzip.alterada ===
 const debil = datosDeConsulta(new Headers({ etag: 'W/"d41d8cd98f00b204e9800998ecf8427e"' }));
 comprobar("una ETag débil queda marcada como alterada y sin el W/",
   debil.alterada === true && debil.etag === "d41d8cd98f00b204e9800998ecf8427e", JSON.stringify(debil));
+
+// Las consultas de confirmar van en paralelo: el orden del resultado tiene que ser el de
+// la entrada (si no, se confirma un archivo con el tamaño de otro) y no más de N a la vez.
+let enVuelo = 0;
+let maximoEnVuelo = 0;
+const esperas = [50, 5, 30, 1, 20, 10, 40, 2, 15, 25, 3];
+const ordenados = await enParalelo(esperas, 4, async (ms, i) => {
+  enVuelo += 1;
+  maximoEnVuelo = Math.max(maximoEnVuelo, enVuelo);
+  await new Promise((r) => setTimeout(r, ms));
+  enVuelo -= 1;
+  return `${i}:${ms}`;
+});
+comprobar("en paralelo devuelve en el orden de la entrada aunque terminen en otro orden",
+  ordenados.join(",") === esperas.map((ms, i) => `${i}:${ms}`).join(","), ordenados.join(","));
+comprobar("y nunca tiene más en vuelo que el límite", maximoEnVuelo === 4, String(maximoEnVuelo));
+comprobar("una lista vacía no espera nada", (await enParalelo([], 8, async () => 1)).length === 0);
+let fallo = null;
+try { await enParalelo([1, 2, 3], 2, async (n) => { if (n === 2) throw new Error("dos"); return n; }); } catch (e) { fallo = e.message; }
+comprobar("si una consulta falla, falla todo", fallo === "dos", String(fallo));
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);

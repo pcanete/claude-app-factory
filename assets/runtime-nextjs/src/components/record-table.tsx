@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { formatFieldValue, formatValue } from "@/lib/presentation";
 import type { EntitySpec, FieldSpec } from "@/lib/spec";
 

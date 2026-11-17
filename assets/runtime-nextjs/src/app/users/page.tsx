@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { createUserAction } from "@/app/users/actions";
 import {
   countManagedUsers,

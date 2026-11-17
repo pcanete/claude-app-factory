@@ -13,6 +13,7 @@ import {
 } from "@/lib/attachments";
 import { recordAuditEvent } from "@/lib/audit";
 import { sql, withTransaction } from "@/lib/db";
+import { enParalelo } from "@/lib/en-paralelo";
 import { recordAccessForAgent, type RecordAccessContext } from "@/lib/record-access";
 import { deleteRecord, getRecord, insertRecord, listRecords, recordInputFromObject, updateRecord } from "@/lib/repository";
 import { revalidateAfterWrite } from "@/lib/revalidation";
@@ -614,44 +615,54 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
   const noLlegaron: string[] = [];
   const distintos: string[] = [];
   const sinComprobar: string[] = [];
-  for (const archivo of todos.filter((a) => a.status === "pendiente")) {
-    const objeto = await consultarObjeto(archivo.object_key);
+  // Las consultas al almacén van en paralelo y las escrituras en una sola transacción.
+  // Antes era un HEAD y una transacción por archivo, en serie: once láminas tardaban unos
+  // siete segundos, y en un plan con límite de duración de funciones eso es lo que se paga.
+  const pendientes = todos.filter((a) => a.status === "pendiente");
+  const consultas = await enParalelo(pendientes, 8, (archivo) => consultarObjeto(archivo.object_key));
+  const guardar: typeof pendientes = [];
+  const descartar: Array<{ archivo: (typeof pendientes)[number]; objeto: { tamano: number; etag: string } }> = [];
+  pendientes.forEach((archivo, i) => {
+    const objeto = consultas[i];
     if (!objeto) {
       noLlegaron.push(archivo.original_name);
-      continue;
+      return;
     }
     // Una respuesta comprimida no describe los bytes guardados: no prueba que el archivo
     // sea otro, así que no se descarta. Queda pendiente y se dice por qué.
     if (objeto.alterada) {
       sinComprobar.push(archivo.original_name);
-      continue;
+      return;
     }
     // En una subida de una vez el ETag es el MD5. Con Content-MD5 firmado no debería
     // diferir nunca; si difiere, el objeto no es el declarado y no se da por guardado.
     const mismo = objeto.tamano === archivo.size_bytes && (objeto.etag === archivo.md5 || objeto.etag.includes("-"));
+    if (mismo) guardar.push(archivo);
+    else descartar.push({ archivo, objeto });
+  });
+  if (guardar.length || descartar.length) {
     await withTransaction(async (client) => {
-      if (!mismo) {
-        await descartarPendiente(client, archivo.id);
-        return;
+      for (const { archivo } of descartar) await descartarPendiente(client, archivo.id);
+      for (const archivo of guardar) {
+        await marcarGuardado(client, archivo.id);
+        await recordAuditEvent(client, {
+          ...autoria({ agent, quien, client }),
+          entityKey: "iteracion",
+          recordId: iteracion,
+          action: "attachment_create",
+          changes: {
+            stored: { id: archivo.id, originalName: archivo.original_name, contentType: archivo.content_type, sizeBytes: archivo.size_bytes, md5: archivo.md5 },
+            source: "mcp:procesos",
+          },
+        });
       }
-      await marcarGuardado(client, archivo.id);
-      await recordAuditEvent(client, {
-        ...autoria({ agent, quien, client }),
-        entityKey: "iteracion",
-        recordId: iteracion,
-        action: "attachment_create",
-        changes: {
-          stored: { id: archivo.id, originalName: archivo.original_name, contentType: archivo.content_type, sizeBytes: archivo.size_bytes, md5: archivo.md5 },
-          source: "mcp:procesos",
-        },
-      });
     });
-    if (mismo) confirmados.push(archivo.original_name);
-    else {
-      distintos.push(`${archivo.original_name} (se declararon ${archivo.size_bytes} bytes y MD5 ${archivo.md5}; el almacén tiene ${objeto.tamano} bytes y ETag ${objeto.etag || "vacía"})`);
-      await borrarDelAlmacen([archivo.object_key]);
-    }
   }
+  confirmados.push(...guardar.map((archivo) => archivo.original_name));
+  for (const { archivo, objeto } of descartar) {
+    distintos.push(`${archivo.original_name} (se declararon ${archivo.size_bytes} bytes y MD5 ${archivo.md5}; el almacén tiene ${objeto.tamano} bytes y ETag ${objeto.etag || "vacía"})`);
+  }
+  if (descartar.length) await borrarDelAlmacen(descartar.map(({ archivo }) => archivo.object_key));
   revalidateAfterWrite("iteracion", iteracion);
   const guardados = (await archivosDelRegistro("iteracion", iteracion)).map((a) => a.original_name);
   const imagenes = (await imagenesDe(iteracion)).length;

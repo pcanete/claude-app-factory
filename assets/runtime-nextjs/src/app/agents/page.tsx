@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { deleteAgentAction, setAgentOwnerAction, setAgentStatusAction } from "@/app/agents/actions";
 import { AgentCreateForm } from "@/components/agent-create-form";
 import { WebClientConnection } from "@/components/web-client-connection";

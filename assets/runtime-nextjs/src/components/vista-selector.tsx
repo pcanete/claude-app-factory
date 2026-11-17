@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 
 /**
  * Elegir cómo se ve un listado (tarjetas o lista) sin perder los filtros: es un enlace que

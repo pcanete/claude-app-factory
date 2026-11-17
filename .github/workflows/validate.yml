@@ -104,6 +104,11 @@ jobs:
       - name: The activity graph groups the same way for every period
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-activity-period.mjs
+      # Precargar es renderizar en el servidor: un enlace que precarga multiplica las
+      # invocaciones de cada visita, y eso agotó una vez el límite de un plan gratuito.
+      - name: No link prefetches dynamic pages by default
+        working-directory: /tmp/reference-app
+        run: node scripts/test-sin-precarga.mjs
       # El tablero mide con la bitácora: un error acá hace que se mejore la etapa equivocada.
       - name: Build the generated application
         working-directory: /tmp/reference-app

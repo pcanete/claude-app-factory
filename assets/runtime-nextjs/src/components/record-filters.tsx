@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import type { ListRecordOptions } from "@/lib/repository";
 import { relationFields, type EntitySpec, type FieldSpec } from "@/lib/spec";
 
