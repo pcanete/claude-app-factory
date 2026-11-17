@@ -1,4 +1,4 @@
-import type { ActivityEvent } from "@/lib/audit";
+import { datosDePeriodo, type GrupoDeActividad, type Periodo } from "@/lib/activity-period";
 
 /**
  * La actividad como organismo.
@@ -27,8 +27,6 @@ const ANCHO = 1040;
 const ALTO = 430;
 const CENTRO = { x: ANCHO / 2, y: ALTO / 2 };
 
-// Cuántos eventos alimentan el dibujo. Más que esto no agrega lectura: satura.
-const EVENTOS_VISIBLES = 40;
 const MAX_ACTORES = 6;
 const MAX_ENTIDADES = 7;
 
@@ -76,24 +74,33 @@ function posicionEnArco(indice: number, total: number, lado: "izquierda" | "dere
   };
 }
 
-function construir(eventos: ActivityEvent[], etiquetasDeEntidad: Record<string, string>) {
-  const recientes = eventos.slice(0, EVENTOS_VISIBLES);
+/**
+ * El dibujo se arma con grupos —cuánto hizo cada actor sobre cada entidad— y no con
+ * eventos sueltos: así sirve igual para los últimos 40 eventos que para un mes entero
+ * contado en la base. Nada de lo que se dibuja crece con la cantidad: los radios, la
+ * opacidad de las líneas y las partículas por línea tienen tope.
+ */
+function construir(grupos: GrupoDeActividad[], etiquetasDeEntidad: Record<string, string>) {
   const ahora = Date.now();
   const semillas = new Map<string, Omit<Nodo, "x" | "y" | "lado">>();
   const vinculos = new Map<string, { desde: string; hacia: string; actividad: number; fallos: number }>();
+  let operaciones = 0;
+  let fallosTotales = 0;
+  let masReciente = Infinity;
 
   const sumar = (
     clave: string,
     etiqueta: string,
     detalle: string,
     especie: Especie,
-    fallo: boolean,
+    cantidad: number,
+    fallos: number,
     edad: number,
   ) => {
     const previo = semillas.get(clave);
     if (previo) {
-      previo.actividad += 1;
-      previo.fallos += fallo ? 1 : 0;
+      previo.actividad += cantidad;
+      previo.fallos += fallos;
       previo.frescura = Math.min(previo.frescura, edad);
       return;
     }
@@ -102,40 +109,44 @@ function construir(eventos: ActivityEvent[], etiquetasDeEntidad: Record<string, 
       etiqueta: recortar(etiqueta, 22),
       detalle,
       especie,
-      actividad: 1,
-      fallos: fallo ? 1 : 0,
+      actividad: cantidad,
+      fallos,
       frescura: edad,
     });
   };
 
-  for (const evento of recientes) {
-    const fallo = evento.status === "failed";
-    const edad = Math.max(0, ahora - new Date(evento.created_at).getTime());
+  for (const grupo of grupos) {
+    const edad = Math.max(0, ahora - new Date(grupo.ultimo).getTime());
+    operaciones += grupo.cantidad;
+    fallosTotales += grupo.fallos;
+    masReciente = Math.min(masReciente, edad);
 
-    const actorClave = evento.source === "agent"
-      ? `agente:${evento.agent_id ?? evento.agent_name ?? "?"}`
-      : `persona:${evento.actor_id ?? evento.actor_name ?? "?"}`;
+    const actorClave = grupo.source === "agent"
+      ? `agente:${grupo.agent_id ?? grupo.agent_name ?? "?"}`
+      : `persona:${grupo.actor_id ?? grupo.actor_name ?? "?"}`;
     sumar(
       actorClave,
-      evento.source === "agent" ? evento.agent_name ?? "Agente" : evento.actor_name ?? "Persona",
-      evento.source === "agent"
-        ? `a cargo de ${evento.responsible_name ?? "nadie"}`
-        : evento.actor_email ?? "persona",
-      evento.source === "agent" ? "agente" : "persona",
-      fallo,
+      grupo.source === "agent" ? grupo.agent_name ?? "Agente" : grupo.actor_name ?? "Persona",
+      grupo.source === "agent"
+        ? `a cargo de ${grupo.responsible_name ?? "nadie"}`
+        : grupo.actor_email ?? "persona",
+      grupo.source === "agent" ? "agente" : "persona",
+      grupo.cantidad,
+      grupo.fallos,
       edad,
     );
 
-    if (!evento.entity_key) continue;
-    const entidadClave = `entidad:${evento.entity_key}`;
+    if (!grupo.entity_key) continue;
+    const entidadClave = `entidad:${grupo.entity_key}`;
     // El detalle se completa después con el total de operaciones: cuántas veces se tocó
     // dice más que cuál fue la última, y no expone el nombre interno de una herramienta.
     sumar(
       entidadClave,
-      etiquetasDeEntidad[evento.entity_key] ?? evento.entity_key,
+      etiquetasDeEntidad[grupo.entity_key] ?? grupo.entity_key,
       "",
       "entidad",
-      fallo,
+      grupo.cantidad,
+      grupo.fallos,
       edad,
     );
 
@@ -143,10 +154,10 @@ function construir(eventos: ActivityEvent[], etiquetasDeEntidad: Record<string, 
       const clave = `${desde}->${hacia}`;
       const previo = vinculos.get(clave);
       if (previo) {
-        previo.actividad += 1;
-        previo.fallos += fallo ? 1 : 0;
+        previo.actividad += grupo.cantidad;
+        previo.fallos += grupo.fallos;
       } else {
-        vinculos.set(clave, { desde, hacia, actividad: 1, fallos: fallo ? 1 : 0 });
+        vinculos.set(clave, { desde, hacia, actividad: grupo.cantidad, fallos: grupo.fallos });
       }
     }
   }
@@ -157,7 +168,7 @@ function construir(eventos: ActivityEvent[], etiquetasDeEntidad: Record<string, 
 
   for (const nodo of [...actores, ...entidades]) {
     if (nodo.especie !== "entidad") continue;
-    nodo.detalle = nodo.actividad === 1 ? "1 operación" : `${nodo.actividad} operaciones`;
+    nodo.detalle = nodo.actividad === 1 ? "1 operación" : `${nodo.actividad.toLocaleString("es-AR")} operaciones`;
   }
 
   const nodos: Nodo[] = [];
@@ -173,9 +184,9 @@ function construir(eventos: ActivityEvent[], etiquetasDeEntidad: Record<string, 
     etiqueta: "",
     detalle: "",
     especie: "entidad",
-    actividad: recientes.length,
-    fallos: recientes.filter((e) => e.status === "failed").length,
-    frescura: recientes.length ? Math.max(0, ahora - new Date(recientes[0].created_at).getTime()) : Infinity,
+    actividad: operaciones,
+    fallos: fallosTotales,
+    frescura: masReciente,
     ...CENTRO,
     lado: "derecha",
   };
@@ -191,7 +202,7 @@ function construir(eventos: ActivityEvent[], etiquetasDeEntidad: Record<string, 
     }))
     .filter((v): v is Vinculo => Boolean(v.desde && v.hacia));
 
-  return { nodos, nucleo, arcos, total: recientes.length };
+  return { nodos, nucleo, arcos, total: operaciones };
 }
 
 /** Una curva suave: las líneas rectas se leen como cables, las curvas como tejido. */
@@ -231,15 +242,18 @@ function escalaDeBrillo(nodos: Array<{ frescura: number }>) {
 }
 
 export function ActivityOrganism({
-  events,
+  groups,
   entityLabels,
   total,
+  period,
 }: {
-  events: ActivityEvent[];
+  groups: GrupoDeActividad[];
   entityLabels: Record<string, string>;
   total: number;
+  period: Periodo;
 }) {
-  const { nodos, nucleo, arcos, total: dibujados } = construir(events, entityLabels);
+  const { nodos, nucleo, arcos, total: dibujados } = construir(groups, entityLabels);
+  const periodo = datosDePeriodo(period);
   const brillo = escalaDeBrillo(nodos);
   const agentes = nodos.filter((n) => n.especie === "agente").length;
   const personas = nodos.filter((n) => n.especie === "persona").length;
@@ -251,11 +265,13 @@ export function ActivityOrganism({
         <div className="organism-head">
           <div>
             <p className="eyebrow">Sistema en movimiento</p>
-            <h2>Todavía en silencio</h2>
+            <h2>{periodo.horas === null ? "Todavía en silencio" : "Nada en este período"}</h2>
           </div>
         </div>
         <p className="subtitle organism-empty">
-          Cuando alguien cargue algo o un agente consulte, va a aparecer acá.
+          {periodo.horas === null
+            ? "Cuando alguien cargue algo o un agente consulte, va a aparecer acá."
+            : `No hubo actividad ${periodo.frase} con estos filtros.`}
         </p>
       </section>
     );
@@ -266,10 +282,11 @@ export function ActivityOrganism({
       <div className="organism-head">
         <div>
           <p className="eyebrow">Sistema en movimiento</p>
-          <h2>Actividad reciente</h2>
+          <h2>{periodo.horas === null ? "Actividad reciente" : `Actividad · ${periodo.label.toLowerCase()}`}</h2>
           <p className="subtitle">
-            Cada partícula es una llamada real. Se dibujan las últimas {dibujados} de{" "}
-            {total.toLocaleString("es-AR")}.
+            {periodo.horas === null
+              ? <>Cada partícula es una llamada real. Se dibujan las últimas {dibujados} de {total.toLocaleString("es-AR")}.</>
+              : <>{dibujados.toLocaleString("es-AR")} {dibujados === 1 ? "operación" : "operaciones"} {periodo.frase}. Las partículas pasan más seguido donde hubo más trabajo.</>}
           </p>
         </div>
         <div className="organism-stats">

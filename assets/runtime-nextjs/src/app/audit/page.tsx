@@ -3,8 +3,10 @@ import {
   listActivityAgents,
   listActivityEvents,
   RETENCION_POR_DEFECTO_DIAS,
+  summarizeActivity,
   type ActivitySource,
 } from "@/lib/audit";
+import { agruparEventos, desdeDePeriodo, EVENTOS_RECIENTES, PERIODOS, periodoValido } from "@/lib/activity-period";
 import { ActivityOrganism } from "@/components/activity-organism";
 import { Pagination } from "@/components/pagination";
 import { getSetting } from "@/platform/settings/store";
@@ -49,6 +51,7 @@ export default async function AuditPage({
     action?: string;
     source?: string;
     agent?: string;
+    periodo?: string;
     page?: string;
   }>;
 }) {
@@ -73,7 +76,9 @@ export default async function AuditPage({
   const action = requested.action?.trim() || undefined;
   const agentId = agentes.some((agente) => agente.id === requested.agent) ? requested.agent : undefined;
 
-  const filtros = { entityKey, action, source, agentId };
+  // El período filtra también la tabla: lo que se dibuja y lo que se lista es lo mismo.
+  const periodo = periodoValido(requested.periodo);
+  const filtros = { entityKey, action, source, agentId, desde: desdeDePeriodo(periodo) };
   const total = await countActivityEvents(filtros);
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
   const solicitada = Number(requested.page ?? "1");
@@ -83,6 +88,13 @@ export default async function AuditPage({
     limit: POR_PAGINA,
     offset: (page - 1) * POR_PAGINA,
   });
+  // Con un período, el grafo cuenta en la base: una consulta agrupada, no los eventos uno
+  // por uno. Sin período dibuja los últimos eventos, aunque la tabla esté en otra página.
+  const grupos = periodo !== "recientes"
+    ? await summarizeActivity(filtros)
+    : agruparEventos(page === 1
+      ? eventos.slice(0, EVENTOS_RECIENTES)
+      : await listActivityEvents({ ...filtros, limit: EVENTOS_RECIENTES }));
 
   const retencionGuardada = await getSetting("auditoria", "retencion_dias");
   const retencion = typeof retencionGuardada?.value === "number"
@@ -106,9 +118,12 @@ export default async function AuditPage({
         </div>
       </div>
 
-      <ActivityOrganism entityLabels={etiquetasDeEntidad} events={eventos} total={total} />
+      <ActivityOrganism entityLabels={etiquetasDeEntidad} groups={grupos} period={periodo} total={total} />
 
       <form className="toolbar">
+        <select aria-label="Período" className="control audit-filter" defaultValue={periodo} name="periodo">
+          {PERIODOS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+        </select>
         <select aria-label="Filtrar por origen" className="control audit-filter" defaultValue={source ?? ""} name="source">
           <option value="">Personas y agentes</option>
           <option value="human">Sólo personas</option>

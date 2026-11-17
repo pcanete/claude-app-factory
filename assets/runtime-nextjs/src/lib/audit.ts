@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { sql, transactionSql } from "@/lib/db";
+import type { GrupoDeActividad } from "@/lib/activity-period";
 
 export type AuditAction =
   | "setting_save"
@@ -171,6 +172,8 @@ export type ActivityFilters = {
   action?: string;
   agentId?: string;
   responsibleId?: string;
+  /** Sólo lo ocurrido desde este momento. */
+  desde?: Date;
 };
 
 function activityWhere(filters: ActivityFilters, values: unknown[]) {
@@ -191,6 +194,10 @@ function activityWhere(filters: ActivityFilters, values: unknown[]) {
     if (!valor) continue;
     values.push(valor);
     conditions.push(`actividad.${columna} = $${values.length}::uuid`);
+  }
+  if (filters.desde) {
+    values.push(filters.desde.toISOString());
+    conditions.push(`actividad.created_at >= $${values.length}::timestamptz`);
   }
   return conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 }
@@ -218,6 +225,33 @@ export async function listActivityEvents(
     `SELECT * FROM (${CONSULTA_ACTIVIDAD}) AS actividad ${where}
       ORDER BY actividad.created_at DESC
       LIMIT ${limite} OFFSET ${desplazamiento}`,
+    values,
+  );
+}
+
+/**
+ * La actividad de un período contada en la base: cuánto hizo cada actor sobre cada
+ * entidad, cuántas veces falló y cuándo fue lo último. Es lo que dibuja el grafo cuando
+ * se mira más que los últimos eventos: una consulta, sin traer los eventos uno por uno.
+ * El tope es holgado —el grafo muestra 6 actores y 7 entidades— y sólo evita que una
+ * instalación con muchísimos agentes devuelva filas que nadie va a dibujar.
+ */
+export async function summarizeActivity(filters: ActivityFilters = {}) {
+  const values: unknown[] = [];
+  const where = activityWhere(filters, values);
+  return sql<GrupoDeActividad>(
+    `SELECT actividad.source, actividad.actor_id,
+            max(actividad.actor_name) AS actor_name, max(actividad.actor_email) AS actor_email,
+            actividad.agent_id, max(actividad.agent_name) AS agent_name,
+            max(actividad.responsible_name) AS responsible_name,
+            actividad.entity_key,
+            count(*)::int AS cantidad,
+            (count(*) FILTER (WHERE actividad.status = 'failed'))::int AS fallos,
+            max(actividad.created_at) AS ultimo
+       FROM (${CONSULTA_ACTIVIDAD}) AS actividad ${where}
+      GROUP BY actividad.source, actividad.actor_id, actividad.agent_id, actividad.entity_key
+      ORDER BY max(actividad.created_at) DESC
+      LIMIT 500`,
     values,
   );
 }
