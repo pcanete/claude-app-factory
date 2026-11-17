@@ -25,6 +25,7 @@ import {
   consultarObjeto,
   direccionDeDescarga,
   direccionDeSubida,
+  leerObjeto,
   MAXIMO_POR_ARCHIVO,
 } from "@/platform/storage/almacen";
 import {
@@ -43,7 +44,9 @@ import {
   insertarPendiente,
   marcarGuardado,
   soltarDelRegistro,
+  type ArchivoGuardado,
 } from "@/platform/storage/archivos";
+import { elegirVistaPrevia } from "@/platform/storage/vista-previa";
 import {
   claveDeNombre,
   destinoDeRecurso,
@@ -663,8 +666,10 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
     distintos.push(`${archivo.original_name} (se declararon ${archivo.size_bytes} bytes y MD5 ${archivo.md5}; el almacén tiene ${objeto.tamano} bytes y ETag ${objeto.etag || "vacía"})`);
   }
   if (descartar.length) await borrarDelAlmacen(descartar.map(({ archivo }) => archivo.object_key));
+  const archivosGuardados = await archivosDelRegistro("iteracion", iteracion);
+  const vistaPrevia = await vistaPreviaDesdeProducido({ agent, quien, iteracion, archivos: archivosGuardados });
   revalidateAfterWrite("iteracion", iteracion);
-  const guardados = (await archivosDelRegistro("iteracion", iteracion)).map((a) => a.original_name);
+  const guardados = archivosGuardados.map((a) => a.original_name);
   const imagenes = (await imagenesDe(iteracion)).length;
   const falta = faltasParaCompletar(imagenes, guardados.length);
   const partes = [
@@ -672,9 +677,67 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
     noLlegaron.length ? `Todavía no llegaron: ${noLlegaron.join(", ")}. Subilos y volvé a confirmar.` : "",
     distintos.length ? `No coinciden con lo declarado y se descartaron: ${distintos.join(", ")}. Pedí la subida de nuevo con subir_producido.` : "",
     sinComprobar.length ? `No se pudieron comprobar porque el almacén respondió comprimido: ${sinComprobar.join(", ")}. Siguen pendientes; avisá a quien mantiene la aplicación.` : "",
+    vistaPrevia.length ? `Quedaron como vista previa en el panel: ${vistaPrevia.join(", ")}. No hace falta adjuntarlas.` : "",
     falta.length ? `Para que la iteración quede completa falta ${falta.join(" y ")}.` : "La iteración quedó completa.",
   ];
-  return { iteracion, confirmados, no_llegaron: noLlegaron, descartados: distintos, sin_comprobar: sinComprobar, guardados, falta, mensaje: partes.filter(Boolean).join(" ") };
+  return { iteracion, confirmados, no_llegaron: noLlegaron, descartados: distintos, sin_comprobar: sinComprobar, vista_previa: vistaPrevia, guardados, falta, mensaje: partes.filter(Boolean).join(" ") };
+}
+
+/**
+ * Si la iteración todavía no tiene imágenes, usa las de lo producido como vista previa.
+ *
+ * Antes había que mandar las láminas dos veces: con subir_producido y con
+ * adjuntar_a_iteracion. El segundo paso necesita una credencial de agente guardada en la
+ * máquina, que quien se conecta con su propia cuenta no tiene: subía todo y la iteración
+ * quedaba incompleta igual. Las imágenes ya están en el almacén; la aplicación las copia.
+ *
+ * Si la iteración ya tiene imágenes no toca nada: lo que alguien adjuntó a propósito manda.
+ * Si falla (el almacén no responde, la política no admite imágenes), no rompe la
+ * confirmación: lo producido quedó guardado igual y la iteración dice qué le falta.
+ */
+async function vistaPreviaDesdeProducido(entrada: { agent: AgentPrincipal; quien: Identidad; iteracion: string; archivos: ArchivoGuardado[] }) {
+  const politica = resolveAttachmentPolicy(requireEntity("iteracion"));
+  if (!politica || (await imagenesDe(entrada.iteracion)).length) return [];
+  const elegidos = elegirVistaPrevia(entrada.archivos, politica);
+  if (!elegidos.length) return [];
+  try {
+    const contenidos = await enParalelo(elegidos, 8, (archivo) => leerObjeto(archivo.object_key));
+    return await withTransaction(async (client) => {
+      await lockAttachmentSet(client, "iteracion", entrada.iteracion);
+      // Otra llamada pudo adjuntar mientras se bajaban: si ya hay, no se duplica.
+      if (await countAttachments(client, "iteracion", entrada.iteracion)) return [];
+      const nombres: string[] = [];
+      for (const [i, archivo] of elegidos.entries()) {
+        const contenido = contenidos[i];
+        const sha256 = createHash("sha256").update(contenido).digest("hex");
+        const id = await insertAttachment(client, {
+          entityKey: "iteracion",
+          recordId: entrada.iteracion,
+          originalName: archivo.original_name,
+          contentType: archivo.content_type.toLowerCase(),
+          content: contenido,
+          sha256,
+          actorId: entrada.quien.persona,
+        });
+        await recordAuditEvent(client, {
+          ...autoria({ agent: entrada.agent, quien: entrada.quien, client }),
+          entityKey: "iteracion",
+          recordId: entrada.iteracion,
+          action: "attachment_create",
+          changes: {
+            attachment: { id, originalName: archivo.original_name, contentType: archivo.content_type, sizeBytes: contenido.length, sha256 },
+            source: "mcp:procesos:vista-previa",
+            from_stored_file: archivo.id,
+          },
+        });
+        nombres.push(archivo.original_name);
+      }
+      return nombres;
+    });
+  } catch (error) {
+    console.error("No se pudo armar la vista previa desde lo producido", entrada.iteracion, error);
+    return [];
+  }
 }
 
 /** Una dirección para bajar un archivo de lo producido, que vale una hora. */

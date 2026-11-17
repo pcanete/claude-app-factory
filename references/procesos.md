@@ -165,8 +165,15 @@ Con almacén:
 - Borrar una iteración, por el motor o por las herramientas genéricas, borra también lo
   producido del almacén, después de confirmar la transacción.
 
-Las láminas siguen yendo con `adjuntar_a_iteracion`: son lo que se mira en el panel y lo que
-lee otra IA con `read_attachment`.
+La vista previa (lo que se mira en el panel y lo que lee otra IA con `read_attachment`) sale
+de lo producido: al confirmar, si la iteración todavía no tiene imágenes, `confirmar_producido`
+copia del almacén las imágenes guardadas —en el orden de sus nombres, dentro de la política de
+adjuntos— y las deja como adjuntos (2.5.4). Antes había que mandarlas otra vez con
+`adjuntar_a_iteracion`, y ese paso necesita una credencial de agente guardada en la máquina: quien
+se conecta con su propia cuenta subía todo y la iteración quedaba incompleta igual.
+`adjuntar_a_iteracion` queda para lo que no es imagen (la portada de un video) o para elegir
+otra vista previa. Si la iteración ya tiene imágenes, confirmar no las toca. Una iteración
+vieja sin vista previa se arregla llamando de nuevo a `confirmar_producido`.
 
 ## Lo que trae el proceso
 
@@ -199,7 +206,7 @@ recursos enlaza esas carpetas a sus originales.
 | `como_se_hace` | Requisitos, skill, carpeta, qué registrar y la guía completa, con las últimas veces que se hizo y sus imágenes |
 | `registrar_iteracion` | Guarda una vez que se hizo, si está completa |
 | `iteraciones_de_proceso` | Todas las veces que se hizo, con todo lo registrado |
-| `adjuntar_a_iteracion` | Adjunta imágenes o PDF livianos para verlos en el panel. Obligatorio en piezas visuales: sin imágenes, la iteración queda incompleta |
+| `adjuntar_a_iteracion` | Adjunta imágenes o PDF livianos para verlos en el panel. Sin imágenes, la iteración queda incompleta; con almacén, las imágenes subidas con `subir_producido` ya quedan como vista previa al confirmar |
 | `editar_proceso` | Sólo para quien administra (los demás no la ven): cambia lo que se manda de un proceso y deja el resto; tiene que quedar completo |
 | `subir_producido` | Sólo con almacén: una dirección firmada por archivo para subir lo producido |
 | `confirmar_producido` | Sólo con almacén: comprueba en el almacén lo subido y lo da por guardado |

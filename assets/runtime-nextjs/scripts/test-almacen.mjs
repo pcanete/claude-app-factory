@@ -15,6 +15,7 @@
  */
 import { cabecerasDeConsulta, cabecerasFirmadas, codificar, datosDeConsulta, rutaDeObjeto, urlFirmada } from "../src/platform/storage/firma.ts";
 import { enParalelo } from "../src/lib/en-paralelo.ts";
+import { elegirVistaPrevia } from "../src/platform/storage/vista-previa.ts";
 
 let fallos = 0;
 function comprobar(nombre, condicion, detalle = "") {
@@ -101,6 +102,30 @@ comprobar("una lista vacía no espera nada", (await enParalelo([], 8, async () =
 let fallo = null;
 try { await enParalelo([1, 2, 3], 2, async (n) => { if (n === 2) throw new Error("dos"); return n; }); } catch (e) { fallo = e.message; }
 comprobar("si una consulta falla, falla todo", fallo === "dos", String(fallo));
+
+// La vista previa sale de lo producido: sólo imágenes que el panel acepta, en orden de nombre.
+const politica = { maxFiles: 3, maxSizeBytes: 1000, allowedTypes: ["image/jpeg", "image/png", "application/pdf"] };
+const producido = [
+  { original_name: "slide-10.jpg", content_type: "image/jpeg", size_bytes: 500 },
+  { original_name: "caption.txt", content_type: "text/plain", size_bytes: 100 },
+  { original_name: "slide-2.jpg", content_type: "IMAGE/JPEG", size_bytes: 500 },
+  { original_name: "final.mp4", content_type: "video/mp4", size_bytes: 900 },
+  { original_name: "slide-1.jpg", content_type: "image/jpeg", size_bytes: 500 },
+  { original_name: "enorme.png", content_type: "image/png", size_bytes: 5000 },
+  { original_name: "raro.gif", content_type: "image/gif", size_bytes: 10 },
+  { original_name: "guion.pdf", content_type: "application/pdf", size_bytes: 10 },
+];
+const elegidas = elegirVistaPrevia(producido, politica).map((a) => a.original_name);
+comprobar("la vista previa toma sólo imágenes admitidas y en orden natural (2 antes que 10)",
+  elegidas.join(",") === "slide-1.jpg,slide-2.jpg,slide-10.jpg", elegidas.join(","));
+comprobar("deja afuera la imagen que supera el tamaño, la de un tipo no admitido, el PDF y el video",
+  !elegidas.some((n) => ["enorme.png", "raro.gif", "guion.pdf", "final.mp4", "caption.txt"].includes(n)), elegidas.join(","));
+comprobar("y no pasa del máximo de archivos",
+  elegirVistaPrevia(producido, { ...politica, maxFiles: 2 }).length === 2);
+comprobar("con comodín image/* también admite el gif",
+  elegirVistaPrevia(producido, { ...politica, allowedTypes: ["image/*"], maxFiles: 10 }).some((a) => a.original_name === "raro.gif"));
+comprobar("sin imágenes no hay vista previa",
+  elegirVistaPrevia(producido.filter((a) => !a.content_type.toLowerCase().startsWith("image/")), politica).length === 0);
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);
