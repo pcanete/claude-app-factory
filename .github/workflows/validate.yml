@@ -99,6 +99,11 @@ jobs:
       - name: Storage signatures match the published AWS example
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-almacen.mjs
+      # Si agrupar los últimos eventos difiere de cómo agrupa la base, el grafo muestra
+      # otra cosa según el período elegido.
+      - name: The activity graph groups the same way for every period
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-activity-period.mjs
       # El tablero mide con la bitácora: un error acá hace que se mejore la etapa equivocada.
       - name: Build the generated application
         working-directory: /tmp/reference-app
