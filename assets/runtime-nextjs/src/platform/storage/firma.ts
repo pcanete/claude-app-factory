@@ -116,3 +116,29 @@ export function cabecerasFirmadas(entrada: {
     authorization: `${ALGORITMO} Credential=${entrada.credenciales.accessKeyId}/${alcance}, SignedHeaders=${firmadas}, Signature=${firma}`,
   };
 }
+
+/**
+ * Las cabeceras para consultar un objeto. Se pide sin compresión: fetch pide gzip por
+ * defecto, y para los tipos de texto el almacén puede responder comprimido, con otro tamaño
+ * y una ETag débil que ya no es el MD5. Pasó con R2: los JPG se confirmaban y los .md se
+ * descartaban siempre.
+ */
+export function cabecerasDeConsulta(entrada: { origen: string; ruta: string; credenciales: Credenciales; ahora?: Date }) {
+  return { ...cabecerasFirmadas({ ...entrada, metodo: "HEAD" }), "accept-encoding": "identity" };
+}
+
+/**
+ * Lo que dice la respuesta a una consulta: tamaño, ETag sin comillas y si vino comprimida.
+ * Una ETag débil (W/"…") o una respuesta comprimida no describen los bytes guardados: el
+ * tamaño y el MD5 no se pueden comparar, y quien confirma tiene que saberlo en vez de
+ * descartar el archivo como si fuera otro.
+ */
+export function datosDeConsulta(cabeceras: { get(nombre: string): string | null }) {
+  const codificacion = (cabeceras.get("content-encoding") ?? "").trim().toLowerCase();
+  const crudo = (cabeceras.get("etag") ?? "").trim();
+  return {
+    tamano: Number(cabeceras.get("content-length") ?? 0),
+    etag: crudo.replace(/^W\//i, "").replace(/"/g, "").toLowerCase(),
+    alterada: (codificacion !== "" && codificacion !== "identity") || /^W\//i.test(crudo),
+  };
+}

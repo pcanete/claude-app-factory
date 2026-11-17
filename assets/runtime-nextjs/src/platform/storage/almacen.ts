@@ -1,5 +1,5 @@
 import "server-only";
-import { cabecerasFirmadas, rutaDeObjeto, urlFirmada, type Credenciales } from "@/platform/storage/firma";
+import { cabecerasDeConsulta, cabecerasFirmadas, datosDeConsulta, rutaDeObjeto, urlFirmada, type Credenciales } from "@/platform/storage/firma";
 
 /**
  * El almacén propio de la aplicación: un bucket compatible con S3 donde guarda lo producido.
@@ -76,21 +76,21 @@ export function direccionDeDescarga(clave: string, entrada: { nombre: string; ti
   };
 }
 
-/** Qué hay en el almacén con esa clave: tamaño y ETag (el MD5 en una subida de una vez). Null si no está. */
-export async function consultarObjeto(clave: string): Promise<{ tamano: number; etag: string } | null> {
+/**
+ * Qué hay en el almacén con esa clave: tamaño y ETag (el MD5 en una subida de una vez), sin
+ * compresión (ver cabecerasDeConsulta). Null si no está.
+ */
+export async function consultarObjeto(clave: string): Promise<{ tamano: number; etag: string; alterada: boolean } | null> {
   const config = exigir();
   const ruta = rutaDeObjeto(config.bucket, clave);
   const respuesta = await fetch(`${config.origen}${ruta}`, {
     method: "HEAD",
-    headers: cabecerasFirmadas({ metodo: "HEAD", origen: config.origen, ruta, credenciales: config.credenciales }),
+    headers: cabecerasDeConsulta({ origen: config.origen, ruta, credenciales: config.credenciales }),
     cache: "no-store",
   });
   if (respuesta.status === 404) return null;
   if (!respuesta.ok) throw new Error(`El almacén respondió ${respuesta.status} al consultar un archivo.`);
-  return {
-    tamano: Number(respuesta.headers.get("content-length") ?? 0),
-    etag: (respuesta.headers.get("etag") ?? "").replace(/"/g, "").toLowerCase(),
-  };
+  return datosDeConsulta(respuesta.headers);
 }
 
 /** Borra un objeto. Que ya no esté no es un error. */
