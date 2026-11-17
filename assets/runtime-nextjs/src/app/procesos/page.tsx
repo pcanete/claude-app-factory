@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { notFound } from "next/navigation";
 import { VistaSelector } from "@/components/vista-selector";
 import { canManageUsers, hasPermission, requireUser } from "@/lib/auth";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { notFound } from "next/navigation";
 import { FichaForm } from "@/components/ficha-form";
 import { canManageUsers, requireUser } from "@/lib/auth";

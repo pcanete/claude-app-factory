@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { registroATexto, requisitosATexto, type Definicion } from "@/platform/processes/definition";
 import { guardarProcesoAction } from "@/app/procesos/actions";
 import { almacenConfigurado } from "@/platform/storage/almacen";

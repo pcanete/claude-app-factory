@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { clearDevelopmentRoleAction } from "@/app/dev-access/actions";
 import { SessionSignOut } from "@/components/session-sign-out";
 import { clerkAuthConfigured } from "@/platform/auth/config";
@@ -60,6 +60,8 @@ export async function Sidebar() {
   ];
   // Sin vistas de dominio, los datos son lo único que hay para hacer: van abiertos.
   const datosAbiertos = operacion.length === 0;
+  // Sin precarga (ver components/enlace): con ella, cada visita renderizaba en el servidor
+  // todos los destinos del menú, una docena de páginas dinámicas, aunque nadie hiciera clic.
   const lista = (enlaces: Enlace[]) => enlaces.map((link) => (
     <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
   ));

@@ -1,5 +1,5 @@
 import { recordAccessForUser } from "@/lib/record-access";
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { hasPermission, hasViewAccess, requireUser } from "@/lib/auth";
 import { countRecords } from "@/lib/repository";
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";

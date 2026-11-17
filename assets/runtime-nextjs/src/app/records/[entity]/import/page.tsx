@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { notFound } from "next/navigation";
 import { confirmImportAction } from "@/app/records/[entity]/import/actions";
 import { ImportUploadForm } from "@/components/import-upload-form";

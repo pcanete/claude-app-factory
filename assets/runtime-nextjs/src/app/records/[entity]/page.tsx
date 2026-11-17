@@ -1,6 +1,6 @@
 import { recordAccessForUser } from "@/lib/record-access";
 import { conNombresDePersonas } from "@/lib/people-display";
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { notFound } from "next/navigation";
 import { BulkRecordTable } from "@/components/bulk-record-table";
 import { Pagination } from "@/components/pagination";

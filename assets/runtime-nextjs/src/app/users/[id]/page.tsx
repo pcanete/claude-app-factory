@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/enlace";
 import { notFound } from "next/navigation";
 import { deleteUserAction, sendUserInvitationAction, updateUserAction } from "@/app/users/actions";
 import { clerkAuthConfigured } from "@/platform/auth/config";
