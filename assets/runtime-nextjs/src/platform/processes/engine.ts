@@ -613,10 +613,17 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
   const confirmados: string[] = [];
   const noLlegaron: string[] = [];
   const distintos: string[] = [];
+  const sinComprobar: string[] = [];
   for (const archivo of todos.filter((a) => a.status === "pendiente")) {
     const objeto = await consultarObjeto(archivo.object_key);
     if (!objeto) {
       noLlegaron.push(archivo.original_name);
+      continue;
+    }
+    // Una respuesta comprimida no describe los bytes guardados: no prueba que el archivo
+    // sea otro, así que no se descarta. Queda pendiente y se dice por qué.
+    if (objeto.alterada) {
+      sinComprobar.push(archivo.original_name);
       continue;
     }
     // En una subida de una vez el ETag es el MD5. Con Content-MD5 firmado no debería
@@ -641,7 +648,7 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
     });
     if (mismo) confirmados.push(archivo.original_name);
     else {
-      distintos.push(archivo.original_name);
+      distintos.push(`${archivo.original_name} (se declararon ${archivo.size_bytes} bytes y MD5 ${archivo.md5}; el almacén tiene ${objeto.tamano} bytes y ETag ${objeto.etag || "vacía"})`);
       await borrarDelAlmacen([archivo.object_key]);
     }
   }
@@ -653,9 +660,10 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
     confirmados.length ? `Quedaron guardados ${confirmados.length}: ${confirmados.join(", ")}.` : "No se guardó nada nuevo.",
     noLlegaron.length ? `Todavía no llegaron: ${noLlegaron.join(", ")}. Subilos y volvé a confirmar.` : "",
     distintos.length ? `No coinciden con lo declarado y se descartaron: ${distintos.join(", ")}. Pedí la subida de nuevo con subir_producido.` : "",
+    sinComprobar.length ? `No se pudieron comprobar porque el almacén respondió comprimido: ${sinComprobar.join(", ")}. Siguen pendientes; avisá a quien mantiene la aplicación.` : "",
     falta.length ? `Para que la iteración quede completa falta ${falta.join(" y ")}.` : "La iteración quedó completa.",
   ];
-  return { iteracion, confirmados, no_llegaron: noLlegaron, descartados: distintos, guardados, falta, mensaje: partes.filter(Boolean).join(" ") };
+  return { iteracion, confirmados, no_llegaron: noLlegaron, descartados: distintos, sin_comprobar: sinComprobar, guardados, falta, mensaje: partes.filter(Boolean).join(" ") };
 }
 
 /** Una dirección para bajar un archivo de lo producido, que vale una hora. */
@@ -781,6 +789,7 @@ export async function confirmarRecurso(agent: AgentPrincipal, nombre: string, ve
   if (fila.status === "publicado") return { nombre, version, publicado: true, mensaje: "Ya estaba publicada." };
   const objeto = await consultarObjeto(fila.object_key);
   if (!objeto) return { nombre, version, publicado: false, mensaje: "Todavía no llegó: subila y volvé a confirmar." };
+  if (objeto.alterada) return { nombre, version, publicado: false, mensaje: "No se pudo comprobar: el almacén respondió comprimido. Sigue pendiente; avisá a quien mantiene la aplicación." };
   if (objeto.tamano !== fila.size_bytes || (objeto.etag !== fila.md5 && !objeto.etag.includes("-"))) {
     await descartarVersion(fila.id);
     await borrarDelAlmacen([fila.object_key]);

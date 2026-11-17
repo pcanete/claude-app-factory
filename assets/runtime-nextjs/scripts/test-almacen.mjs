@@ -13,7 +13,7 @@
  *     barra que separa carpetas no se codifica;
  *   - una dirección no vale más de lo que se pidió, ni más de siete días.
  */
-import { cabecerasFirmadas, codificar, rutaDeObjeto, urlFirmada } from "../src/platform/storage/firma.ts";
+import { cabecerasDeConsulta, cabecerasFirmadas, codificar, datosDeConsulta, rutaDeObjeto, urlFirmada } from "../src/platform/storage/firma.ts";
 
 let fallos = 0;
 function comprobar(nombre, condicion, detalle = "") {
@@ -64,6 +64,22 @@ comprobar("consultar un objeto firma host, fecha y hash vacío",
   cabeceras.authorization.startsWith("AWS4-HMAC-SHA256 Credential=id/20261116/auto/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=")
   && cabeceras["x-amz-date"] === "20261116T120000Z"
   && cabeceras["x-amz-content-sha256"] === "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", JSON.stringify(cabeceras));
+
+const consulta = cabecerasDeConsulta({ origen: "https://cuenta.r2.cloudflarestorage.com", ruta: "/mi-bucket/k", credenciales: R2, ahora: new Date("2026-11-16T12:00:00Z") });
+comprobar("la consulta pide la respuesta sin comprimir", consulta["accept-encoding"] === "identity", JSON.stringify(consulta));
+comprobar("y la firma es la misma que sin esa cabecera (no se firma)", consulta.authorization === cabeceras.authorization, JSON.stringify(consulta));
+
+// La consulta de un objeto: una respuesta comprimida o con ETag débil no describe los bytes guardados.
+const entera = datosDeConsulta(new Headers({ "content-length": "1234", etag: '"D41D8CD98F00B204E9800998ECF8427E"' }));
+comprobar("una respuesta entera da tamaño y MD5 en minúsculas sin comillas",
+  entera.tamano === 1234 && entera.etag === "d41d8cd98f00b204e9800998ecf8427e" && entera.alterada === false, JSON.stringify(entera));
+const identidad = datosDeConsulta(new Headers({ "content-length": "10", etag: '"abc"', "content-encoding": "identity" }));
+comprobar("content-encoding identity no cuenta como alterada", identidad.alterada === false, JSON.stringify(identidad));
+const gzip = datosDeConsulta(new Headers({ "content-length": "612", etag: '"abc"', "content-encoding": "gzip" }));
+comprobar("una respuesta en gzip queda marcada como alterada", gzip.alterada === true, JSON.stringify(gzip));
+const debil = datosDeConsulta(new Headers({ etag: 'W/"d41d8cd98f00b204e9800998ecf8427e"' }));
+comprobar("una ETag débil queda marcada como alterada y sin el W/",
+  debil.alterada === true && debil.etag === "d41d8cd98f00b204e9800998ecf8427e", JSON.stringify(debil));
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);
