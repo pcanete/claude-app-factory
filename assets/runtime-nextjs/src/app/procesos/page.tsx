@@ -126,7 +126,7 @@ export default async function ProcesosPage({ searchParams }: { searchParams: Pro
                     <img alt="" key={imagen.id} loading="lazy" src={`/attachments/${imagen.id}?ver=1`} />
                   ))
                   : familia.iteraciones
-                    ? <span>Incompleta: falta adjuntar las láminas</span>
+                    ? <span>Incompleta: sin vista previa</span>
                     : <span>Sin piezas todavía</span>}
               </div>
               <div className="process-card-body">

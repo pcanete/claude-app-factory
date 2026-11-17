@@ -476,7 +476,13 @@ export function iteracionIncompleta(imagenes: number, guardados?: number) {
 export function faltasParaCompletar(imagenes: number, guardados?: number) {
   const faltas: string[] = [];
   if (guardados !== undefined && guardados <= 0) faltas.push("subir lo producido con subir_producido y confirmarlo con confirmar_producido");
-  if (imagenes <= 0) faltas.push("adjuntar las láminas con adjuntar_a_iteracion");
+  if (imagenes <= 0) {
+    // Con almacén, las imágenes subidas quedan como vista previa al confirmar (2.5.4): si
+    // todavía no se subió nada, subir alcanza. Si ya se subió y no hay imágenes, lo
+    // producido no las tiene (un video) y falta adjuntar la portada.
+    if (guardados === undefined) faltas.push("adjuntar las láminas con adjuntar_a_iteracion");
+    else if (guardados > 0) faltas.push("adjuntar la portada con adjuntar_a_iteracion, porque lo producido no tiene imágenes");
+  }
   return faltas;
 }
 
@@ -490,8 +496,10 @@ export function mensajeDeRegistro(entrada: { iteracion: string; procesoNuevo: bo
   const partes = [`${registrada} Falta ${faltas.join(" y ")} (iteracion ${entrada.iteracion}): hasta entonces queda incompleta.`];
   if (entrada.guardados !== undefined && entrada.guardados <= 0) {
     partes.push("Lo producido se guarda en la aplicación, no en una carpeta personal: subí los archivos finales con las direcciones que da subir_producido y confirmalos; sin eso nadie más los puede abrir.");
-  }
-  if (entrada.imagenes <= 0) {
+    if (entrada.imagenes <= 0) {
+      partes.push("Las imágenes que subas (las láminas) quedan solas como vista previa al confirmar: no hace falta adjuntarlas. Sólo si lo producido no tiene imágenes (un video), adjuntá la portada con adjuntar_a_iteracion.");
+    }
+  } else if (entrada.imagenes <= 0) {
     partes.push(
       "Adjuntar es parte de registrar, no un paso opcional: sin imágenes el panel la marca incompleta y la próxima IA no tiene qué mirar.",
       "Adjuntá las láminas de un carrusel o la portada de un video, y comprobá con iteraciones_de_proceso que aparecen.",

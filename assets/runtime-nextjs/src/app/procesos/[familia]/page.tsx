@@ -63,7 +63,10 @@ function Producido({ it }: { it: Iteracion }) {
 function queFalta(it: Iteracion) {
   const partes: string[] = [];
   if (it.falta.some((falta) => falta.startsWith("subir"))) partes.push("subir lo producido");
-  if (!it.imagenes.length) partes.push("adjuntar las láminas");
+  // Con almacén, las láminas subidas quedan como vista previa al confirmar: el panel dice
+  // lo mismo que las faltas, no lo deduce por su cuenta.
+  if (it.falta.some((falta) => falta.startsWith("adjuntar la portada"))) partes.push("adjuntar la portada");
+  else if (it.falta.some((falta) => falta.startsWith("adjuntar"))) partes.push("adjuntar las láminas");
   return partes.length ? `Incompleta: falta ${partes.join(" y ")}` : "";
 }
 

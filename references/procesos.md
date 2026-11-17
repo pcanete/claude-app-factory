@@ -230,7 +230,7 @@ nombre.
 
 **Procesos** lista lo que el equipo sabe hacer, con la portada de la última pieza. Si la
 última iteración no tiene imágenes, la tarjeta lo marca («última incompleta»), y si ninguna
-tiene, la portada dice «Incompleta: falta adjuntar las láminas» en vez de «Sin piezas todavía». La página de
+tiene, la portada dice «Incompleta: sin vista previa» en vez de «Sin piezas todavía». La página de
 cada proceso muestra qué hace, con qué skill, qué necesita la máquina, qué se registra, dónde
 se guarda y las iteraciones como galería o lista. Quien administra, desde ahí:
 

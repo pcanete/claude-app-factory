@@ -222,11 +222,19 @@ comprobar("sin almacén, le falta la carpeta", faltasDeFicha({ ...completo, carp
 comprobar("con almacén, sin lo producido guardado está incompleta aunque tenga imágenes", iteracionIncompleta(3, 0) === true);
 comprobar("con lo producido y las imágenes, completa", iteracionIncompleta(3, 2) === false);
 comprobar("sin almacén, lo producido no cuenta", iteracionIncompleta(3) === false && iteracionIncompleta(3, undefined) === false);
-comprobar("a una recién registrada con almacén le faltan las dos cosas", faltasParaCompletar(0, 0).length === 2, faltasParaCompletar(0, 0).join("; "));
+// Con almacén, las láminas subidas quedan como vista previa al confirmar (2.5.4): a una
+// recién registrada le falta subir, no subir y además adjuntar.
+comprobar("a una recién registrada con almacén le falta subir lo producido, y nada más",
+  faltasParaCompletar(0, 0).length === 1 && faltasParaCompletar(0, 0)[0].startsWith("subir"), faltasParaCompletar(0, 0).join("; "));
+comprobar("y sigue incompleta", iteracionIncompleta(0, 0) === true);
+comprobar("con lo producido guardado pero sin imágenes (un video), falta la portada",
+  faltasParaCompletar(0, 1).length === 1 && faltasParaCompletar(0, 1)[0].startsWith("adjuntar la portada"), faltasParaCompletar(0, 1).join("; "));
+comprobar("sin almacén, sin imágenes sigue faltando adjuntar las láminas", faltasParaCompletar(0)[0] === "adjuntar las láminas con adjuntar_a_iteracion");
 const recienConAlmacen = mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: false, imagenes: 0, guardados: 0 });
 comprobar("registrar con almacén avisa que falta subir lo producido",
   recienConAlmacen.includes("subir_producido") && recienConAlmacen.includes("confirmar_producido"), recienConAlmacen);
-comprobar("y también las láminas", recienConAlmacen.includes("adjuntar_a_iteracion"), recienConAlmacen);
+comprobar("y dice que las láminas subidas quedan como vista previa, sin pedir adjuntarlas",
+  recienConAlmacen.includes("quedan solas como vista previa") && !recienConAlmacen.includes("no un paso opcional"), recienConAlmacen);
 comprobar("con lo producido y las láminas, no hay advertencia",
   mensajeDeRegistro({ iteracion: ID_IT, procesoNuevo: false, imagenes: 2, guardados: 1 }) === "Quedó registrada.");
 
