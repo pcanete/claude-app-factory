@@ -162,6 +162,19 @@ Con almacén:
   dirección de descarga que vale una hora, a quien puede leer la iteración. En el panel, cada
   archivo se baja desde `/producido/<id>`, que comprueba permisos y redirige a una dirección
   de cinco minutos.
+- **Repetir una subida no duplica** (2.5.5). Un archivo es el mismo si tiene el mismo nombre
+  y el mismo MD5. Si ya está guardado en la iteración, `subir_producido` lo reutiliza
+  (`ya_guardado`): no crea otro, y la dirección que entrega apunta al mismo objeto, así que
+  un script que vuelve a subir todo después de un error sólo puede escribir los mismos
+  bytes. Si hay uno pendiente igual, se reemplaza: mismo lugar, misma clave. Al confirmar,
+  un pendiente que repite un archivo guardado se descarta sin consultar el almacén, y la
+  vista previa toma cada imagen una sola vez. El mismo nombre con otro contenido es otro
+  archivo: nada guardado se pisa.
+- **Un archivo suelto se borra** con `borrar_producido` o desde la tarjeta de la iteración en
+  el panel, por quien hizo la iteración, quien responde por ella o quien administra (2.5.5).
+  Se van la fila, el objeto del almacén —después de confirmar la transacción— y, si había
+  quedado como vista previa, el adjunto que es su copia (mismo nombre y mismos bytes), salvo
+  que quede otro archivo guardado igual. Al revés no: borrar un adjunto no toca lo producido.
 - Borrar una iteración, por el motor o por las herramientas genéricas, borra también lo
   producido del almacén, después de confirmar la transacción.
 

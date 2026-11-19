@@ -171,6 +171,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:access
+      # Repetir una subida no duplica lo producido, y borrar un archivo suelto saca
+      # tambien su copia de la vista previa. Las funciones reales, contra esta base.
+      - name: Produced files do not duplicate and delete one by one (against PostgreSQL)
+        working-directory: /tmp/reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: pnpm db:producido
       # La prueba que importa de la guarda no es que analice SQL: es que frene un
       # despliegue real contra datos reales, y que no frene cuando no hay nada que
       # perder. Las dos mitades, contra PostgreSQL.

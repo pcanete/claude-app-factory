@@ -16,6 +16,9 @@ import { dirname, resolve as resolvePath } from "node:path";
 const raiz = resolvePath(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function resolve(especificador, contexto, siguiente) {
+  // `server-only` es una marca que Next resuelve por su cuenta para impedir que un módulo de
+  // servidor llegue al navegador. Una prueba corre en el servidor: no hay nada que impedir.
+  if (especificador === "server-only") return { url: "data:text/javascript,", shortCircuit: true };
   if (!especificador.startsWith("@/")) return siguiente(especificador, contexto);
   const base = resolvePath(raiz, "src", especificador.slice(2));
   for (const candidato of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`]) {

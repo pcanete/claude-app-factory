@@ -41,11 +41,13 @@ import {
   borrarDelAlmacen,
   contarDelRegistro,
   descartarPendiente,
-  insertarPendiente,
   marcarGuardado,
+  reservarSubida,
   soltarDelRegistro,
+  soltarProducido,
   type ArchivoGuardado,
 } from "@/platform/storage/archivos";
+import { separarRepetidos } from "@/platform/storage/repetidos";
 import { elegirVistaPrevia } from "@/platform/storage/vista-previa";
 import {
   claveDeNombre,
@@ -548,6 +550,12 @@ async function exigirIteracionPropia(iteracion: string, quien: Identidad, client
  * hora y sirve sólo para ese archivo. Quien sube no necesita ninguna cuenta: el PUT va
  * directo al almacén, sin pasar el archivo por el chat ni por este servidor. El Content-MD5
  * va dentro de la firma, así que el almacén rechaza un archivo distinto del declarado.
+ *
+ * Repetir el pedido no duplica: un archivo con el mismo nombre y el mismo MD5 que ya está
+ * guardado en la iteración se reutiliza (`ya_guardado`), y uno pendiente igual se reemplaza.
+ * La lista de subidas sigue alineada con la de archivos, una por archivo, para que un script
+ * que sube todo de nuevo después de un error siga andando: la dirección de un archivo ya
+ * guardado apunta al mismo objeto y, con el MD5 firmado, sólo puede escribir los mismos bytes.
  */
 export async function subirProducido(agent: AgentPrincipal, iteracion: string, archivos: Array<{ nombre: string; tipo: string; tamano: number; md5: string }>) {
   exigirAlcance(agent, "records:write");
@@ -568,15 +576,12 @@ export async function subirProducido(agent: AgentPrincipal, iteracion: string, a
     const id = randomUUID();
     return { id, nombre, tipo, tamano: archivo.tamano, md5, clave: `iteracion/${iteracion}/${id}/${nombre}` };
   });
-  await withTransaction(async (client) => {
+  const { reservas, soltados } = await withTransaction(async (client) => {
     await exigirIteracionPropia(iteracion, quien, client);
     await lockAttachmentSet(client, "iteracion", iteracion);
-    const actuales = await contarDelRegistro(client, "iteracion", iteracion);
-    if (actuales + preparados.length > MAXIMO_PRODUCIDO_POR_ITERACION) {
-      throw new Error(`Una iteración admite hasta ${MAXIMO_PRODUCIDO_POR_ITERACION} archivos de lo producido y esta ya tiene ${actuales}.`);
-    }
+    const reservas: Array<Awaited<ReturnType<typeof reservarSubida>>> = [];
     for (const archivo of preparados) {
-      await insertarPendiente(client, {
+      reservas.push(await reservarSubida(client, {
         id: archivo.id,
         entityKey: "iteracion",
         recordId: iteracion,
@@ -586,20 +591,44 @@ export async function subirProducido(agent: AgentPrincipal, iteracion: string, a
         tamano: archivo.tamano,
         md5: archivo.md5.hex,
         persona: quien.persona,
-      });
+      }));
     }
+    // Se cuenta después de reservar: lo que se reutilizó no ocupa un lugar nuevo.
+    const actuales = await contarDelRegistro(client, "iteracion", iteracion);
+    if (actuales > MAXIMO_PRODUCIDO_POR_ITERACION) {
+      throw new Error(`Una iteración admite hasta ${MAXIMO_PRODUCIDO_POR_ITERACION} archivos de lo producido; con estos serían ${actuales}.`);
+    }
+    return { reservas, soltados: reservas.flatMap((reserva) => reserva.soltados) };
   });
+  await borrarDelAlmacen(soltados);
+  const segun = (estado: string) => [...new Set(preparados.filter((_, i) => reservas[i].estado === estado).map((a) => a.nombre))];
+  const yaGuardados = segun("ya_guardado");
+  const reemplazados = segun("reemplazado");
   return {
     iteracion,
-    subidas: preparados.map((archivo) => {
-      const direccion = direccionDeSubida(archivo.clave, { md5Base64: archivo.md5.base64, tipo: archivo.tipo });
-      return { id: archivo.id, nombre: archivo.nombre, metodo: "PUT", url: direccion.url, cabeceras: direccion.cabeceras, vence: direccion.vence };
+    subidas: preparados.map((archivo, i) => {
+      const reserva = reservas[i];
+      const direccion = direccionDeSubida(reserva.objectKey, { md5Base64: archivo.md5.base64, tipo: reserva.tipo });
+      return {
+        id: reserva.id,
+        nombre: archivo.nombre,
+        metodo: "PUT",
+        url: direccion.url,
+        cabeceras: direccion.cabeceras,
+        vence: direccion.vence,
+        ...(reserva.estado === "ya_guardado" ? { ya_guardado: true } : {}),
+      };
     }),
+    ya_guardados: yaGuardados,
+    reemplazados,
     como: [
       "Subí cada archivo con un PUT a su url, con esas cabeceras exactas y el archivo como cuerpo, desde un script o una terminal de esta máquina: no lo pases por el chat.",
       "Por ejemplo: curl -sS --fail -X PUT -H \"Content-MD5: <md5 en base64>\" -H \"Content-Type: <tipo>\" --upload-file \"<archivo>\" \"<url>\"",
+      yaGuardados.length
+        ? `Ya estaban guardados, con el mismo nombre y el mismo MD5, y no se duplican: ${yaGuardados.join(", ")}. No hace falta volver a subirlos; si se suben, quedan iguales.`
+        : "",
       "Cuando terminen, llamá confirmar_producido con la iteración: la aplicación comprueba en el almacén que cada archivo llegó entero. Las direcciones vencen en una hora; si vence, pedí otra.",
-    ].join(" "),
+    ].filter(Boolean).join(" "),
   };
 }
 
@@ -621,7 +650,13 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
   // Las consultas al almacén van en paralelo y las escrituras en una sola transacción.
   // Antes era un HEAD y una transacción por archivo, en serie: once láminas tardaban unos
   // siete segundos, y en un plan con límite de duración de funciones eso es lo que se paga.
-  const pendientes = todos.filter((a) => a.status === "pendiente");
+  // Un pendiente que repite un archivo ya guardado (o a otro pendiente igual) se descarta
+  // sin consultar el almacén: guardarlo dejaría el mismo archivo dos veces en lo producido.
+  const { unicos: pendientes, repetidos } = separarRepetidos(
+    todos.filter((a) => a.status === "guardado"),
+    todos.filter((a) => a.status === "pendiente"),
+  );
+  const nombresRepetidos = [...new Set(repetidos.map((a) => a.original_name))];
   const consultas = await enParalelo(pendientes, 8, (archivo) => consultarObjeto(archivo.object_key));
   const guardar: typeof pendientes = [];
   const descartar: Array<{ archivo: (typeof pendientes)[number]; objeto: { tamano: number; etag: string } }> = [];
@@ -643,9 +678,14 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
     if (mismo) guardar.push(archivo);
     else descartar.push({ archivo, objeto });
   });
-  if (guardar.length || descartar.length) {
+  const clavesRepetidas: string[] = [];
+  if (guardar.length || descartar.length || repetidos.length) {
     await withTransaction(async (client) => {
       for (const { archivo } of descartar) await descartarPendiente(client, archivo.id);
+      for (const archivo of repetidos) {
+        const clave = await descartarPendiente(client, archivo.id);
+        if (clave) clavesRepetidas.push(clave);
+      }
       for (const archivo of guardar) {
         await marcarGuardado(client, archivo.id);
         await recordAuditEvent(client, {
@@ -665,7 +705,7 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
   for (const { archivo, objeto } of descartar) {
     distintos.push(`${archivo.original_name} (se declararon ${archivo.size_bytes} bytes y MD5 ${archivo.md5}; el almacén tiene ${objeto.tamano} bytes y ETag ${objeto.etag || "vacía"})`);
   }
-  if (descartar.length) await borrarDelAlmacen(descartar.map(({ archivo }) => archivo.object_key));
+  if (descartar.length || clavesRepetidas.length) await borrarDelAlmacen([...descartar.map(({ archivo }) => archivo.object_key), ...clavesRepetidas]);
   const archivosGuardados = await archivosDelRegistro("iteracion", iteracion);
   const vistaPrevia = await vistaPreviaDesdeProducido({ agent, quien, iteracion, archivos: archivosGuardados });
   revalidateAfterWrite("iteracion", iteracion);
@@ -674,13 +714,14 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
   const falta = faltasParaCompletar(imagenes, guardados.length);
   const partes = [
     confirmados.length ? `Quedaron guardados ${confirmados.length}: ${confirmados.join(", ")}.` : "No se guardó nada nuevo.",
+    nombresRepetidos.length ? `Ya estaban guardados y no se duplicaron: ${nombresRepetidos.join(", ")}.` : "",
     noLlegaron.length ? `Todavía no llegaron: ${noLlegaron.join(", ")}. Subilos y volvé a confirmar.` : "",
     distintos.length ? `No coinciden con lo declarado y se descartaron: ${distintos.join(", ")}. Pedí la subida de nuevo con subir_producido.` : "",
     sinComprobar.length ? `No se pudieron comprobar porque el almacén respondió comprimido: ${sinComprobar.join(", ")}. Siguen pendientes; avisá a quien mantiene la aplicación.` : "",
     vistaPrevia.length ? `Quedaron como vista previa en el panel: ${vistaPrevia.join(", ")}. No hace falta adjuntarlas.` : "",
     falta.length ? `Para que la iteración quede completa falta ${falta.join(" y ")}.` : "La iteración quedó completa.",
   ];
-  return { iteracion, confirmados, no_llegaron: noLlegaron, descartados: distintos, sin_comprobar: sinComprobar, vista_previa: vistaPrevia, guardados, falta, mensaje: partes.filter(Boolean).join(" ") };
+  return { iteracion, confirmados, repetidos: nombresRepetidos, no_llegaron: noLlegaron, descartados: distintos, sin_comprobar: sinComprobar, vista_previa: vistaPrevia, guardados, falta, mensaje: partes.filter(Boolean).join(" ") };
 }
 
 /**
@@ -753,6 +794,66 @@ export async function descargarProducido(agent: AgentPrincipal, id: string) {
   if (!padre) throw noEsta;
   const direccion = direccionDeDescarga(archivo.object_key, { nombre: archivo.original_name, tipo: archivo.content_type });
   return { id: archivo.id, nombre: archivo.original_name, tipo: archivo.content_type, tamano: archivo.size_bytes, url: direccion.url, vence: direccion.vence };
+}
+
+/**
+ * Borra un archivo de lo producido de una iteración: su fila, su objeto en el almacén y, si
+ * había quedado como vista previa, el adjunto que es su copia (salvo que quede otro archivo
+ * guardado igual, que sigue representándolo). Lo borra quien puede subir lo producido de esa
+ * iteración: quien la hizo, quien responde por ella o quien administra. El objeto se borra
+ * del almacén recién cuando la transacción se confirmó.
+ */
+export async function borrarProducido(agent: AgentPrincipal, id: string) {
+  exigirAlcance(agent, "records:write");
+  const quien = identidad(agent);
+  exigirAlmacen();
+  // Lo que no se puede borrar responde igual que lo que no existe: no confirma que existe.
+  const noEsta = new Error("Ese archivo no existe o no está a tu alcance.");
+  const archivo = await archivoPorId(id);
+  if (!archivo || archivo.entity_key !== "iteracion") throw noEsta;
+  const iteracion = archivo.record_id;
+  const soltado = await withTransaction(async (client) => {
+    if (!(await getRecord("iteracion", iteracion, client, true, quien.access))) throw noEsta;
+    await exigirIteracionPropia(iteracion, quien, client);
+    await lockAttachmentSet(client, "iteracion", iteracion);
+    const resultado = await soltarProducido(client, "iteracion", iteracion, id);
+    if (!resultado) throw noEsta;
+    await recordAuditEvent(client, {
+      ...autoria({ agent, quien, client }),
+      entityKey: "iteracion",
+      recordId: iteracion,
+      action: "attachment_delete",
+      changes: {
+        stored: {
+          id: resultado.archivo.id,
+          originalName: resultado.archivo.original_name,
+          contentType: resultado.archivo.content_type,
+          sizeBytes: resultado.archivo.size_bytes,
+          md5: resultado.archivo.md5,
+          status: resultado.archivo.status,
+        },
+        attachments: resultado.adjuntos.map((a) => ({ id: a.id, originalName: a.original_name, contentType: a.content_type, sizeBytes: Number(a.size_bytes), sha256: a.sha256 })),
+        source: "procesos:borrar-producido",
+      },
+    });
+    return resultado;
+  });
+  await borrarDelAlmacen([soltado.archivo.object_key]);
+  revalidateAfterWrite("iteracion", iteracion);
+  const nombre = soltado.archivo.original_name;
+  const guardados = await archivosDelRegistro("iteracion", iteracion);
+  const imagenes = (await imagenesDe(iteracion)).length;
+  const falta = faltasParaCompletar(imagenes, guardados.length);
+  return {
+    iteracion,
+    borrado: { id: soltado.archivo.id, nombre },
+    vista_previa_quitada: soltado.adjuntos.map((a) => a.original_name),
+    falta,
+    mensaje: [
+      soltado.adjuntos.length ? `Se borró «${nombre}» de lo producido y de la vista previa.` : `Se borró «${nombre}» de lo producido.`,
+      falta.length ? `Para que la iteración quede completa falta ${falta.join(" y ")}.` : "",
+    ].filter(Boolean).join(" "),
+  };
 }
 
 // ---------------------------------------------------------------------------------------

@@ -16,6 +16,7 @@
 import { cabecerasDeConsulta, cabecerasFirmadas, codificar, datosDeConsulta, rutaDeObjeto, urlFirmada } from "../src/platform/storage/firma.ts";
 import { enParalelo } from "../src/lib/en-paralelo.ts";
 import { elegirVistaPrevia } from "../src/platform/storage/vista-previa.ts";
+import { claveDeArchivo, separarRepetidos, sinRepetidos } from "../src/platform/storage/repetidos.ts";
 
 let fallos = 0;
 function comprobar(nombre, condicion, detalle = "") {
@@ -106,14 +107,14 @@ comprobar("si una consulta falla, falla todo", fallo === "dos", String(fallo));
 // La vista previa sale de lo producido: sólo imágenes que el panel acepta, en orden de nombre.
 const politica = { maxFiles: 3, maxSizeBytes: 1000, allowedTypes: ["image/jpeg", "image/png", "application/pdf"] };
 const producido = [
-  { original_name: "slide-10.jpg", content_type: "image/jpeg", size_bytes: 500 },
-  { original_name: "caption.txt", content_type: "text/plain", size_bytes: 100 },
-  { original_name: "slide-2.jpg", content_type: "IMAGE/JPEG", size_bytes: 500 },
-  { original_name: "final.mp4", content_type: "video/mp4", size_bytes: 900 },
-  { original_name: "slide-1.jpg", content_type: "image/jpeg", size_bytes: 500 },
-  { original_name: "enorme.png", content_type: "image/png", size_bytes: 5000 },
-  { original_name: "raro.gif", content_type: "image/gif", size_bytes: 10 },
-  { original_name: "guion.pdf", content_type: "application/pdf", size_bytes: 10 },
+  { original_name: "slide-10.jpg", content_type: "image/jpeg", size_bytes: 500, md5: "a".repeat(32) },
+  { original_name: "caption.txt", content_type: "text/plain", size_bytes: 100, md5: "b".repeat(32) },
+  { original_name: "slide-2.jpg", content_type: "IMAGE/JPEG", size_bytes: 500, md5: "c".repeat(32) },
+  { original_name: "final.mp4", content_type: "video/mp4", size_bytes: 900, md5: "d".repeat(32) },
+  { original_name: "slide-1.jpg", content_type: "image/jpeg", size_bytes: 500, md5: "e".repeat(32) },
+  { original_name: "enorme.png", content_type: "image/png", size_bytes: 5000, md5: "f".repeat(32) },
+  { original_name: "raro.gif", content_type: "image/gif", size_bytes: 10, md5: "0".repeat(32) },
+  { original_name: "guion.pdf", content_type: "application/pdf", size_bytes: 10, md5: "1".repeat(32) },
 ];
 const elegidas = elegirVistaPrevia(producido, politica).map((a) => a.original_name);
 comprobar("la vista previa toma sólo imágenes admitidas y en orden natural (2 antes que 10)",
@@ -126,6 +127,34 @@ comprobar("con comodín image/* también admite el gif",
   elegirVistaPrevia(producido, { ...politica, allowedTypes: ["image/*"], maxFiles: 10 }).some((a) => a.original_name === "raro.gif"));
 comprobar("sin imágenes no hay vista previa",
   elegirVistaPrevia(producido.filter((a) => !a.content_type.toLowerCase().startsWith("image/")), politica).length === 0);
+
+// Una subida repetida dejó cada lámina dos veces: la vista previa la toma una sola vez.
+const duplicado = [...producido, ...producido.map((a) => ({ ...a, md5: a.md5.toUpperCase() }))];
+const sinDuplicar = elegirVistaPrevia(duplicado, { ...politica, maxFiles: 10 }).map((a) => a.original_name);
+comprobar("la vista previa no repite una imagen guardada dos veces (mismo nombre y MD5)",
+  sinDuplicar.join(",") === "slide-1.jpg,slide-2.jpg,slide-10.jpg", sinDuplicar.join(","));
+comprobar("pero sí toma dos imágenes con el mismo nombre y otro contenido",
+  elegirVistaPrevia([...producido, { ...producido[0], md5: "9".repeat(32) }], { ...politica, maxFiles: 10 }).filter((a) => a.original_name === "slide-10.jpg").length === 2);
+
+// Cuándo dos archivos de lo producido son el mismo: mismo nombre y mismo MD5.
+comprobar("la clave no distingue mayúsculas en el MD5",
+  claveDeArchivo({ original_name: "a.jpg", md5: "AB".repeat(16) }) === claveDeArchivo({ original_name: "a.jpg", md5: "ab".repeat(16) }));
+comprobar("y sí distingue el nombre",
+  claveDeArchivo({ original_name: "a.jpg", md5: "ab".repeat(16) }) !== claveDeArchivo({ original_name: "b.jpg", md5: "ab".repeat(16) }));
+const guardados = [{ id: "g1", original_name: "slide-01.jpg", md5: "1".repeat(32) }];
+const pendientes = [
+  { id: "p1", original_name: "slide-01.jpg", md5: "1".repeat(32) },
+  { id: "p2", original_name: "README.md", md5: "2".repeat(32) },
+  { id: "p3", original_name: "README.md", md5: "2".repeat(32) },
+  { id: "p4", original_name: "slide-01.jpg", md5: "3".repeat(32) },
+];
+const separados = separarRepetidos(guardados, pendientes);
+comprobar("un pendiente igual a uno guardado es repetido, y de dos pendientes iguales queda el primero",
+  separados.repetidos.map((a) => a.id).join(",") === "p1,p3", separados.repetidos.map((a) => a.id).join(","));
+comprobar("un archivo con el mismo nombre y otro contenido no es repetido",
+  separados.unicos.map((a) => a.id).join(",") === "p2,p4", separados.unicos.map((a) => a.id).join(","));
+comprobar("sin repetidos conserva el orden de llegada",
+  sinRepetidos([...pendientes, ...pendientes]).map((a) => a.id).join(",") === "p1,p2,p4");
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);
