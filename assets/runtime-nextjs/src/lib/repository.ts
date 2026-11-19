@@ -8,6 +8,7 @@ import {
   type RecordAccessContext,
 } from "@/lib/record-access";
 import { type EntitySpec, type FieldSpec, relationFields, requireEntity } from "@/lib/spec";
+import { booleanoDeFormulario } from "@/lib/form-boolean";
 
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,47}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -388,7 +389,7 @@ function parseTags(field: FieldSpec, raw: unknown): string[] {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseScalar(field: FieldSpec, raw: FormDataEntryValue | null, mode: "create" | "update") {
-  if (field.type === "boolean") return raw !== null;
+  if (field.type === "boolean") return booleanoDeFormulario(raw, Boolean(field.required));
   if (field.type === "tags") return parseTags(field, typeof raw === "string" ? raw : "");
   const value = typeof raw === "string" ? raw.trim() : "";
   if (!value) {

@@ -37,6 +37,7 @@ import {
   iteracionIncompleta,
   mensajeDeRegistro,
   nombreDeFamilia,
+  quienesSaben,
   registroATexto,
   registroDeTexto,
   requisitosATexto,
@@ -266,6 +267,25 @@ comprobar("la skill que viene con el proceso ya no se instala clonando el reposi
 comprobar("sin recursos la guía no tiene esa sección", !guiaConAlmacen.includes("Instalá lo que trae el proceso"));
 
 comprobar("sin almacén la guía sigue pidiendo Dropbox", guiaSinAlmacen.includes("conector de Dropbox") && !guiaSinAlmacen.includes("subir_producido"));
+
+// 2.5.6: quiénes saben se calcula sobre todas las iteraciones y sólo descuenta una
+// reproducción que no salió igual. Una original con salio_igual en false (un formulario que
+// guardó «no» donde no había valor) no deja a su autor afuera.
+{
+  const its = [
+    { autor: "ana", origen: "original", salio_igual: false },
+    { autor: "beto", origen: "reproduccion", salio_igual: false },
+    { autor: "caro", origen: "reproduccion", salio_igual: true },
+    { autor: "ana", origen: "original", salio_igual: null },
+    { autor: null, origen: "original" },
+  ];
+  const saben = quienesSaben(its);
+  comprobar("saben: cuenta a quien hizo una original aunque diga salio_igual false",
+    saben.includes("ana"), saben.join(","));
+  comprobar("saben: deja afuera a quien sólo tiene una reproducción que no salió igual",
+    !saben.includes("beto"), saben.join(","));
+  comprobar("saben: sin repetidos y en orden de aparición", saben.join(",") === "ana,caro", saben.join(","));
+}
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);

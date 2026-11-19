@@ -15,7 +15,7 @@
  */
 import { cabecerasDeConsulta, cabecerasFirmadas, codificar, datosDeConsulta, rutaDeObjeto, urlFirmada } from "../src/platform/storage/firma.ts";
 import { enParalelo } from "../src/lib/en-paralelo.ts";
-import { elegirVistaPrevia } from "../src/platform/storage/vista-previa.ts";
+import { elegirVistaPrevia, vistaPreviaQueFalta } from "../src/platform/storage/vista-previa.ts";
 import { claveDeArchivo, separarRepetidos, sinRepetidos } from "../src/platform/storage/repetidos.ts";
 
 let fallos = 0;
@@ -155,6 +155,27 @@ comprobar("un archivo con el mismo nombre y otro contenido no es repetido",
   separados.unicos.map((a) => a.id).join(",") === "p2,p4", separados.unicos.map((a) => a.id).join(","));
 comprobar("sin repetidos conserva el orden de llegada",
   sinRepetidos([...pendientes, ...pendientes]).map((a) => a.id).join(",") === "p1,p2,p4");
+
+// 2.5.6: la vista previa se completa si salió de lo producido, y no si se eligió a mano.
+{
+  const pol = { maxFiles: 20, maxSizeBytes: 1000, allowedTypes: ["image/jpeg"] };
+  const img = (n, m) => ({ id: n, original_name: n, content_type: "image/jpeg", size_bytes: 10, md5: m.repeat(32) });
+  const guardados = [img("slide-01.jpg", "1"), img("slide-02.jpg", "2"), img("slide-03.jpg", "3")];
+  const de = (lista) => lista.map((a) => ({ original_name: a.original_name, md5: a.md5 }));
+  const nombres = (lista) => lista.map((a) => a.original_name).join(",");
+  comprobar("sin vista previa toma todas las imágenes de lo producido",
+    nombres(vistaPreviaQueFalta(guardados, [], 0, pol)) === "slide-01.jpg,slide-02.jpg,slide-03.jpg");
+  comprobar("si a la vista previa que salió de lo producido le falta una lámina, vuelve",
+    nombres(vistaPreviaQueFalta(guardados, de([guardados[0], guardados[2]]), 2, pol)) === "slide-02.jpg",
+    nombres(vistaPreviaQueFalta(guardados, de([guardados[0], guardados[2]]), 2, pol)));
+  comprobar("si está completa no agrega nada", vistaPreviaQueFalta(guardados, de(guardados), 3, pol).length === 0);
+  comprobar("una vista previa elegida a mano (una portada que no está en lo producido) no se toca",
+    vistaPreviaQueFalta(guardados, [{ original_name: "portada.jpg", md5: "9".repeat(32) }], 1, pol).length === 0);
+  comprobar("una lámina adjunta con otro contenido que lo producido cuenta como elegida a mano",
+    vistaPreviaQueFalta(guardados, [{ original_name: "slide-01.jpg", md5: "8".repeat(32) }], 1, pol).length === 0);
+  comprobar("no pasa del máximo de adjuntos, contando los que no son imágenes",
+    nombres(vistaPreviaQueFalta(guardados, de([guardados[0]]), 2, { ...pol, maxFiles: 3 })) === "slide-02.jpg");
+}
 
 if (fallos) {
   console.error(`\n${fallos} comprobación(es) fallaron.`);

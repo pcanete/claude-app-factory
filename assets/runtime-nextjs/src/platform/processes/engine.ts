@@ -45,10 +45,11 @@ import {
   reservarSubida,
   soltarDelRegistro,
   soltarProducido,
+  vistaPreviaActual,
   type ArchivoGuardado,
 } from "@/platform/storage/archivos";
 import { separarRepetidos } from "@/platform/storage/repetidos";
-import { elegirVistaPrevia } from "@/platform/storage/vista-previa";
+import { porNombre, vistaPreviaQueFalta } from "@/platform/storage/vista-previa";
 import {
   claveDeNombre,
   destinoDeRecurso,
@@ -63,6 +64,7 @@ import {
   iteracionIncompleta,
   mensajeDeRegistro,
   nombreDeFamilia,
+  quienesSaben,
   resumenCorto,
   skillDeIteracion,
   validarDefinicion,
@@ -283,9 +285,11 @@ async function producidoDe(iteracion: string): Promise<Producido[]> {
 
 async function imagenesDe(iteracion: string): Promise<Imagen[]> {
   const adjuntos = await listAttachments("iteracion", iteracion).catch(() => []);
+  // En orden natural de nombre (slide-07 antes que slide-08 aunque se haya adjuntado después),
+  // y a igual nombre, por fecha.
   return adjuntos
     .filter((adjunto) => adjunto.content_type.startsWith("image/"))
-    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.original_name.localeCompare(b.original_name))
+    .sort((a, b) => porNombre(a, b) || String(a.created_at).localeCompare(String(b.created_at)))
     .map((adjunto) => ({ id: adjunto.id, nombre: adjunto.original_name, tipo: adjunto.content_type }));
 }
 
@@ -714,7 +718,7 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
   const falta = faltasParaCompletar(imagenes, guardados.length);
   const partes = [
     confirmados.length ? `Quedaron guardados ${confirmados.length}: ${confirmados.join(", ")}.` : "No se guardó nada nuevo.",
-    nombresRepetidos.length ? `Ya estaban guardados y no se duplicaron: ${nombresRepetidos.join(", ")}.` : "",
+    nombresRepetidos.length ? `Se descartaron pedidos de subida viejos que repetían archivos ya guardados: ${nombresRepetidos.join(", ")}. Esos archivos siguen guardados una sola vez.` : "",
     noLlegaron.length ? `Todavía no llegaron: ${noLlegaron.join(", ")}. Subilos y volvé a confirmar.` : "",
     distintos.length ? `No coinciden con lo declarado y se descartaron: ${distintos.join(", ")}. Pedí la subida de nuevo con subir_producido.` : "",
     sinComprobar.length ? `No se pudieron comprobar porque el almacén respondió comprimido: ${sinComprobar.join(", ")}. Siguen pendientes; avisá a quien mantiene la aplicación.` : "",
@@ -725,30 +729,37 @@ export async function confirmarProducido(agent: AgentPrincipal, iteracion: strin
 }
 
 /**
- * Si la iteración todavía no tiene imágenes, usa las de lo producido como vista previa.
+ * Completa la vista previa con las imágenes de lo producido que le faltan.
+ *
+ * Sin imágenes, toma las de lo producido. Con imágenes, sólo completa si la vista previa
+ * salió de lo producido (cada imagen es copia de un archivo guardado): si se borró un archivo
+ * y se volvió a subir, su lámina vuelve (2.5.6). Una vista previa elegida a mano —una
+ * portada que no está en lo producido— no se toca: lo que alguien adjuntó a propósito manda.
  *
  * Antes había que mandar las láminas dos veces: con subir_producido y con
  * adjuntar_a_iteracion. El segundo paso necesita una credencial de agente guardada en la
  * máquina, que quien se conecta con su propia cuenta no tiene: subía todo y la iteración
  * quedaba incompleta igual. Las imágenes ya están en el almacén; la aplicación las copia.
  *
- * Si la iteración ya tiene imágenes no toca nada: lo que alguien adjuntó a propósito manda.
  * Si falla (el almacén no responde, la política no admite imágenes), no rompe la
  * confirmación: lo producido quedó guardado igual y la iteración dice qué le falta.
  */
 async function vistaPreviaDesdeProducido(entrada: { agent: AgentPrincipal; quien: Identidad; iteracion: string; archivos: ArchivoGuardado[] }) {
   const politica = resolveAttachmentPolicy(requireEntity("iteracion"));
-  if (!politica || (await imagenesDe(entrada.iteracion)).length) return [];
-  const elegidos = elegirVistaPrevia(entrada.archivos, politica);
+  if (!politica) return [];
+  const antes = await vistaPreviaActual(null, "iteracion", entrada.iteracion);
+  const elegidos = vistaPreviaQueFalta(entrada.archivos, antes.imagenes, antes.total, politica);
   if (!elegidos.length) return [];
   try {
     const contenidos = await enParalelo(elegidos, 8, (archivo) => leerObjeto(archivo.object_key));
     return await withTransaction(async (client) => {
       await lockAttachmentSet(client, "iteracion", entrada.iteracion);
-      // Otra llamada pudo adjuntar mientras se bajaban: si ya hay, no se duplica.
-      if (await countAttachments(client, "iteracion", entrada.iteracion)) return [];
+      // Otra llamada pudo adjuntar mientras se bajaban: se vuelve a decidir con lo que hay ahora.
+      const ahora = await vistaPreviaActual(client, "iteracion", entrada.iteracion);
+      const siguenFaltando = new Set(vistaPreviaQueFalta(entrada.archivos, ahora.imagenes, ahora.total, politica).map((a) => a.id));
       const nombres: string[] = [];
       for (const [i, archivo] of elegidos.entries()) {
+        if (!siguenFaltando.has(archivo.id)) continue;
         const contenido = contenidos[i];
         const sha256 = createHash("sha256").update(contenido).digest("hex");
         const id = await insertAttachment(client, {
@@ -1014,6 +1025,20 @@ async function cargarFamilia(agent: AgentPrincipal, proceso: string) {
   return { quien, familia, procesos, actual, definicion: definicionDe(actual) };
 }
 
+/** Los nombres de quienes saben hacer el proceso, mirando todas sus iteraciones. */
+async function quienesSabenDe(procesos: Record<string, unknown>[], quien: Identidad) {
+  const registros = (await Promise.all(procesos.map((proceso) => listRecords("iteracion", {
+    filters: { proceso_id: String(proceso.id) },
+    sort: "created_at",
+    direction: "asc",
+    limit: 1000,
+    access: quien.access,
+  })))).flat().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  const ids = quienesSaben(registros);
+  const nombres = await nombresDePersonas(ids);
+  return [...new Set(ids.map((id) => nombres.get(id)).filter((n): n is string => Boolean(n)))];
+}
+
 /** Todo lo de un proceso: ficha, requisitos, qué se registra, carpeta y las veces que se hizo. */
 export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: string, limite = 50) {
   const { quien, familia, procesos, actual, definicion } = await cargarFamilia(agent, proceso);
@@ -1030,10 +1055,8 @@ export async function iteracionesDeProceso(agent: AgentPrincipal, proceso: strin
     registro: definicion.registro ?? [],
     carpeta: definicion.carpeta ?? null,
     recursos: await recursosPublicados(definicion.recursos ?? []),
-    // Quién ya lo hizo: a quién preguntarle.
-    saben: [...new Set(iteraciones
-      .filter((it) => it.salio_igual !== false && it.quien)
-      .map((it) => it.quien as string))],
+    // Quién ya lo hizo: a quién preguntarle. Sobre todas las iteraciones, no sobre la página.
+    saben: await quienesSabenDe(procesos, quien),
     iteraciones,
   };
 }
@@ -1046,7 +1069,7 @@ export async function comoSeHace(agent: AgentPrincipal, proceso: string) {
   const { quien, procesos, actual, definicion } = await cargarFamilia(agent, proceso);
   if (actual.estado === "retirado") throw new Error(`«${nombreDeFamilia(actual.nombre)}» está retirado.`);
   const recientes = (await iteracionesDe(procesos, quien, 10))
-    .filter((it) => it.salio_igual !== false && it.receta)
+    .filter((it) => !(it.origen === "reproduccion" && it.salio_igual === false) && it.receta)
     .slice(0, 3);
   const { recursos, faltantes } = await recursosParaInstalar(definicion.recursos ?? []);
   return {
