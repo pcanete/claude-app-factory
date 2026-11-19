@@ -18,7 +18,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { getPool, sql, withTransaction } from "@/lib/db";
-import { marcarGuardado, reservarSubida, soltarProducido } from "@/platform/storage/archivos";
+import { marcarGuardado, reservarSubida, soltarProducido, vistaPreviaActual } from "@/platform/storage/archivos";
 
 let fallos = 0;
 function comprobar(nombre, condicion, detalle = "") {
@@ -125,6 +125,14 @@ try {
   comprobar("un pendiente se borra sin tocar la vista previa", pendiente?.adjuntos.length === 0 && (await adjuntos()).length === 1);
   comprobar("borrar dos veces no encuentra nada", (await soltar(registro, primero.id)) === null);
   comprobar("y no queda ningún archivo del registro", (await filas()).length === 0, JSON.stringify(await filas()));
+
+  // La vista previa actual se compara con lo producido por nombre y MD5: el MD5 que calcula
+  // la base sobre el contenido del adjunto tiene que ser el mismo que el de lo producido.
+  const segunda = Buffer.from("la segunda lámina");
+  const actual = await vistaPreviaActual(null, ENTIDAD, registro);
+  comprobar("la vista previa actual da el MD5 de cada imagen adjunta, igual al de lo producido",
+    actual.total === 1 && actual.imagenes.length === 1 && actual.imagenes[0].original_name === "slide-02.jpg" && actual.imagenes[0].md5 === md5(segunda),
+    JSON.stringify(actual));
 } finally {
   await sql("DELETE FROM app_stored_file WHERE entity_key = $1", [ENTIDAD]);
   await sql("DELETE FROM app_attachment WHERE entity_key = $1", [ENTIDAD]);

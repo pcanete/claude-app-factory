@@ -88,7 +88,23 @@ export async function reservarSubida(client: PoolClient, archivo: {
   return { id: archivo.id, objectKey: archivo.objectKey, tipo: archivo.tipo, estado: "nuevo", soltados: [] };
 }
 
-export type AdjuntoSoltado = { id: string; original_name: string; content_type: string; size_bytes: number; sha256: string };
+/**
+ * La vista previa de un registro tal como está: sus imágenes adjuntas con el MD5 de su
+ * contenido (para saber si cada una es copia de un archivo de lo producido) y cuántos
+ * adjuntos tiene en total (para no pasar del máximo).
+ */
+export async function vistaPreviaActual(client: PoolClient | null, entityKey: string, recordId: string) {
+  const texto = `SELECT original_name, md5(content) AS md5, content_type FROM app_attachment WHERE entity_key = $1 AND record_id = $2`;
+  const filas = client
+    ? await transactionSql<{ original_name: string; md5: string; content_type: string }>(client, texto, [entityKey, recordId])
+    : await sql<{ original_name: string; md5: string; content_type: string }>(texto, [entityKey, recordId]);
+  return {
+    imagenes: filas.filter((f) => f.content_type.toLowerCase().startsWith("image/")).map(({ original_name, md5 }) => ({ original_name, md5 })),
+    total: filas.length,
+  };
+}
+
+export type AdjuntoSoltado ={ id: string; original_name: string; content_type: string; size_bytes: number; sha256: string };
 
 /**
  * Borra un archivo de lo producido de un registro y, si había quedado como vista previa, el

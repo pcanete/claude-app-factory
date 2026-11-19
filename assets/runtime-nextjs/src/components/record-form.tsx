@@ -1,6 +1,7 @@
 import Link from "@/components/enlace";
 import { createRecordAction, updateRecordAction } from "@/app/actions";
 import type { EntitySpec, FieldSpec } from "@/lib/spec";
+import { valorDeSelectorBooleano } from "@/lib/form-boolean";
 
 type PersonOption = { id: string; name: string };
 
@@ -34,6 +35,16 @@ function FieldControl({ field, value, people, ownerRestriction }: {
   people?: PersonOption[];
   ownerRestriction?: { ownerField: string; allowedId: string };
 }) {
+  // Un sí/no opcional tiene tres estados: una casilla convertiría «sin valor» en «no».
+  if (field.type === "boolean" && !field.required) {
+    return (
+      <select className="control" defaultValue={valorDeSelectorBooleano(value ?? field.default)} id={field.key} name={field.key}>
+        <option value="">Sin valor</option>
+        <option value="true">Sí</option>
+        <option value="false">No</option>
+      </select>
+    );
+  }
   if (field.type === "boolean") {
     return (
       <label className="checkbox">

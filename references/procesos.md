@@ -175,6 +175,12 @@ Con almacén:
   Se van la fila, el objeto del almacén —después de confirmar la transacción— y, si había
   quedado como vista previa, el adjunto que es su copia (mismo nombre y mismos bytes), salvo
   que quede otro archivo guardado igual. Al revés no: borrar un adjunto no toca lo producido.
+- **La vista previa se completa** (2.5.6). Si salió de lo producido —cada imagen adjunta es
+  copia, con el mismo nombre y MD5, de un archivo guardado—, confirmar agrega las láminas que
+  le faltan: un archivo borrado y vuelto a subir recupera su lámina. Si alguien la eligió a
+  mano (una portada que no está en lo producido), no se toca. La galería ordena por nombre.
+- **Quiénes saben** se calcula sobre todas las iteraciones, no sobre la página que pidió
+  `iteraciones_de_proceso` (2.5.6), y sólo descuenta una reproducción que no salió igual.
 - Borrar una iteración, por el motor o por las herramientas genéricas, borra también lo
   producido del almacén, después de confirmar la transacción.
 

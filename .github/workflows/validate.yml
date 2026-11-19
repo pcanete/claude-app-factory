@@ -99,6 +99,10 @@ jobs:
       - name: Storage signatures match the published AWS example
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-almacen.mjs
+      # Guardar un registro sin tocar un si/no opcional no puede convertir "sin valor" en "no".
+      - name: An optional yes/no saved from the panel keeps its empty value
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-form-boolean.mjs
       # Si agrupar los últimos eventos difiere de cómo agrupa la base, el grafo muestra
       # otra cosa según el período elegido.
       - name: The activity graph groups the same way for every period

@@ -470,6 +470,22 @@ export function iteracionIncompleta(imagenes: number, guardados?: number) {
 }
 
 /**
+ * Quiénes saben hacer un proceso: quienes lo hicieron alguna vez, salvo en una reproducción
+ * que no salió igual. Se calcula sobre todas las iteraciones, no sobre la página que se
+ * muestra: con `limite: 1` la respuesta no puede decir que nadie sabe (2.5.6). Una
+ * iteración original sin `salio_igual` cuenta; `false` sólo descuenta si es reproducción.
+ */
+export function quienesSaben(iteraciones: ReadonlyArray<{ autor?: unknown; origen?: unknown; salio_igual?: unknown }>) {
+  const ids: string[] = [];
+  for (const it of iteraciones) {
+    if (typeof it.autor !== "string" || !it.autor) continue;
+    if (it.origen === "reproduccion" && it.salio_igual === false) continue;
+    if (!ids.includes(it.autor)) ids.push(it.autor);
+  }
+  return ids;
+}
+
+/**
  * Qué le falta a una iteración ya registrada. `guardados` es cuántos archivos de lo producido
  * están comprobados en el almacén; sin almacén no se pasa y no cuenta.
  */
