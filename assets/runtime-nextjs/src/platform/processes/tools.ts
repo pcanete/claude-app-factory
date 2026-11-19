@@ -6,6 +6,7 @@ import { runtimeSpec } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
   adjuntarAIteracion,
+  borrarProducido,
   comoSeHace,
   administraProcesos,
   confirmarProducido,
@@ -235,7 +236,7 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
     server.registerTool("subir_producido", {
       annotations: marcas("subir_producido"),
       description:
-        "Prepara la subida de lo producido en una iteración registrada —el video final, el PDF, los JPG de un carrusel— al almacén de la aplicación, sin que haga falta Dropbox ni otra cuenta. Devuelve, por cada archivo, una dirección que vale una hora: subilo con un PUT desde un script o una terminal de esta máquina, con las cabeceras que te da, sin pasar el archivo por el chat. Antes calculá el tamaño en bytes y el MD5 de cada archivo en esta máquina (por ejemplo certutil -hashfile <archivo> MD5, Get-FileHash -Algorithm MD5 o md5sum). Después llamá confirmar_producido.",
+        "Prepara la subida de lo producido en una iteración registrada —el video final, el PDF, los JPG de un carrusel— al almacén de la aplicación, sin que haga falta Dropbox ni otra cuenta. Devuelve, por cada archivo, una dirección que vale una hora: subilo con un PUT desde un script o una terminal de esta máquina, con las cabeceras que te da, sin pasar el archivo por el chat. Repetir el pedido no duplica: un archivo con el mismo nombre y el mismo MD5 que ya está guardado se reutiliza (viene marcado ya_guardado y no hace falta volver a subirlo), y uno pendiente igual se reemplaza. Antes calculá el tamaño en bytes y el MD5 de cada archivo en esta máquina (por ejemplo certutil -hashfile <archivo> MD5, Get-FileHash -Algorithm MD5 o md5sum). Después llamá confirmar_producido.",
       inputSchema: z.object({
         iteracion: z.string().uuid().describe("El id que devolvió registrar_iteracion."),
         archivos: z.array(z.object({
@@ -271,6 +272,18 @@ export function registrarHerramientasDeProcesos(server: McpServer, agent: AgentP
       }),
     }, async (entrada) => rastreo("descargar_producido", entrada, async () => ({
       value: await descargarProducido(agent, entrada.archivo),
+      resultCount: 1,
+    })));
+
+    server.registerTool("borrar_producido", {
+      annotations: marcas("borrar_producido"),
+      description:
+        "Borra un archivo de lo producido de una iteración —su id sale de iteraciones_de_proceso, en «producido»—: lo saca de la aplicación y del almacén y, si había quedado como vista previa, también de ahí (salvo que quede otro archivo igual guardado). Sirve para sacar un archivo equivocado o uno que quedó repetido. Lo borra quien hizo la iteración, quien responde por ella o quien administra. No se deshace: para reemplazar un archivo, borralo y subí el nuevo con subir_producido.",
+      inputSchema: z.object({
+        archivo: z.string().uuid().describe("El id del archivo de lo producido."),
+      }),
+    }, async (entrada) => rastreo("borrar_producido", entrada, async () => ({
+      value: await borrarProducido(agent, entrada.archivo),
       resultCount: 1,
     })));
   }

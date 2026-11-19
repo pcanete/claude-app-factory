@@ -4,7 +4,7 @@ import { Copiar } from "@/components/copiar";
 import { Receta, Salidas } from "@/components/process-output";
 import { SubirLaminas } from "@/components/subir-laminas";
 import { VistaSelector } from "@/components/vista-selector";
-import { borrarIteracionAction, borrarProcesoAction, reactivarProcesoAction, retirarProcesoAction } from "../actions";
+import { borrarIteracionAction, borrarProcesoAction, borrarProducidoAction, reactivarProcesoAction, retirarProcesoAction } from "../actions";
 import { canManageUsers, hasPermission, requireUser } from "@/lib/auth";
 import { USER_SCOPES } from "@/platform/mcp/store";
 import { iteracionesDeProceso, motorDisponible, type Iteracion } from "@/platform/processes/engine";
@@ -45,14 +45,29 @@ function tamano(bytes: number) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-/** Lo producido guardado en la aplicación: cada archivo se baja con los permisos de quien mira. */
-function Producido({ it }: { it: Iteracion }) {
+/**
+ * Lo producido guardado en la aplicación: cada archivo se baja con los permisos de quien mira.
+ * Quien puede subir lo producido de la iteración puede borrar un archivo suelto; si había
+ * quedado como vista previa, sale también de ahí. El motor vuelve a comprobar el permiso.
+ */
+function Producido({ it, familia, puedeBorrar }: { it: Iteracion; familia: string; puedeBorrar: boolean }) {
   if (!it.producido?.length) return null;
   return (
     <ul className="case-list produced-list">
       {it.producido.map((archivo) => (
         <li key={archivo.id}>
           <a className="record-link" href={`/producido/${archivo.id}`}>{archivo.nombre}</a> <span className="table-secondary">{tamano(archivo.tamano)}</span>
+          {puedeBorrar && (
+            <details className="case-cancel produced-delete">
+              <summary>Borrar</summary>
+              <form action={borrarProducidoAction}>
+                <input name="archivo" type="hidden" value={archivo.id} />
+                <input name="familia" type="hidden" value={familia} />
+                <button className="button danger" type="submit">Borrar {archivo.nombre}</button>
+                <span className="field-help">Sale de lo producido y, si era vista previa, también de ahí. No se deshace.</span>
+              </form>
+            </details>
+          )}
         </li>
       ))}
     </ul>
@@ -346,7 +361,7 @@ export default async function ProcesoPage({
                     <Origen it={it} />
                   </div>
                   {it.salio_igual === false && it.que_falto && <p className="iteration-missing">Qué faltó: {it.que_falto}</p>}
-                  <Producido it={it} />
+                  <Producido familia={familia} it={it} puedeBorrar={gestiona || it.persona === user.id} />
                   <div className="iteration-links">
                     <Carpeta carpeta={it.carpeta} />
                     {it.conversacion && (esWeb(it.conversacion)

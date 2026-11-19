@@ -55,11 +55,13 @@ export const MARCAS = {
   adjuntar_a_iteracion: AGREGA,
   editar_proceso: REEMPLAZA,
 
-  // Lo producido en el almacén propio: pedir la subida agrega archivos pendientes; confirmar
-  // los da por guardados y repetirla no cambia nada más; descargar sólo entrega una dirección.
+  // Lo producido en el almacén propio: pedir la subida agrega archivos pendientes (repetirla
+  // reutiliza lo que ya está, pero puede agregar otros); confirmar los da por guardados y
+  // repetirla no cambia nada más; descargar sólo entrega una dirección; borrar saca un archivo.
   subir_producido: AGREGA,
   confirmar_producido: CONFIRMA,
   descargar_producido: LEE,
+  borrar_producido: BORRA,
 
   // Recursos, sólo para quien administra: publicar agrega una versión pendiente; confirmar la
   // da por publicada y repetirla no cambia nada más.

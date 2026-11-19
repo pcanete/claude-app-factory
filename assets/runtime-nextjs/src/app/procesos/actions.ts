@@ -8,6 +8,7 @@ import { registroDeTexto, requisitosDeTexto, type Ficha } from "@/platform/proce
 import {
   adjuntarAIteracion,
   borrarIteracion,
+  borrarProducido,
   borrarProceso,
   crearProceso,
   editarProceso,
@@ -128,6 +129,13 @@ export async function reactivarProcesoAction(formData: FormData) {
 export async function borrarProcesoAction(formData: FormData) {
   const user = await requireUser();
   await sobreFamilia(formData, (familia) => borrarProceso(persona(user), familia), "/procesos");
+}
+
+/** Borra un archivo de lo producido (y su copia en la vista previa) desde la tarjeta de la iteración. */
+export async function borrarProducidoAction(formData: FormData) {
+  const user = await requireUser();
+  const archivo = String(formData.get("archivo") ?? "");
+  await sobreFamilia(formData, () => borrarProducido(persona(user), archivo));
 }
 
 export async function borrarIteracionAction(formData: FormData) {
