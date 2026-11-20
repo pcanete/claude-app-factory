@@ -113,6 +113,11 @@ jobs:
       - name: No link prefetches dynamic pages by default
         working-directory: /tmp/reference-app
         run: node scripts/test-sin-precarga.mjs
+      # El menu lleva a la vista de cada entidad: si ahi no esta el alta, quien puede crear
+      # no encuentra como (paso entre 2.1.0 y 2.5.6).
+      - name: The page the menu opens offers creating records
+        working-directory: /tmp/reference-app
+        run: node scripts/test-alta-en-vistas.mjs
       # El tablero mide con la bitácora: un error acá hace que se mejore la etapa equivocada.
       - name: Build the generated application
         working-directory: /tmp/reference-app
