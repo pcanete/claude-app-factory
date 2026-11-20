@@ -37,6 +37,8 @@ export type ManagedAgentInput = {
   scopes: string[];
   tokenHash: string;
   expiresAt: string;
+  /** Días sin uso después de los cuales vence. Cada uso corre el vencimiento (2.5.9). */
+  renewDays?: number;
   /** Quién responde por lo que haga esta credencial. Obligatorio. */
   ownerUserId: string;
   /** Quién la emitió. Puede diferir del responsable. */
@@ -72,12 +74,12 @@ export async function createManagedAgent(client: PoolClient, input: ManagedAgent
   }
   const rows = await transactionSql<{ id: string }>(
     client,
-    `INSERT INTO app_agent (name, token_hash, role_key, scopes, expires_at, owner_user_id, created_by_user_id)
-     VALUES ($1, $2, $3, $4::text[], $5, $6, $7)
+    `INSERT INTO app_agent (name, token_hash, role_key, scopes, expires_at, owner_user_id, created_by_user_id, renew_days)
+     VALUES ($1, $2, $3, $4::text[], $5, $6, $7, $8)
      RETURNING id`,
     [
       input.name, input.tokenHash, input.roleKey, input.scopes, input.expiresAt,
-      input.ownerUserId, input.createdByUserId,
+      input.ownerUserId, input.createdByUserId, input.renewDays ?? null,
     ],
   );
   return rows[0].id;
@@ -120,15 +122,15 @@ export async function getManagedAgentForUpdate(client: PoolClient, id: string) {
  * —nombre, rol, responsable, historial—: renovar no es crear otro. No cambia si está activo:
  * uno revocado sigue revocado hasta que alguien lo reactive.
  */
-export async function rotateManagedAgentToken(client: PoolClient, id: string, tokenHash: string, expiresAt: string) {
+export async function rotateManagedAgentToken(client: PoolClient, id: string, tokenHash: string, expiresAt: string, renewDays?: number) {
   const filas = await transactionSql<{ id: string; name: string; active: boolean; expires_at: Date | null }>(
     client,
     `UPDATE app_agent AS a
-        SET token_hash = $2, expires_at = $3, updated_at = now()
+        SET token_hash = $2, expires_at = $3, renew_days = COALESCE($4, a.renew_days), updated_at = now()
        FROM (SELECT id, expires_at FROM app_agent WHERE id = $1 FOR UPDATE) AS antes
       WHERE a.id = antes.id
       RETURNING a.id, a.name, a.active, antes.expires_at`,
-    [id, tokenHash, expiresAt],
+    [id, tokenHash, expiresAt, renewDays ?? null],
   );
   return filas[0] ?? null;
 }

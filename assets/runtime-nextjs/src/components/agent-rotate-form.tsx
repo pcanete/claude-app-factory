@@ -36,14 +36,14 @@ export function AgentRotateForm({ agentId, agentName }: { agentId: string; agent
       {state.status !== "success" ? (
         <form action={action}>
           <input name="id" type="hidden" value={agentId} />
-          <select aria-label={`Vencimiento de la clave nueva de ${agentName}`} className="control" defaultValue="90" name="expires_days">
+          <select aria-label={`Vence si no se usa: clave nueva de ${agentName}`} className="control" defaultValue="90" name="expires_days">
             <option value="30">30 días</option>
             <option value="90">90 días</option>
             <option value="180">180 días</option>
             <option value="365">1 año</option>
           </select>
           <button className="button secondary" disabled={pending} type="submit">{pending ? "Generando…" : "Generar clave nueva"}</button>
-          <span className="field-help">La clave actual deja de funcionar en el acto. Se mantienen el nombre, el rol, el responsable y el historial.</span>
+          <span className="field-help">Para una clave filtrada o perdida: la actual deja de funcionar en el acto. Se mantienen el nombre, el rol, el responsable y el historial.</span>
           {state.status === "error" && <span aria-live="polite" className="field-help danger-text">{state.message}</span>}
         </form>
       ) : (
