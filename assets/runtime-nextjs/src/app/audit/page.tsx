@@ -39,6 +39,7 @@ const acciones: Array<{ key: string; label: string }> = [
   { key: "agent_create", label: "Conexión de agente creada" },
   { key: "agent_status", label: "Acceso de agente modificado" },
   { key: "agent_owner", label: "Responsable de agente cambiado" },
+  { key: "agent_token_rotate", label: "Clave de agente regenerada" },
 ];
 
 const POR_PAGINA = 50;

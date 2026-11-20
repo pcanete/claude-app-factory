@@ -138,7 +138,7 @@ export function AgentCreateForm({
               <option value="180">180 días</option>
               <option value="365">1 año</option>
             </select>
-            <span className="field-help">Después deberá crearse una credencial nueva.</span>
+            <span className="field-help">Después se regenera la clave desde la lista de conexiones.</span>
           </label>
         </div>
         {state.status === "error" && <div aria-live="polite" className="notice import-error agent-form-notice">{state.message}</div>}

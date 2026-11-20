@@ -180,6 +180,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
         run: pnpm db:access
+      # Las credenciales de agente vencen: regenerar la clave mantiene al agente y anula
+      # la clave anterior en el acto.
+      - name: Regenerating an agent key keeps the agent and voids the old key (against PostgreSQL)
+        working-directory: /tmp/reference-app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+        run: pnpm db:agentes
       # Repetir una subida no duplica lo producido, y borrar un archivo suelto saca
       # tambien su copia de la vista previa. Las funciones reales, contra esta base.
       - name: Produced files do not duplicate and delete one by one (against PostgreSQL)

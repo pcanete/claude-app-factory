@@ -1,6 +1,7 @@
 import Link from "@/components/enlace";
 import { deleteAgentAction, setAgentOwnerAction, setAgentStatusAction } from "@/app/agents/actions";
 import { AgentCreateForm } from "@/components/agent-create-form";
+import { AgentRotateForm } from "@/components/agent-rotate-form";
 import { WebClientConnection } from "@/components/web-client-connection";
 import { headers } from "next/headers";
 import { countAgentEvents, listAgentEvents, listManagedAgents } from "@/platform/mcp/admin";
@@ -76,8 +77,9 @@ export default async function AgentsPage({
 
       <section>
         <div className="section-heading"><div><h2>Conexiones existentes</h2><p className="subtitle">
-            Revocar corta el acceso en el acto y conserva el historial. Eliminar sólo está
-            disponible para conexiones que nunca se usaron.
+            Revocar corta el acceso en el acto y conserva el historial. Regenerar la clave da
+            una nueva al mismo agente, por ejemplo cuando vence. Eliminar sólo está disponible
+            para conexiones que nunca se usaron.
           </p></div></div>
         <div className="table-wrap">
           {agents.length ? (
@@ -111,6 +113,7 @@ export default async function AgentsPage({
                           <input name="active" type="hidden" value={agent.active ? "false" : "true"} />
                           <button className={`button ${agent.active ? "danger" : "secondary"}`} type="submit">{agent.active ? "Revocar" : "Reactivar"}</button>
                         </form>
+                        <AgentRotateForm agentId={agent.id} agentName={agent.name} />
                         {Number(agent.event_count) === 0 && (
                           <form action={deleteAgentAction}>
                             <input name="id" type="hidden" value={agent.id} />

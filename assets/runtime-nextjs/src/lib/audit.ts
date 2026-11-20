@@ -17,7 +17,8 @@ export type AuditAction =
   | "user_link"
   | "agent_create"
   | "agent_status"
-  | "agent_owner";
+  | "agent_owner"
+  | "agent_token_rotate";
 
 export type AuditEvent = {
   id: string;

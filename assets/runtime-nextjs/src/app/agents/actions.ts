@@ -1,6 +1,5 @@
 "use server";
 
-import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -9,8 +8,10 @@ import {
   setManagedAgentOwner,
   getManagedAgentForUpdate,
   isManagedAgentId,
+  rotateManagedAgentToken,
   setManagedAgentActive,
 } from "@/platform/mcp/admin";
+import { emitirCredencial } from "@/platform/mcp/credencial";
 import { connectionEnvVar, connectionSlug } from "@/platform/mcp/connection";
 import { recordAuditEvent } from "@/lib/audit";
 import { requireUserManagementAccess } from "@/lib/auth";
@@ -74,9 +75,7 @@ export async function createAgentAction(
     return { status: "error", message: "Elegí un vencimiento válido." };
   }
 
-  const token = `factory_mcp_${randomBytes(32).toString("base64url")}`;
-  const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
-  const expiresAt = new Date(Date.now() + expiresDays * 24 * 60 * 60 * 1_000).toISOString();
+  const { token, tokenHash, expiresAt } = emitirCredencial(expiresDays);
   try {
     await withTransaction(async (client) => {
       const id = await createManagedAgent(client, {
@@ -106,6 +105,59 @@ export async function createAgentAction(
     message: "La conexión fue creada. Copiá la credencial ahora: no volverá a mostrarse.",
     token,
     agentName: name,
+  };
+}
+
+export type AgentRotateState = {
+  status: "idle" | "success" | "error";
+  message?: string;
+  token?: string;
+  /** La variable de entorno donde el asistente de conexión guardó la credencial. */
+  envVar?: string;
+  expiresAt?: string;
+};
+
+/**
+ * Regenera la clave de una conexión que ya existe: otra clave, otro vencimiento, el mismo
+ * agente. La anterior deja de servir en el acto. Es lo que hace falta cuando una credencial
+ * vence (90 días por defecto) o se filtra, sin perder el historial ni el responsable.
+ */
+export async function regenerateAgentTokenAction(
+  _previous: AgentRotateState,
+  formData: FormData,
+): Promise<AgentRotateState> {
+  const actor = await requireUserManagementAccess();
+  const id = String(formData.get("id") ?? "");
+  const expiresDays = Number(formData.get("expires_days") ?? 90);
+  if (!isManagedAgentId(id)) return { status: "error", message: "Esa conexión no existe." };
+  let credencial: ReturnType<typeof emitirCredencial>;
+  try {
+    credencial = emitirCredencial(expiresDays);
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Elegí un vencimiento válido." };
+  }
+  const agente = await withTransaction(async (client) => {
+    const renovado = await rotateManagedAgentToken(client, id, credencial.tokenHash, credencial.expiresAt);
+    if (!renovado) return null;
+    await recordAuditEvent(client, {
+      actorId: actor.id,
+      entityKey: "app_agent",
+      recordId: id,
+      action: "agent_token_rotate",
+      changes: { name: renovado.name, expiresDays, before: { expiresAt: renovado.expires_at }, after: { expiresAt: credencial.expiresAt } },
+    });
+    return renovado;
+  });
+  if (!agente) return { status: "error", message: "Esa conexión no existe." };
+  refreshAgents();
+  return {
+    status: "success",
+    message: agente.active
+      ? "Clave nueva. La anterior ya no funciona: reemplazala donde la tengas guardada. Copiala ahora, no volverá a mostrarse."
+      : "Clave nueva, pero la conexión sigue revocada: reactivala para que funcione. Copiala ahora, no volverá a mostrarse.",
+    token: credencial.token,
+    envVar: connectionEnvVar(agente.name),
+    expiresAt: credencial.expiresAt,
   };
 }
 

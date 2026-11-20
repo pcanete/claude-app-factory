@@ -114,6 +114,25 @@ export async function getManagedAgentForUpdate(client: PoolClient, id: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Le da a un agente una clave nueva con un vencimiento nuevo. La anterior deja de servir en
+ * el acto, porque sólo se guarda un hash y se reemplaza. El agente sigue siendo el mismo
+ * —nombre, rol, responsable, historial—: renovar no es crear otro. No cambia si está activo:
+ * uno revocado sigue revocado hasta que alguien lo reactive.
+ */
+export async function rotateManagedAgentToken(client: PoolClient, id: string, tokenHash: string, expiresAt: string) {
+  const filas = await transactionSql<{ id: string; name: string; active: boolean; expires_at: Date | null }>(
+    client,
+    `UPDATE app_agent AS a
+        SET token_hash = $2, expires_at = $3, updated_at = now()
+       FROM (SELECT id, expires_at FROM app_agent WHERE id = $1 FOR UPDATE) AS antes
+      WHERE a.id = antes.id
+      RETURNING a.id, a.name, a.active, antes.expires_at`,
+    [id, tokenHash, expiresAt],
+  );
+  return filas[0] ?? null;
+}
+
 export async function setManagedAgentActive(client: PoolClient, id: string, active: boolean) {
   await transactionSql(
     client,
