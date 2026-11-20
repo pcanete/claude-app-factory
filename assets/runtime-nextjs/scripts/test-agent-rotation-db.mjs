@@ -11,7 +11,8 @@
  *     responsable);
  *   - la clave anterior deja de servir en el acto;
  *   - regenerar no reactiva una conexión revocada;
- *   - regenerar una conexión que no existe no hace nada.
+ *   - regenerar una conexión que no existe no hace nada;
+ *   - usar una credencial corre su vencimiento, y una vencida no revive por usarla (2.5.9).
  *
  * Requiere una base descartable con las migraciones aplicadas; borra lo que crea.
  */
@@ -34,6 +35,8 @@ function comprobar(nombre, condicion, detalle = "") {
 const persona = randomUUID();
 const rol = runtimeSpec.roles[0].key;
 let agente = null;
+let enUsoId = null;
+let olvidadaId = null;
 
 try {
   await sql(
@@ -74,10 +77,43 @@ try {
 
   const inexistente = await withTransaction((client) => rotateManagedAgentToken(client, randomUUID(), emitirCredencial(90).tokenHash, nueva.expiresAt));
   comprobar("regenerar una conexión que no existe no hace nada", inexistente === null);
+
+  // 2.5.9: vence a los renew_days días sin uso, no a fecha fija. Usarla corre el plazo.
+  const dia = 24 * 60 * 60 * 1_000;
+  const enUso = emitirCredencial(90, new Date(Date.now() - 89 * dia)); // le queda un día
+  enUsoId = await withTransaction((client) => createManagedAgent(client, {
+    name: `En uso ${persona.slice(0, 8)}`,
+    roleKey: rol,
+    scopes: ["schema:read", "records:read"],
+    tokenHash: enUso.tokenHash,
+    expiresAt: enUso.expiresAt,
+    renewDays: 90,
+    ownerUserId: persona,
+    createdByUserId: persona,
+  }));
+  comprobar("una credencial en uso entra", (await authenticateAgentToken(enUso.token))?.id === enUsoId);
+  const [corrida] = await sql("SELECT expires_at FROM app_agent WHERE id = $1", [enUsoId]);
+  const faltan = (new Date(corrida.expires_at).getTime() - Date.now()) / dia;
+  comprobar("y usarla corre su vencimiento a 90 días desde ahora", faltan > 89.9 && faltan <= 90.01, String(faltan));
+
+  const olvidada = emitirCredencial(90, new Date(Date.now() - 91 * dia)); // venció ayer
+  olvidadaId = await withTransaction((client) => createManagedAgent(client, {
+    name: `Olvidada ${persona.slice(0, 8)}`,
+    roleKey: rol,
+    scopes: ["schema:read", "records:read"],
+    tokenHash: olvidada.tokenHash,
+    expiresAt: olvidada.expiresAt,
+    renewDays: 90,
+    ownerUserId: persona,
+    createdByUserId: persona,
+  }));
+  comprobar("una credencial que pasó 90 días sin uso no entra", (await authenticateAgentToken(olvidada.token)) === null);
+  const [sigue] = await sql("SELECT expires_at FROM app_agent WHERE id = $1", [olvidadaId]);
+  comprobar("y intentar usarla no la revive", new Date(sigue.expires_at).toISOString() === olvidada.expiresAt, String(sigue.expires_at));
 } finally {
-  if (agente) {
-    await sql("DELETE FROM app_agent_event WHERE agent_id = $1", [agente]).catch(() => undefined);
-    await sql("DELETE FROM app_agent WHERE id = $1", [agente]);
+  for (const id of [agente, enUsoId, olvidadaId].filter(Boolean)) {
+    await sql("DELETE FROM app_agent_event WHERE agent_id = $1", [id]).catch(() => undefined);
+    await sql("DELETE FROM app_agent WHERE id = $1", [id]);
   }
   await sql("DELETE FROM app_user WHERE id = $1", [persona]).catch(() => undefined);
   await getPool().end();

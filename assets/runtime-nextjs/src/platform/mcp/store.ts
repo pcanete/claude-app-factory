@@ -42,9 +42,16 @@ export async function authenticateAgentToken(token: string): Promise<AgentPrinci
   // El responsable viaja con la credencial: de él sale el alcance por registro, y su
   // estado importa tanto como el del agente. Una persona desactivada no sigue operando
   // a través de una credencial que dejó viva.
+  //
+  // Cada uso corre el vencimiento (2.5.9): una credencial vence a los `renew_days` días sin
+  // usarse, no a fecha fija. Una que ya venció no revive por intentar usarla.
   const rows = await sql<AgentRow>(
     `UPDATE app_agent AS a
-        SET last_used_at = now()
+        SET last_used_at = now(),
+            expires_at = CASE
+              WHEN a.renew_days IS NULL OR a.expires_at IS NULL THEN a.expires_at
+              ELSE GREATEST(a.expires_at, now() + make_interval(days => a.renew_days))
+            END
        FROM (SELECT id, owner_user_id FROM app_agent WHERE token_hash = $1) AS actual
       WHERE a.id = actual.id
         AND a.token_hash = $1

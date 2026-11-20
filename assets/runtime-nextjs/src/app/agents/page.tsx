@@ -84,7 +84,7 @@ export default async function AgentsPage({
         <div className="table-wrap">
           {agents.length ? (
             <table className="audit-table">
-              <thead><tr><th>Agente</th><th>Rol</th><th>Responsable</th><th>Estado</th><th>Vencimiento</th><th>Último uso</th><th>Llamadas</th><th>Acción</th></tr></thead>
+              <thead><tr><th>Agente</th><th>Rol</th><th>Responsable</th><th>Estado</th><th>Vence si no se usa</th><th>Último uso</th><th>Llamadas</th><th>Acción</th></tr></thead>
               <tbody>
                 {agents.map((agent) => (
                   <tr key={agent.id}>

@@ -84,6 +84,7 @@ export async function createAgentAction(
         scopes: [...accessScopes[access]],
         tokenHash,
         expiresAt,
+        renewDays: expiresDays,
         ownerUserId,
         createdByUserId: actor.id,
       });
@@ -137,7 +138,7 @@ export async function regenerateAgentTokenAction(
     return { status: "error", message: error instanceof Error ? error.message : "Elegí un vencimiento válido." };
   }
   const agente = await withTransaction(async (client) => {
-    const renovado = await rotateManagedAgentToken(client, id, credencial.tokenHash, credencial.expiresAt);
+    const renovado = await rotateManagedAgentToken(client, id, credencial.tokenHash, credencial.expiresAt, expiresDays);
     if (!renovado) return null;
     await recordAuditEvent(client, {
       actorId: actor.id,
