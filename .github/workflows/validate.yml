@@ -118,6 +118,11 @@ jobs:
       - name: The page the menu opens offers creating records
         working-directory: /tmp/reference-app
         run: node scripts/test-alta-en-vistas.mjs
+      # El middleware de Clerk dejaba las invocaciones de /api/mcp abiertas hasta el tope de
+      # 300 s. El matcher se evalua con la funcion de Next, no con una copia.
+      - name: Routes that authenticate themselves skip the middleware
+        working-directory: /tmp/reference-app
+        run: node scripts/test-mcp-sin-middleware.mjs
       # El tablero mide con la bitácora: un error acá hace que se mejore la etapa equivocada.
       - name: Build the generated application
         working-directory: /tmp/reference-app
