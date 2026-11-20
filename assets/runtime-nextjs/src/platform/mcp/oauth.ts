@@ -1,5 +1,5 @@
 import "server-only";
-import { auth } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { verifyClerkToken } from "@clerk/mcp-tools/next";
 import { sql } from "@/lib/db";
 import { USER_SCOPES, type AgentPrincipal } from "@/platform/mcp/store";
@@ -21,8 +21,16 @@ export type OAuthOutcome =
   | { estado: "inactivo" }
   | { estado: "no_invitado" };
 
-export async function authenticateOAuthUser(token: string): Promise<OAuthOutcome> {
-  const clerkAuth = await auth({ acceptsToken: "oauth_token" });
+/**
+ * Verifica el token OAuth contra Clerk desde la propia ruta, sin depender del middleware
+ * (2.6.1). `/api/mcp` quedó fuera del middleware de Clerk porque ahí las invocaciones no
+ * terminaban: un tercio llegaba al tope de 300 s y era casi todo el consumo de funciones.
+ * `auth()` necesita ese middleware; `authenticateRequest` hace la misma verificación con el
+ * pedido en la mano.
+ */
+export async function authenticateOAuthUser(request: Request, token: string): Promise<OAuthOutcome> {
+  const estado = await (await clerkClient()).authenticateRequest(request, { acceptsToken: "oauth_token" });
+  const clerkAuth = estado.toAuth() as Parameters<typeof verifyClerkToken>[0];
   const verificado = verifyClerkToken(clerkAuth, token);
   const subject = verificado?.extra?.userId ?? verificado?.clientId;
   if (!subject) return { estado: "sin_identidad" };
