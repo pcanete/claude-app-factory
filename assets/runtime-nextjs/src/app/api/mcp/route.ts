@@ -7,6 +7,9 @@ import { instruccionesPara } from "@/platform/mcp/instructions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Fusible: ninguna herramienta tarda más de unos segundos. Si una invocación queda abierta,
+// se corta al minuto y no a los 300 s, que era lo que consumía casi todo el plan (2.6.1).
+export const maxDuration = 60;
 
 type FactoryAuthInfo = AuthInfo & { factoryAgent: AgentPrincipal; factoryInstructions: string };
 
@@ -87,7 +90,7 @@ async function serve(request: Request) {
     agent = await authenticateAgentToken(token);
     if (!agent) return unauthorized(request);
   } else {
-    const resultado = await authenticateOAuthUser(token);
+    const resultado = await authenticateOAuthUser(request, token);
     if (resultado.estado !== "ok") return unauthorized(request, oauthMessage(resultado));
     agent = resultado.principal;
   }
