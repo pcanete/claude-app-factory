@@ -17,6 +17,7 @@ import { cabecerasDeConsulta, cabecerasFirmadas, codificar, datosDeConsulta, rut
 import { enParalelo } from "../src/lib/en-paralelo.ts";
 import { elegirVistaPrevia, vistaPreviaQueFalta } from "../src/platform/storage/vista-previa.ts";
 import { claveDeArchivo, separarRepetidos, sinRepetidos } from "../src/platform/storage/repetidos.ts";
+import { firmarTicket, verificarTicket } from "../src/platform/storage/ticket.ts";
 
 let fallos = 0;
 function comprobar(nombre, condicion, detalle = "") {
@@ -175,6 +176,22 @@ comprobar("sin repetidos conserva el orden de llegada",
     vistaPreviaQueFalta(guardados, [{ original_name: "slide-01.jpg", md5: "8".repeat(32) }], 1, pol).length === 0);
   comprobar("no pasa del máximo de adjuntos, contando los que no son imágenes",
     nombres(vistaPreviaQueFalta(guardados, de([guardados[0]]), 2, { ...pol, maxFiles: 3 })) === "slide-02.jpg");
+}
+
+// 2.6.0: el ticket de subida deja subir sin clave, sólo esa iteración y sólo una hora.
+{
+  const clave = "clave-del-servidor";
+  const it = "11111111-2222-4333-8444-555555555555";
+  const ahora = new Date("2026-11-20T00:00:00Z");
+  const { ticket, vence } = firmarTicket(clave, it, 3600, ahora);
+  comprobar("un ticket recién firmado da su iteración", verificarTicket(clave, ticket, ahora) === it);
+  comprobar("y dice cuándo vence", vence === "2026-11-20T01:00:00.000Z", vence);
+  comprobar("vencido no vale", verificarTicket(clave, ticket, new Date("2026-11-20T01:00:01Z")) === null);
+  comprobar("con otra clave no vale", verificarTicket("otra", ticket, ahora) === null);
+  const [, v, f] = ticket.split(".");
+  comprobar("cambiar la iteración invalida la firma", verificarTicket(clave, `99999999-2222-4333-8444-555555555555.${v}.${f}`, ahora) === null);
+  comprobar("estirar el vencimiento invalida la firma", verificarTicket(clave, `${it}.${Number(v) + 86400}.${f}`, ahora) === null);
+  comprobar("algo que no es un ticket no vale", verificarTicket(clave, "basura", ahora) === null && verificarTicket(clave, "", ahora) === null);
 }
 
 if (fallos) {

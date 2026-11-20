@@ -22,6 +22,7 @@ import { getEntity, relationFields, requireEntity } from "@/lib/spec";
 import type { AgentPrincipal } from "@/platform/mcp/store";
 import {
   almacenConfigurado,
+  claveDeTickets,
   consultarObjeto,
   direccionDeDescarga,
   direccionDeSubida,
@@ -49,6 +50,8 @@ import {
   type ArchivoGuardado,
 } from "@/platform/storage/archivos";
 import { separarRepetidos } from "@/platform/storage/repetidos";
+import { firmarTicket, verificarTicket } from "@/platform/storage/ticket";
+import { applicationUrl } from "@/platform/auth/config";
 import { porNombre, vistaPreviaQueFalta } from "@/platform/storage/vista-previa";
 import {
   claveDeNombre,
@@ -608,8 +611,12 @@ export async function subirProducido(agent: AgentPrincipal, iteracion: string, a
   const segun = (estado: string) => [...new Set(preparados.filter((_, i) => reservas[i].estado === estado).map((a) => a.nombre))];
   const yaGuardados = segun("ya_guardado");
   const reemplazados = segun("reemplazado");
+  const { ticket, vence } = firmarTicket(claveDeTickets(), iteracion);
   return {
     iteracion,
+    // Para subir sin ninguna clave en la máquina (2.6.0): el script del equipo trae las
+    // direcciones con este ticket. Vale una hora y sólo sirve para esta iteración.
+    ticket: { url: `${applicationUrl()}/api/producido/subidas?t=${encodeURIComponent(ticket)}`, vence },
     subidas: preparados.map((archivo, i) => {
       const reserva = reservas[i];
       const direccion = direccionDeSubida(reserva.objectKey, { md5Base64: archivo.md5.base64, tipo: reserva.tipo });
@@ -626,13 +633,37 @@ export async function subirProducido(agent: AgentPrincipal, iteracion: string, a
     ya_guardados: yaGuardados,
     reemplazados,
     como: [
-      "Subí cada archivo con un PUT a su url, con esas cabeceras exactas y el archivo como cuerpo, desde un script o una terminal de esta máquina: no lo pases por el chat.",
+      "Si el repositorio de skills de la organización tiene un script de subida, pasale ticket.url y los archivos: el script trae las direcciones con el ticket y sube cada archivo, sin ninguna clave en esta máquina.",
+      "Si no, subí cada archivo con un PUT a su url, con esas cabeceras exactas y el archivo como cuerpo, desde un script o una terminal de esta máquina: no lo pases por el chat.",
       "Por ejemplo: curl -sS --fail -X PUT -H \"Content-MD5: <md5 en base64>\" -H \"Content-Type: <tipo>\" --upload-file \"<archivo>\" \"<url>\"",
       yaGuardados.length
         ? `Ya estaban guardados, con el mismo nombre y el mismo MD5, y no se duplican: ${yaGuardados.join(", ")}. No hace falta volver a subirlos; si se suben, quedan iguales.`
         : "",
       "Cuando terminen, llamá confirmar_producido con la iteración: la aplicación comprueba en el almacén que cada archivo llegó entero. Las direcciones vencen en una hora; si vence, pedí otra.",
     ].filter(Boolean).join(" "),
+  };
+}
+
+/**
+ * Canjea un ticket de subida por las direcciones de los archivos pendientes de su iteración.
+ *
+ * Lo llama la ruta `/api/producido/subidas`, sin sesión ni credencial: la autorización es el
+ * ticket, que firmó el servidor al responder subir_producido a alguien que podía subir.
+ * Devuelve sólo lo pendiente: lo ya guardado no hace falta subirlo.
+ */
+export async function subidasDelTicket(ticket: string) {
+  if (!almacenConfigurado()) return null;
+  const iteracion = verificarTicket(claveDeTickets(), ticket);
+  if (!iteracion) return null;
+  const archivos = await archivosDelRegistro("iteracion", iteracion, false);
+  return {
+    iteracion,
+    subidas: archivos.filter((a) => a.status === "pendiente").map((archivo) => {
+      const md5Base64 = Buffer.from(archivo.md5, "hex").toString("base64");
+      const direccion = direccionDeSubida(archivo.object_key, { md5Base64, tipo: archivo.content_type });
+      return { nombre: archivo.original_name, tamano: archivo.size_bytes, md5: archivo.md5, metodo: "PUT", url: direccion.url, cabeceras: direccion.cabeceras, vence: direccion.vence };
+    }),
+    guardados: archivos.filter((a) => a.status === "guardado").map((a) => ({ nombre: a.original_name, md5: a.md5 })),
   };
 }
 

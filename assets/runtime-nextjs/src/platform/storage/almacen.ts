@@ -1,4 +1,5 @@
 import "server-only";
+import { createHmac } from "node:crypto";
 import { cabecerasDeConsulta, cabecerasFirmadas, datosDeConsulta, rutaDeObjeto, urlFirmada, type Credenciales } from "@/platform/storage/firma";
 
 /**
@@ -37,6 +38,15 @@ function exigir() {
   const config = configuracion();
   if (!config) throw new Error("Esta aplicación no tiene almacén configurado.");
   return config;
+}
+
+/**
+ * La clave con que se firman los tickets de subida (`ticket.ts`). Sale del secreto del
+ * almacén, que sólo vive en el servidor: no hace falta configurar otra variable.
+ */
+export function claveDeTickets() {
+  const config = exigir();
+  return createHmac("sha256", config.credenciales.secretAccessKey).update("tickets-de-subida").digest("hex");
 }
 
 /** Hasta 5 GB: el máximo de una subida de una sola vez en S3 y en R2. */

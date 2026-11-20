@@ -179,6 +179,12 @@ Con almacén:
   copia, con el mismo nombre y MD5, de un archivo guardado—, confirmar agrega las láminas que
   le faltan: un archivo borrado y vuelto a subir recupera su lámina. Si alguien la eligió a
   mano (una portada que no está en lo producido), no se toca. La galería ordena por nombre.
+- **Subir sin ninguna clave en la máquina** (2.6.0). `subir_producido` devuelve un `ticket.url`:
+  una dirección firmada por el servidor que vale una hora y sólo sirve para traer las
+  direcciones de subida de los archivos pendientes de esa iteración
+  (`GET /api/producido/subidas?t=…`, sin sesión). La IA pide la subida con el conector de la
+  persona —que entra con su cuenta y no vence— y le pasa el ticket al script de subida de la
+  organización; el script no necesita credencial. Confirmar sigue siendo `confirmar_producido`.
 - **Quiénes saben** se calcula sobre todas las iteraciones, no sobre la página que pidió
   `iteraciones_de_proceso` (2.5.6), y sólo descuenta una reproducción que no salió igual.
 - Borrar una iteración, por el motor o por las herramientas genéricas, borra también lo
