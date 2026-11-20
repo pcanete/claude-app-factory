@@ -270,6 +270,7 @@ export default async function NamedViewPage({
   const entity = view.entity ? getEntity(view.entity) : null;
   const canRead = entity ? hasPermission(user, entity.key, "read") : false;
   const canUpdate = entity ? hasPermission(user, entity.key, "update") : false;
+  const canCreate = entity ? hasPermission(user, entity.key, "create") : false;
   // Las otras formas de ver la misma entidad, como pestañas: el menú tiene una sola entrada
   // por entidad, y acá se elige si se ve como lista, agenda o tablero.
   const visibles = runtimeSpec.views
@@ -287,7 +288,15 @@ export default async function NamedViewPage({
           <h1>{pestanas && grupo ? grupo.label : view.label}</h1>
           <p className="subtitle">{view.description ?? entity?.description ?? "Un resumen de lo que está pasando."}</p>
         </div>
-        {entity && !tieneLista && <Link className="button secondary" href={`/records/${entity.key}`}>Abrir listado base</Link>}
+        {/* Desde 2.1.0 el menú lleva a la vista y no al listado base: el alta tiene que estar
+            acá, o quien tiene permiso de crear no encuentra cómo (2.5.7). */}
+        {entity && (canCreate || !tieneLista) && (
+          <div className="header-actions">
+            {!tieneLista && <Link className="button secondary" href={`/records/${entity.key}`}>Abrir listado base</Link>}
+            {canCreate && <Link className="button secondary" href={`/records/${entity.key}/import`}>Importar</Link>}
+            {canCreate && <Link className="button" href={`/records/${entity.key}/new`}>Nuevo {entity.label.toLowerCase()}</Link>}
+          </div>
+        )}
       </div>
       {pestanas && (
         <nav aria-label={`Cómo ver ${grupo!.label.toLowerCase()}`} className="view-switch view-tabs">
