@@ -87,7 +87,7 @@ export function componerInstrucciones(contexto: ContextoInstrucciones, valor: un
         ? [
           "- Lo producido se guarda en la aplicación, no en Dropbox ni en una carpeta personal: no hace falta acceso a ninguna otra cuenta.",
           "- Al terminar, registralo con registrar_iteracion: los datos que pide el proceso, la receta, la skill con su commit y el enlace a la conversación.",
-          "- Después subí lo producido con subir_producido (un PUT por archivo desde esta máquina, sin pasarlo por el chat) y confirmalo con confirmar_producido. Es parte de registrar: hasta entonces la iteración queda incompleta. Las imágenes que subas (las láminas) quedan solas como vista previa en el panel; sólo si lo producido no tiene imágenes (un video), adjuntá la portada con adjuntar_a_iteracion.",
+          "- Después subí lo producido con subir_producido (un PUT por archivo desde esta máquina, sin pasarlo por el chat; si la organización tiene un script de subida, pasale el ticket que devuelve) y confirmalo con confirmar_producido. Es parte de registrar: hasta entonces la iteración queda incompleta. Las imágenes que subas (las láminas) quedan solas como vista previa en el panel; sólo si lo producido no tiene imágenes (un video), adjuntá la portada con adjuntar_a_iteracion.",
         ]
         : [
           "- Lo producido va a la carpeta de Dropbox del proceso. Comprobá con el conector de Dropbox que quedó ahí antes de registrar; si no tenés conector, preguntale a la persona en vez de dar por buena la carpeta sincronizada.",
