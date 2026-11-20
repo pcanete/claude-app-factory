@@ -490,7 +490,12 @@ def main() -> int:
         failures.append(
             "Agent credentials can be issued without the user-management capability, which allows privilege escalation."
         )
-    if "randomBytes" not in agent_actions or "createHash" not in agent_actions:
+    # Desde 2.5.8 crear y regenerar emiten la clave con la misma funcion, en credencial.ts:
+    # las acciones tienen que usarla, y ella tiene que generar al azar y guardar solo el hash.
+    credential_path = project / "src/platform/mcp/credencial.ts"
+    credential = credential_path.read_text(encoding="utf-8") if credential_path.is_file() else ""
+    issues_tokens = "emitirCredencial" in agent_actions and "randomBytes" in credential and "createHash" in credential
+    if not issues_tokens and ("randomBytes" not in agent_actions or "createHash" not in agent_actions):
         failures.append("Agent tokens must be generated randomly and stored only as a hash.")
     for invariant in ("requireUserManagementAccess", "listManagedAgents", "listAgentEvents"):
         if invariant not in agent_page:
