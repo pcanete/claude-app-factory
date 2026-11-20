@@ -84,7 +84,7 @@ try {
   enUsoId = await withTransaction((client) => createManagedAgent(client, {
     name: `En uso ${persona.slice(0, 8)}`,
     roleKey: rol,
-    scopes: ["schema:read"],
+    scopes: ["schema:read", "records:read"],
     tokenHash: enUso.tokenHash,
     expiresAt: enUso.expiresAt,
     renewDays: 90,
@@ -100,7 +100,7 @@ try {
   olvidadaId = await withTransaction((client) => createManagedAgent(client, {
     name: `Olvidada ${persona.slice(0, 8)}`,
     roleKey: rol,
-    scopes: ["schema:read"],
+    scopes: ["schema:read", "records:read"],
     tokenHash: olvidada.tokenHash,
     expiresAt: olvidada.expiresAt,
     renewDays: 90,
