@@ -263,7 +263,21 @@ tbody tr:hover { background: #1a1d25; }
 .detail-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .detail-item { background: var(--surface); padding: 16px; }
 .detail-key { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.detail-value { margin-top: 8px; word-break: break-word; }
+.detail-value { margin-top: 8px; word-break: break-word; overflow-wrap: anywhere; }
+.detail-list .detail-item.full { grid-column: 1 / -1; }
+.texto-largo { line-height: 1.55; max-width: 92ch; }
+.texto-largo > :first-child { margin-top: 0; }
+.texto-largo > :last-child { margin-bottom: 0; }
+.texto-largo p, .texto-largo ul, .texto-largo ol, .texto-largo blockquote { margin: 0 0 .75em; }
+.texto-largo ul, .texto-largo ol { padding-left: 1.4em; }
+.texto-largo li + li { margin-top: .2em; }
+.texto-largo h3, .texto-largo h4, .texto-largo h5 { margin: 1.2em 0 .45em; line-height: 1.3; }
+.texto-largo h3 { font-size: 17px; }
+.texto-largo h4 { font-size: 15px; }
+.texto-largo h5 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.texto-largo blockquote { border-left: 3px solid var(--border); padding-left: 12px; color: var(--muted); }
+.texto-largo hr { border: 0; border-top: 1px solid var(--border); margin: 1em 0; }
+.texto-largo a { color: var(--primary); overflow-wrap: anywhere; }
 
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .work-section { margin-top: 30px; }
