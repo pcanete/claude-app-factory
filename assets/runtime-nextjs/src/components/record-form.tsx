@@ -95,7 +95,10 @@ function FieldControl({ field, value, people, ownerRestriction }: {
     );
   }
   if (field.type === "long_text" || field.type === "json" || field.type === "file") {
-    return <textarea className="control" defaultValue={inputValue(field, value)} id={field.key} name={field.key} required={field.required} />;
+    const texto = inputValue(field, value);
+    // Alto según lo que ya tiene, para no editar una nota larga por una ranura de 5 líneas.
+    const filas = Math.min(30, Math.max(6, texto.split("\n").length + 2));
+    return <textarea className="control" defaultValue={texto} id={field.key} name={field.key} required={field.required} rows={filas} />;
   }
   if (field.type === "person") {
     // Se muestra como lista de personas: escribir un identificador a mano no es una

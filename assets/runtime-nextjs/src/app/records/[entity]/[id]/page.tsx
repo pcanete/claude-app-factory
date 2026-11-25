@@ -9,9 +9,27 @@ import { listAttachments, resolveAttachmentPolicy } from "@/lib/attachments";
 import { canAccessRelationshipOptions, hasPermission, requirePermission } from "@/lib/auth";
 import { formatFieldValue, formatValue } from "@/lib/presentation";
 import { getRecord, relationshipOptions } from "@/lib/repository";
-import { getEntity, runtimeSpec } from "@/lib/spec";
+import { getEntity, runtimeSpec, type FieldSpec } from "@/lib/spec";
+import { TextoLargo } from "@/components/texto-largo";
 
 export const dynamic = "force-dynamic";
+
+const esCampoLargo = (field: FieldSpec) => ["long_text", "json", "file"].includes(field.type);
+
+/**
+ * Los datos cortos primero, de a dos por fila; los textos largos después, a todo el ancho.
+ * Un texto largo en media columna, al lado de una fecha, no se puede leer.
+ */
+function camposEnOrdenDeLectura(fields: FieldSpec[]) {
+  return [...fields.filter((field) => !esCampoLargo(field)), ...fields.filter(esCampoLargo)];
+}
+
+/** Con un número impar de datos cortos, el último ocupa la fila entera: no queda un hueco. */
+function ocupaLaFila(fields: FieldSpec[], field: FieldSpec) {
+  if (esCampoLargo(field)) return true;
+  const cortos = fields.filter((f) => !esCampoLargo(f));
+  return cortos.length % 2 === 1 && cortos[cortos.length - 1] === field;
+}
 
 export default async function RecordDetailPage({
   params,
@@ -66,12 +84,19 @@ export default async function RecordDetailPage({
       {query.attachment_error && <div className="notice rule-blocked">{query.attachment_error}</div>}
       {query.attachment_success === "1" && <div className="notice success">Archivo adjuntado correctamente.</div>}
       <section className="detail-list" aria-label="Resumen del registro">
-        {entity.fields.map((field) => (
-          <div className="detail-item" key={field.key}>
-            <div className="detail-key">{field.label}</div>
-            <div className="detail-value">{formatFieldValue(field, paraMostrar[field.key], runtimeSpec.app.locale)}</div>
-          </div>
-        ))}
+        {camposEnOrdenDeLectura(entity.fields).map((field) => {
+          const valor = paraMostrar[field.key];
+          return (
+            <div className={`detail-item${ocupaLaFila(entity.fields, field) ? " full" : ""}`} key={field.key}>
+              <div className="detail-key">{field.label}</div>
+              <div className="detail-value">
+                {field.type === "long_text" && typeof valor === "string" && valor.trim()
+                  ? <TextoLargo texto={valor} />
+                  : formatFieldValue(field, valor, runtimeSpec.app.locale)}
+              </div>
+            </div>
+          );
+        })}
       </section>
       {attachmentPolicy && (
         <>

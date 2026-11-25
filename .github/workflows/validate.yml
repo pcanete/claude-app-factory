@@ -103,6 +103,11 @@ jobs:
       - name: An optional yes/no saved from the panel keeps its empty value
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-form-boolean.mjs
+      # Un texto largo se lee como markdown sin que nada escrito se vuelva ejecutable
+      # ni se altere (una clave con asteriscos no es una negrita).
+      - name: Long text renders as safe markdown without altering its content
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-texto-largo.mjs
       # Si agrupar los últimos eventos difiere de cómo agrupa la base, el grafo muestra
       # otra cosa según el período elegido.
       - name: The activity graph groups the same way for every period
