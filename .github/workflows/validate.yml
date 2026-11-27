@@ -99,6 +99,10 @@ jobs:
       - name: Grouped lists keep every record in option order
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-list-groups.mjs
+      # La ficha reparte los campos y busca lo relacionado: un error acá esconde datos.
+      - name: The record page splits fields and finds related records
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-record-layout.mjs
       # Una firma que difiere en un carácter hace que el almacén rechace todas las subidas.
       - name: Storage signatures match the published AWS example
         working-directory: /tmp/reference-app

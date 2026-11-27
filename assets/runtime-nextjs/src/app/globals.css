@@ -604,6 +604,37 @@ tbody tr:hover { background: #1a1d25; }
 }
 .tag-options { display: flex; flex-wrap: wrap; gap: 10px 18px; }
 
+/* Ficha en dos columnas (2.9.0): a la izquierda lo que se lee —los textos largos y lo
+   relacionado como línea de tiempo—; a la derecha las propiedades, que se consultan de un
+   vistazo y las de opciones se cambian en el lugar. El formulario completo queda plegado. */
+.record-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.record-main { display: grid; gap: 18px; min-width: 0; }
+.record-aside { position: sticky; top: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+.record-section-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px; }
+.record-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.record-section-head .record-section-title { margin: 0; }
+.record-text .detail-value { margin: 0; }
+.properties { display: grid; gap: 2px; margin: 0; }
+.property { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 30px; font-size: 13px; }
+.property dt { color: var(--muted); font-size: 12px; }
+.property dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.property-select { max-width: 100%; padding-left: 4px; margin-left: -4px; }
+.property-error { color: #ffc2c2; font-size: 11px; margin-top: 2px; }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--border); display: grid; gap: 10px; }
+.timeline-item { position: relative; }
+.timeline-item::before { content: ""; position: absolute; left: -19px; top: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--surface-raised); border: 2px solid var(--primary); }
+.timeline-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; }
+.timeline-meta { color: var(--muted); font-size: 12px; }
+.timeline-body { margin-top: 4px; color: var(--text); font-size: 13px; }
+.timeline-body .texto-largo { max-width: 80ch; }
+.record-edit { border-top: 1px solid var(--border); padding-top: 12px; }
+.record-edit > summary { cursor: pointer; color: var(--primary); font-size: 13px; margin-bottom: 12px; }
+.record-main .attachment-panel { max-width: none; }
+@media (max-width: 900px) {
+  .record-layout { grid-template-columns: 1fr; }
+  .record-aside { position: static; order: -1; }
+}
+
 /* Lista agrupada (2.8.0): un encabezado por grupo con cuántos hay, y filas de ~34 px con el
    título a la izquierda y los datos a la derecha. Los selectores de la fila parecen texto
    hasta que se pasa el mouse: se edita donde se lee, sin que la lista se vea como un
