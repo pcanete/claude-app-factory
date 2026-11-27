@@ -216,6 +216,8 @@ Las vistas de tabla soportan filtros dinámicos por campo, búsqueda de texto li
 
 Los listados se paginan. `bulk_edit_fields` es opcional y sólo puede referenciar campos `enum` o `boolean`; una mutación masiva tiene un tope de 100 registros, se ejecuta de forma atómica y aplica los mismos permisos, reglas y rastro de auditoría que una edición individual.
 
+Una vista `table` puede declarar `group_by` con un campo `enum`: entonces se muestra como lista agrupada, densa, con un encabezado por opción y cuántos registros hay en cada una, en el orden de las opciones. No pagina (muestra hasta 500), respeta búsqueda, filtros y orden, y los campos de `bulk_edit_fields` se cambian en la misma fila con los mismos permisos, reglas y auditoría que la edición masiva. Si la entidad tiene un campo `person`, la lista ofrece «Todos / Míos»: el dueño de `record_access`, o el primer campo de persona de la vista, igual a quien mira.
+
 Las vistas kanban requieren `entity` y `group_by`, y `group_by` tiene que referenciar un campo `enum`. Poné `allow_move: true` para habilitar el movimiento auditado de tarjetas. Las vistas de calendario requieren `entity` y `date_field`, que tiene que referenciar un campo de fecha o fecha y hora; `end_date_field` es opcional. Poné `allow_reschedule: true` para habilitar cambios de fecha auditados. Las dos operaciones requieren permiso de `update` y pasan por las reglas deterministas. Las vistas de tablero contienen uno o más widgets deterministas:
 
 ```json
