@@ -94,6 +94,18 @@ class ScaffoldTests(unittest.TestCase):
         errors = validate_spec(spec)
         self.assertTrue(any("group_by must reference an enum field" in error for error in errors))
 
+    def test_theme_colors_must_be_hex(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["app"]["theme"] = {"primary": "red; } body { display: none", "surface": "#12"}
+        errors = validate_spec(spec)
+        self.assertIn("app.theme.primary must be a hex color like #5B5BD6.", errors)
+        self.assertIn("app.theme.surface must be a hex color like #5B5BD6.", errors)
+
+    def test_valid_theme_colors_pass(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["app"]["theme"] = {"primary": "#5B5BD6", "surface": "#111"}
+        self.assertEqual(validate_spec(spec), [])
+
     def test_icons_must_exist_in_the_platform_set(self) -> None:
         spec = copy.deepcopy(self.spec)
         spec["entities"][0]["icon"] = "unicornio"

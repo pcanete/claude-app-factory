@@ -103,6 +103,10 @@ jobs:
       - name: The record page splits fields and finds related records
         working-directory: /tmp/reference-app
         run: node --experimental-strip-types scripts/test-record-layout.mjs
+      # El color del AppSpec llega a la hoja de estilos: sólo un hexadecimal y siempre legible.
+      - name: The AppSpec color is applied and stays readable
+        working-directory: /tmp/reference-app
+        run: node --experimental-strip-types scripts/test-theme.mjs
       # Una firma que difiere en un carácter hace que el almacén rechace todas las subidas.
       - name: Storage signatures match the published AWS example
         working-directory: /tmp/reference-app

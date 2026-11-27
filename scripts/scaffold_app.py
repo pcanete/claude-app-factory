@@ -43,7 +43,7 @@ RULE_VALUE_OPERATORS = {"eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in", "
 RULE_STATE_OPERATORS = {"is_empty", "is_not_empty", "changed", "not_changed"}
 # Capacidades administrativas: se declaran por rol en vez de inferirse de que un
 # rol tenga todos los permisos sobre todas las entidades.
-PLATFORM_VERSION = "2.10.0"
+PLATFORM_VERSION = "2.11.0"
 
 CAPABILITIES = {"manage_users", "view_audit", "view_rules"}
 SYSTEM_FIELDS = {"id", "created_at", "updated_at"}
@@ -259,6 +259,18 @@ def validate_spec(spec: Any) -> list[str]:
         for key in ("name", "description"):
             if not required_string(app.get(key)):
                 errors.append(f"app.{key} must be a non-empty string.")
+        # El color se inyecta en la hoja de estilos: sólo un hexadecimal, nada más.
+        theme = app.get("theme")
+        if theme is not None:
+            if not isinstance(theme, dict):
+                errors.append("app.theme must be an object.")
+            else:
+                for key in sorted(set(theme) - {"primary", "surface"}):
+                    errors.append(f"app.theme contains unknown property '{key}'.")
+                for key in ("primary", "surface"):
+                    value = theme.get(key)
+                    if value is not None and not (isinstance(value, str) and re.fullmatch(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})", value)):
+                        errors.append(f"app.theme.{key} must be a hex color like #5B5BD6.")
 
     roles = spec.get("roles")
     role_keys: list[str] = []
