@@ -37,12 +37,16 @@ export function GroupedRecordList({
   const [pending, startTransition] = useTransition();
   const editable = new Set(canUpdate ? editableFields : []);
 
-  function cambiar(recordId: string, field: FieldSpec, value: string) {
+  function cambiar(recordId: string, field: FieldSpec, select: HTMLSelectElement, anterior: string) {
+    const value = select.value;
     startTransition(async () => {
       const result = await bulkSetRecordsAction(viewKey, [recordId], field.key, value);
       if (!result.ok) {
+        // El valor guardado no cambió, así que la página refrescada trae el mismo y React no
+        // vuelve a montar el selector: hay que devolverlo a mano, o queda mostrando un valor
+        // que la regla rechazó.
+        select.value = anterior;
         setError(result.error);
-        router.refresh();
         return;
       }
       setError("");
@@ -59,15 +63,16 @@ export function GroupedRecordList({
     return (
       <select
         aria-label={`${field.label} de ${String(record[titleField?.key ?? "id"] ?? "")}`}
-        className="list-select"
+        className={`list-select${actual ? "" : " empty"}`}
         disabled={pending}
-        // La `key` con el valor hace que, si una regla frena el cambio y la página se
-        // refresca con el valor de antes, el selector vuelva a mostrarlo.
+        // La `key` con el valor vuelve a montar el selector cuando el valor guardado cambia
+        // (por ejemplo, desde otra pestaña).
         key={`${id}-${field.key}-${actual}`}
         defaultValue={actual}
-        onChange={(event) => cambiar(id, field, event.target.value)}
+        onChange={(event) => cambiar(id, field, event.currentTarget, actual)}
+        title={field.label}
       >
-        {!actual && <option value="">{field.label}…</option>}
+        {!actual && <option value="">—</option>}
         {opciones.map((opcion) => <option key={opcion.key} value={opcion.key}>{opcion.label}</option>)}
       </select>
     );
@@ -98,9 +103,10 @@ export function GroupedRecordList({
                     <span className="list-row-meta">
                       {fields.map((field) => {
                         if (editable.has(field.key)) return <span className="list-row-field" key={field.key}>{valorEditable(field, record)}</span>;
+                        // Un dato vacío deja su lugar vacío: si desaparece, las columnas de esa
+                        // fila se corren y dejan de alinearse con las de las otras.
                         const valor = formatFieldValue(field, record[field.key], locale);
-                        if (valor === "—") return null;
-                        return <span className="list-row-field" key={field.key} title={field.label}>{valor}</span>;
+                        return <span className="list-row-field" key={field.key} title={field.label}>{valor === "—" ? "" : valor}</span>;
                       })}
                     </span>
                   </li>

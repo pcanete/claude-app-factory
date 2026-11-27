@@ -622,17 +622,22 @@ tbody tr:hover { background: #1a1d25; }
 .list-row:hover { background: color-mix(in srgb, var(--surface-raised) 55%, transparent); }
 .list-row-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-row-title .record-link { font-weight: 600; }
-.list-row-meta { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; justify-content: flex-end; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
-.list-row-field { white-space: nowrap; }
+.list-row-meta { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; justify-content: flex-end; color: var(--muted); font-size: 12px; }
+/* Columnas de ancho fijo: el mismo dato cae en el mismo lugar en todas las filas. */
+.list-row-field { width: 104px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 .list-select { appearance: none; background: transparent; border: 1px solid transparent; border-radius: 5px; color: var(--text); cursor: pointer; font-size: 12px; padding: 2px 6px; max-width: 150px; }
 .list-select:hover, .list-select:focus { border-color: var(--border); background: var(--field); outline: none; }
 .list-select:disabled { cursor: progress; opacity: .6; }
+.list-select.empty { color: var(--muted); opacity: .55; }
+.list-row-field .list-select { max-width: 100%; text-align: right; }
 .list-row-group .list-select { color: var(--muted); min-width: 92px; }
 @media (max-width: 760px) {
   /* En el teléfono la fila se parte: el título arriba, los datos debajo. */
   .list-row { flex-wrap: wrap; padding: 8px 12px; }
   .list-row-title { flex-basis: 100%; order: -1; white-space: normal; }
-  .list-row-meta { justify-content: flex-start; }
+  .list-row-meta { justify-content: flex-start; flex-wrap: wrap; }
+  .list-row-field { width: auto; text-align: left; }
+  .list-row-field:empty { display: none; }
   .list-select { min-height: 32px; }
 }
 
