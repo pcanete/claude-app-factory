@@ -2,6 +2,8 @@ import Link from "@/components/enlace";
 import { conNombresDePersonas } from "@/lib/people-display";
 import { notFound } from "next/navigation";
 import { BulkRecordTable } from "@/components/bulk-record-table";
+import { GroupedRecordList } from "@/components/grouped-record-list";
+import { agruparPorOpcion, campoDeMios } from "@/lib/list-groups";
 import { OperationalCalendar } from "@/components/operational-calendar";
 import { OperationalKanban } from "@/components/operational-kanban";
 import { Pagination } from "@/components/pagination";
@@ -56,6 +58,64 @@ async function TableView({ view, query, canRead, canUpdate, user, access }: { vi
         <BulkRecordTable bulkFields={bulkFields} canRead={canRead} entity={entity} fields={fields} locale={runtimeSpec.app.locale} records={recordsForClient(records)} viewKey={view.key} />
       ) : <RecordTable canRead={canRead} entity={entity} fields={fields} locale={runtimeSpec.app.locale} records={records} />}
       <Pagination baseHref={`/views/${view.key}`} page={page} pageSize={parsed.pageSize} query={query} total={total} />
+    </>
+  );
+}
+
+/** Hasta cuántos registros muestra una lista agrupada: lo mismo que el tablero. */
+const LIMITE_DE_LISTA = 500;
+
+/**
+ * Una tabla con `group_by`: la lista agrupada por estado, densa, con los campos editables
+ * de la vista cambiándose en la fila. Respeta la búsqueda, los filtros y el orden de la
+ * tabla; no pagina, porque partir un grupo entre páginas lo vuelve ilegible.
+ */
+async function GroupedListView({ view, query, canRead, canUpdate, user, access }: { view: ViewSpec; query: RawSearchParams; canRead: boolean; canUpdate: boolean; user: RuntimeUser; access: RecordAccessContext }) {
+  const entity = getEntity(view.entity ?? "");
+  if (!entity) notFound();
+  const groupField = entity.fields.find((field) => field.key === view.group_by && field.type === "enum");
+  if (!groupField) notFound();
+  const fields = visibleFields(entity, view, 8);
+  const titleField = entity.fields.find((field) => field.key === entity.title_field);
+  const parsed = parseListQuery(entity, query, view);
+  const records = await conNombresDePersonas(
+    entity,
+    await listRecords(entity.key, { ...parsed, access, limit: LIMITE_DE_LISTA, offset: 0 }),
+  );
+  const groups = agruparPorOpcion(recordsForClient(records), groupField);
+  const filterOptions = canAccessRelationshipOptions(user, entity)
+    ? await relationshipOptions(entity, access)
+    : undefined;
+  // «Míos»: el campo de persona de la vista igual a quien mira. Es un filtro más, así que se
+  // combina con la búsqueda y los demás filtros y se puede compartir como enlace.
+  const campoMio = campoDeMios(entity, view.fields);
+  const filtroMio = campoMio ? `f_${campoMio}` : null;
+  const soloMios = Boolean(filtroMio && firstParam(query[filtroMio]) === user.id);
+  const base = `/views/${view.key}`;
+  return (
+    <>
+      <RecordFilters entity={entity} fields={fields} query={parsed} relationshipOptions={filterOptions} resetHref={base} />
+      {filtroMio && (
+        <nav aria-label="Qué registros ver" className="view-switch list-scope">
+          <Link aria-current={!soloMios ? "page" : undefined} className={!soloMios ? "active" : undefined} href={base}>Todos</Link>
+          <Link aria-current={soloMios ? "page" : undefined} className={soloMios ? "active" : undefined} href={`${base}?${filtroMio}=${encodeURIComponent(user.id)}`}>Míos</Link>
+        </nav>
+      )}
+      <GroupedRecordList
+        canRead={canRead}
+        canUpdate={canUpdate}
+        editableFields={view.bulk_edit_fields ?? []}
+        entityKey={entity.key}
+        fields={fields.filter((field) => field.key !== entity.title_field && field.key !== groupField.key)}
+        groupField={groupField}
+        groups={groups}
+        locale={runtimeSpec.app.locale}
+        titleField={titleField}
+        viewKey={view.key}
+      />
+      {records.length >= LIMITE_DE_LISTA && (
+        <p className="operation-hint">Se muestran los primeros {LIMITE_DE_LISTA}. Usá la búsqueda o los filtros para acotar.</p>
+      )}
     </>
   );
 }
@@ -312,7 +372,8 @@ export default async function NamedViewPage({
           ))}
         </nav>
       )}
-      {view.type === "table" && <TableView access={access} canRead={canRead} canUpdate={canUpdate} query={query} user={user} view={view} />}
+      {view.type === "table" && !view.group_by && <TableView access={access} canRead={canRead} canUpdate={canUpdate} query={query} user={user} view={view} />}
+      {view.type === "table" && view.group_by && <GroupedListView access={access} canRead={canRead} canUpdate={canUpdate} query={query} user={user} view={view} />}
       {view.type === "kanban" && <KanbanView access={access} canRead={canRead} canUpdate={canUpdate} view={view} />}
       {view.type === "calendar" && <CalendarView access={access} canRead={canRead} canUpdate={canUpdate} month={firstParam(query.month)} view={view} />}
       {view.type === "dashboard" && <DashboardView access={access} userRole={user.roleKey} view={view} />}

@@ -43,7 +43,7 @@ RULE_VALUE_OPERATORS = {"eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in", "
 RULE_STATE_OPERATORS = {"is_empty", "is_not_empty", "changed", "not_changed"}
 # Capacidades administrativas: se declaran por rol en vez de inferirse de que un
 # rol tenga todos los permisos sobre todas las entidades.
-PLATFORM_VERSION = "2.7.0"
+PLATFORM_VERSION = "2.8.0"
 
 CAPABILITIES = {"manage_users", "view_audit", "view_rules"}
 SYSTEM_FIELDS = {"id", "created_at", "updated_at"}
@@ -556,6 +556,12 @@ def validate_spec(spec: Any) -> list[str]:
                             )
         elif bulk_edit_fields is not None:
             errors.append(f"{path}.bulk_edit_fields is only valid for table views.")
+        # Una tabla con group_by se muestra como lista agrupada (2.8.0); agrupar por un campo
+        # que no es de opciones no tiene grupos que mostrar.
+        if view_type == "table" and "group_by" in view and entity_key in entity_field_specs:
+            table_group = entity_field_specs[entity_key].get(view.get("group_by"))
+            if not table_group or table_group.get("type") != "enum":
+                errors.append(f"{path}.group_by must reference an enum field on the view entity.")
 
         if view_type == "kanban" and entity_key in entity_field_specs:
             group_by = view.get("group_by")

@@ -94,6 +94,20 @@ class ScaffoldTests(unittest.TestCase):
         errors = validate_spec(spec)
         self.assertTrue(any("group_by must reference an enum field" in error for error in errors))
 
+    def test_table_group_must_be_enum(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        table = next(view for view in spec["views"] if view["type"] == "table")
+        table["group_by"] = "scheduled_for"
+        errors = validate_spec(spec)
+        self.assertTrue(any(error.endswith("group_by must reference an enum field on the view entity.") for error in errors))
+
+    def test_table_grouped_by_enum_is_valid(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        table = next(view for view in spec["views"] if view["type"] == "table")
+        entity = next(entity for entity in spec["entities"] if entity["key"] == table["entity"])
+        table["group_by"] = next(field["key"] for field in entity["fields"] if field["type"] == "enum")
+        self.assertEqual(validate_spec(spec), [])
+
     def test_bulk_edit_fields_are_bounded_to_safe_types(self) -> None:
         spec = copy.deepcopy(self.spec)
         table = next(view for view in spec["views"] if view["type"] == "table")
