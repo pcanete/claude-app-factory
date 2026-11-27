@@ -112,6 +112,46 @@ export async function bulkSetRecordsAction(
   return { ok: true, updated: ids.length };
 }
 
+/**
+ * Cambia una propiedad de opciones o de sí o no desde la ficha del registro (2.9.0).
+ *
+ * Es la edición masiva con un solo registro y sin vista: los mismos permisos de `update`,
+ * el mismo alcance por registro, las mismas reglas y la misma auditoría. Un campo opcional
+ * se puede dejar sin valor; uno obligatorio, no.
+ */
+export async function setRecordFieldAction(
+  entityKey: string,
+  recordId: string,
+  fieldKey: string,
+  rawValue: string,
+): Promise<RecordOperationResult> {
+  const user = await requirePermission(entityKey, "update");
+  const entity = requireEntity(entityKey);
+  const field = entity.fields.find((candidate) => candidate.key === fieldKey && ["enum", "boolean"].includes(candidate.type));
+  if (!field) return { ok: false, error: "Ese campo no se cambia desde acá." };
+  if (!UUID.test(recordId)) return { ok: false, error: "La selección contiene identificadores inválidos." };
+  try {
+    const value = rawValue === "" && !field.required ? null : bulkValue(field, rawValue);
+    await withTransaction(async (client) => {
+      await updateOne({
+        client,
+        actorId: user.id,
+        entityKey: entity.key,
+        recordId,
+        values: { [field.key]: value },
+        source: { kind: "detail", field: field.key },
+        access: recordAccessForUser(user),
+      });
+    });
+  } catch (error) {
+    return resultError(error);
+  }
+  revalidatePath(`/records/${entity.key}/${recordId}`);
+  revalidatePath(`/records/${entity.key}`);
+  revalidatePath("/audit");
+  return { ok: true, updated: 1 };
+}
+
 export async function moveRecordAction(viewKey: string, recordId: string, targetKey: string): Promise<RecordOperationResult> {
   const view = requireView(viewKey);
   if (view.type !== "kanban" || !view.entity || !view.allow_move || !view.group_by) {
