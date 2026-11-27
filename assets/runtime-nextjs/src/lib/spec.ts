@@ -54,6 +54,8 @@ export type EntitySpec = {
   relationships?: RelationshipSpec[];
   attachments?: AttachmentPolicy;
   record_access?: RecordAccessPolicy;
+  /** El ícono de su entrada en el menú: un nombre de `lib/icons.json`. */
+  icon?: string;
   permissions: Record<string, Array<"list" | "read" | "create" | "update" | "delete">>;
 };
 
@@ -84,6 +86,8 @@ export type ViewSpec = {
   /** Para qué sirve la vista y qué se hace en ella: es lo primero que lee quien entra. */
   description?: string;
   type: ViewType;
+  /** El ícono de su entrada en el menú, si la vista no es de una entidad (un panorama). */
+  icon?: string;
   entity?: string;
   navigation?: boolean;
   fields?: string[];
