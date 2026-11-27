@@ -291,6 +291,10 @@
         },
         "permissions": {
           "$ref": "#/$defs/permissionMap"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Ícono de su entrada en el menú: un nombre de assets/runtime-nextjs/src/lib/icons.json."
         }
       }
     },
@@ -482,6 +486,10 @@
           "items": {
             "$ref": "#/$defs/dashboardWidget"
           }
+        },
+        "icon": {
+          "type": "string",
+          "description": "Ícono de su entrada en el menú: un nombre de assets/runtime-nextjs/src/lib/icons.json."
         }
       }
     },

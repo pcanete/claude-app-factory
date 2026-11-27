@@ -43,7 +43,7 @@ RULE_VALUE_OPERATORS = {"eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in", "
 RULE_STATE_OPERATORS = {"is_empty", "is_not_empty", "changed", "not_changed"}
 # Capacidades administrativas: se declaran por rol en vez de inferirse de que un
 # rol tenga todos los permisos sobre todas las entidades.
-PLATFORM_VERSION = "2.9.0"
+PLATFORM_VERSION = "2.10.0"
 
 CAPABILITIES = {"manage_users", "view_audit", "view_rules"}
 SYSTEM_FIELDS = {"id", "created_at", "updated_at"}
@@ -218,6 +218,19 @@ def validate_rule_condition(
     return 1
 
 
+ICON_NAMES = frozenset(
+    json.loads((Path(__file__).resolve().parent.parent / "assets" / "runtime-nextjs" / "src" / "lib" / "icons.json").read_text(encoding="utf-8"))
+)
+
+
+def validate_icon(value: Any, path: str, errors: list[str]) -> None:
+    """Un ícono del menú tiene que existir en el set de la plataforma: no se dibuja lo que no está."""
+    if value is None:
+        return
+    if not isinstance(value, str) or value not in ICON_NAMES:
+        errors.append(f"{path}.icon must be one of: {', '.join(sorted(ICON_NAMES))}.")
+
+
 def validate_spec(spec: Any) -> list[str]:
     errors: list[str] = []
     if not isinstance(spec, dict):
@@ -304,6 +317,7 @@ def validate_spec(spec: Any) -> list[str]:
         for key in ("label", "label_plural"):
             if not required_string(entity.get(key)):
                 errors.append(f"{path}.{key} must be a non-empty string.")
+        validate_icon(entity.get("icon"), path, errors)
 
         fields = entity.get("fields")
         field_keys: list[str] = []
@@ -497,10 +511,11 @@ def validate_spec(spec: Any) -> list[str]:
         allowed_view_keys = {
             "key", "label", "description", "type", "entity", "navigation", "fields", "default_sort",
             "page_size", "bulk_edit_fields", "group_by", "allow_move", "date_field",
-            "end_date_field", "allow_reschedule", "widgets",
+            "end_date_field", "allow_reschedule", "widgets", "icon",
         }
         for key in sorted(set(view) - allowed_view_keys):
             errors.append(f"Unknown property at {path}: {key}.")
+        validate_icon(view.get("icon"), path, errors)
         if not is_identifier(view.get("key")):
             errors.append(f"{path}.key must be a snake_case identifier.")
         if "description" in view and (not isinstance(view["description"], str) or len(view["description"]) > 300):

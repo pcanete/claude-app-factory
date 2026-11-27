@@ -76,6 +76,12 @@ button, input, select, textarea { font: inherit; }
 .brand-description { color: var(--muted); font-size: 11px; line-height: 1.4; margin-top: 4px; }
 .nav { display: grid; gap: 1px; }
 .nav-link { color: #c6cad2; padding: 5px 10px; border-radius: 6px; font-size: 13px; }
+/* Ícono del menú (2.10.0): 16 px, del color del texto y un poco más tenue, para que se
+   reconozca cada entrada sin competir con su nombre. */
+.nav-link { display: flex; align-items: center; gap: 8px; }
+.nav-icon { flex: 0 0 16px; opacity: .72; }
+.nav-link:hover .nav-icon { opacity: 1; }
+.nav-link > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-link:hover { background: var(--surface-raised); color: white; }
 .nav-link.home { color: var(--primary); margin-bottom: 4px; }
 .nav-link.audit-link { margin-top: 6px; border-top: 1px solid var(--border); border-radius: 0; padding-top: 10px; }

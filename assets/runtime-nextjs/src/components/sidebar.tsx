@@ -6,12 +6,13 @@ import { canManageUsers, canViewAudit, canViewRules, getCurrentUser, hasPermissi
 import { localPreviewAuthEnabled } from "@/lib/runtime-access";
 import { getEntity, runtimeSpec } from "@/lib/spec";
 import { agruparVistas } from "@/lib/view-groups";
+import { Icono } from "@/components/icono";
 import { motorDisponible } from "@/platform/processes/engine";
 
 /** Las entidades del motor de procesos: se ven desde la página de cada proceso, no desde el menú. */
 const ENTIDADES_DE_PROCESO = new Set(["proceso", "iteracion"]);
 
-type Enlace = { key: string; label: string; href: string };
+type Enlace = { key: string; label: string; href: string; icon?: string };
 
 /**
  * El menú se ordena por lo que la persona viene a hacer, no por el tipo de dato.
@@ -40,30 +41,38 @@ export async function Sidebar() {
   const entidades = runtimeSpec.entities
     .filter((entity) => user && hasPermission(user, entity.key, "list"))
     .filter((entity) => !entidadesConVista.has(entity.key));
-  const enlaceDeEntidad = (entity: (typeof entidades)[number]): Enlace => ({ key: `entity:${entity.key}`, label: entity.label_plural, href: `/records/${entity.key}` });
+  const enlaceDeEntidad = (entity: (typeof entidades)[number]): Enlace => ({ key: `entity:${entity.key}`, label: entity.label_plural, href: `/records/${entity.key}`, icon: entity.icon });
 
   // Procesos e iteraciones se ven desde la página de cada proceso: en el menú, una entrada.
   const miTrabajo: Enlace[] = [
-    ...(motor && user && hasPermission(user, "proceso", "list") ? [{ key: "familias", label: "Procesos", href: "/procesos" }] : []),
+    ...(motor && user && hasPermission(user, "proceso", "list") ? [{ key: "familias", label: "Procesos", href: "/procesos", icon: "layers" }] : []),
   ];
   // Una entrada por entidad, no por vista: la tabla, la agenda y el tablero de los mismos
   // compromisos son una sola cosa vista de tres maneras, y adentro se eligen por pestaña.
   const operacion = agruparVistas(vistas.filter((view) => !deProceso(view.entity)), (clave) => getEntity(clave)?.label_plural)
-    .map((grupo): Enlace => ({ key: grupo.key, label: grupo.label, href: grupo.href }));
+    .map((grupo): Enlace => ({
+      key: grupo.key,
+      label: grupo.label,
+      href: grupo.href,
+      // Una entidad lleva el ícono que declara; una vista suelta (un panorama), el suyo.
+      icon: grupo.entity
+        ? getEntity(grupo.entity)?.icon
+        : vistas.find((vista) => `vista:${vista.key}` === grupo.key)?.icon ?? "chart",
+    }));
   const datos = entidades.filter((entity) => !deProceso(entity.key)).map(enlaceDeEntidad);
   const sistema: Enlace[] = [
-    ...(user && canManageUsers(user) ? [{ key: "users", label: "Usuarios", href: "/users" }] : []),
-    ...(user && canViewAudit(user) ? [{ key: "agents", label: "Agentes", href: "/agents" }] : []),
-    ...(user && canViewAudit(user) ? [{ key: "audit", label: "Actividad", href: "/audit" }] : []),
-    ...(user && canViewRules(user) ? [{ key: "rules", label: "Reglas", href: "/rules" }] : []),
-    ...(user ? [{ key: "settings", label: "Configuración", href: "/settings" }] : []),
+    ...(user && canManageUsers(user) ? [{ key: "users", label: "Usuarios", href: "/users", icon: "user" }] : []),
+    ...(user && canViewAudit(user) ? [{ key: "agents", label: "Agentes", href: "/agents", icon: "bot" }] : []),
+    ...(user && canViewAudit(user) ? [{ key: "audit", label: "Actividad", href: "/audit", icon: "clock" }] : []),
+    ...(user && canViewRules(user) ? [{ key: "rules", label: "Reglas", href: "/rules", icon: "shield" }] : []),
+    ...(user ? [{ key: "settings", label: "Configuración", href: "/settings", icon: "sliders" }] : []),
   ];
   // Sin vistas de dominio, los datos son lo único que hay para hacer: van abiertos.
   const datosAbiertos = operacion.length === 0;
   // Sin precarga (ver components/enlace): con ella, cada visita renderizaba en el servidor
   // todos los destinos del menú, una docena de páginas dinámicas, aunque nadie hiciera clic.
   const lista = (enlaces: Enlace[]) => enlaces.map((link) => (
-    <Link className="nav-link" href={link.href} key={link.key}>{link.label}</Link>
+    <Link className="nav-link" href={link.href} key={link.key}><Icono nombre={link.icon} /><span>{link.label}</span></Link>
   ));
 
   return (
@@ -94,7 +103,7 @@ export async function Sidebar() {
       </label>
 
       <nav className="nav" aria-label="Navegación principal">
-        <Link className="nav-link home" href="/">Por dónde empezar</Link>
+        <Link className="nav-link home" href="/"><Icono nombre="compass" /><span>Por dónde empezar</span></Link>
 
         {miTrabajo.length > 0 && <div className="nav-section">Trabajo</div>}
         {lista(miTrabajo)}

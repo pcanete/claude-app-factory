@@ -94,6 +94,31 @@ class ScaffoldTests(unittest.TestCase):
         errors = validate_spec(spec)
         self.assertTrue(any("group_by must reference an enum field" in error for error in errors))
 
+    def test_icons_must_exist_in_the_platform_set(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["entities"][0]["icon"] = "unicornio"
+        spec["views"][0]["icon"] = 7
+        errors = validate_spec(spec)
+        self.assertTrue(any(error.startswith("entities[0].icon must be one of:") for error in errors), errors)
+        self.assertTrue(any(error.startswith("views[0].icon must be one of:") for error in errors), errors)
+
+    def test_known_icons_are_valid(self) -> None:
+        spec = copy.deepcopy(self.spec)
+        spec["entities"][0]["icon"] = "check-square"
+        spec["views"][0]["icon"] = "chart"
+        self.assertEqual(validate_spec(spec), [])
+
+    def test_icon_set_only_draws_strokes(self) -> None:
+        # El dibujo se inserta como marcado: sólo formas, nada que ejecute ni cargue algo.
+        icons = json.loads((Path(__file__).resolve().parent.parent / "assets" / "runtime-nextjs" / "src" / "lib" / "icons.json").read_text(encoding="utf-8"))
+        self.assertIn("circle", icons)
+        for name, markup in icons.items():
+            self.assertRegex(name, r"^[a-z][a-z-]*$")
+            tags = set(re.findall(r"<\s*/?\s*([a-zA-Z]+)", markup))
+            self.assertTrue(tags, f"{name}: no dibuja ninguna forma")
+            self.assertTrue(tags <= {"path", "circle", "rect", "line", "polyline", "ellipse"}, f"{name}: {tags}")
+            self.assertNotRegex(markup.lower(), r"on[a-z]+=|javascript:|href|<script", name)
+
     def test_table_group_must_be_enum(self) -> None:
         spec = copy.deepcopy(self.spec)
         table = next(view for view in spec["views"] if view["type"] == "table")
